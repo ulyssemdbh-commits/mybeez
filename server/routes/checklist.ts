@@ -9,6 +9,12 @@ import { getSessionToken } from "../middleware/auth";
 import { authService } from "../services/auth";
 import { getTenantDb } from "../tenantDb";
 
+/** Parse a route param as integer and return null if invalid. */
+function parseId(param: string): number | null {
+  const id = parseInt(param, 10);
+  return isNaN(id) ? null : id;
+}
+
 // ---------------------------------------------------------------------------
 // Zod schemas
 // ---------------------------------------------------------------------------
@@ -91,7 +97,7 @@ async function requireSuguAuth(
       .json({ error: "Connexion requise pour cette op\u00e9ration" });
 
   const result = await authService.validateSession(token);
-  if (!result.success)
+  if (!result)
     return res.status(403).json({ error: "Session invalide" });
 
   return next();
@@ -221,7 +227,8 @@ export function registerChecklistRoutes(app: Express) {
   // 8. PATCH /items/:id
   app.patch(`${base}/items/:id`, resolveTenant, async (req, res) => {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
       const data = updateItemSchema.parse(req.body);
       const service = getService(req);
       const result = await service.updateItem(id, data);
@@ -238,7 +245,8 @@ export function registerChecklistRoutes(app: Express) {
   // 9. PATCH /categories/:id
   app.patch(`${base}/categories/:id`, resolveTenant, async (req, res) => {
     try {
-      const id = parseInt(req.params.id, 10);
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
       const data = updateCategorySchema.parse(req.body);
       const service = getService(req);
       const result = await service.updateCategory(id, data);
@@ -346,7 +354,8 @@ export function registerChecklistRoutes(app: Express) {
     requireSuguAuth,
     async (req, res) => {
       try {
-        const id = parseInt(req.params.id, 10);
+        const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
         const parsed = moveItemSchema.parse(req.body);
         const service = getService(req);
         const result = await service.moveItem(id, parsed.direction);
@@ -465,7 +474,8 @@ export function registerChecklistRoutes(app: Express) {
             .json({ error: "Feature not available" });
         }
 
-        const id = parseInt(req.params.id, 10);
+        const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
         const service = getService(req);
         const result = await service.deleteCategory(id);
         emitSuguChecklistUpdated((req as any).tenantId);
@@ -521,7 +531,8 @@ export function registerChecklistRoutes(app: Express) {
             .json({ error: "Feature not available" });
         }
 
-        const id = parseInt(req.params.id, 10);
+        const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
         const service = getService(req);
         const result = await service.deleteItem(id);
         emitSuguChecklistUpdated((req as any).tenantId);
@@ -596,7 +607,8 @@ export function registerChecklistRoutes(app: Express) {
           .json({ error: "Feature not available" });
       }
 
-      const id = parseInt(req.params.id, 10);
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
       const parsed = updateCommentSchema.parse(req.body);
       const db = getTenantDb((req as any).tenantId);
       const [result] = await db
@@ -627,7 +639,8 @@ export function registerChecklistRoutes(app: Express) {
             .json({ error: "Feature not available" });
         }
 
-        const id = parseInt(req.params.id, 10);
+        const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
         const db = getTenantDb((req as any).tenantId);
         const [result] = await db
           .delete(comments)

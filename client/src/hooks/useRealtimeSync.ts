@@ -1,20 +1,45 @@
 /**
- * Realtime Sync Hook — myBeez.
- * Stub — replace with WebSocket/SSE client for live checklist updates.
+ * Realtime Sync Hook — myBeez
+ *
+ * Connects to SSE endpoint for live checklist updates.
  */
-import { useEffect } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 
-export function useRealtimeSync() {
-  const queryClient = useQueryClient();
+import { useState, useEffect, useCallback, useRef } from "react";
+
+interface UseRealtimeSyncOptions {
+  tenantId: string;
+  enabled?: boolean;
+  onChecklistUpdated?: () => void;
+}
+
+export function useRealtimeSync({ tenantId, enabled = true, onChecklistUpdated }: UseRealtimeSyncOptions) {
+  const [connected, setConnected] = useState(false);
+  const eventSourceRef = useRef<EventSource | null>(null);
+  const callbackRef = useRef(onChecklistUpdated);
+  callbackRef.current = onChecklistUpdated;
 
   useEffect(() => {
-    // Polling fallback: refetch checklist data every 30s
-    const interval = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: ["/api/suguval"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/sugumaillane"] });
-    }, 30000);
+    if (!enabled || !tenantId) return;
 
-    return () => clearInterval(interval);
-  }, [queryClient]);
+    const es = new EventSource(`/api/${tenantId}/events`);
+    eventSourceRef.current = es;
+
+    es.onopen = () => setConnected(true);
+
+    es.addEventListener("checklist_updated", () => {
+      callbackRef.current?.();
+    });
+
+    es.onerror = () => {
+      setConnected(false);
+    };
+
+    return () => {
+      es.close();
+      eventSourceRef.current = null;
+      setConnected(false);
+    };
+  }, [tenantId, enabled]);
+
+  return { connected };
 }

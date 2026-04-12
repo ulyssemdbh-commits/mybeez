@@ -28,6 +28,24 @@ export interface RestaurantConfig {
   systemName: string;
 }
 
+/**
+ * Secrets are read from environment variables so they are never committed
+ * to source control. Fallback values are provided only for local dev.
+ * In production, all VAL_* and MAILLANE_* vars must be explicitly set.
+ */
+function requireEnv(key: string, devFallback: string): string {
+  const value = process.env[key];
+  if (!value) {
+    if (process.env.NODE_ENV === "production") {
+      console.error(`[Config] FATAL: environment variable ${key} is not set`);
+      process.exit(1);
+    }
+    console.warn(`[Config] WARNING: ${key} not set — using dev fallback`);
+    return devFallback;
+  }
+  return value;
+}
+
 export const RESTAURANTS: Record<string, RestaurantConfig> = {
   val: {
     id: "val",
@@ -58,10 +76,10 @@ export const RESTAURANTS: Record<string, RestaurantConfig> = {
       6: "LIVRAISON & EMBALLAGES",
     },
     zoneOrder: [1, 2, 3, 4, 5, 6],
-    pinCode: "2792",
-    unlockCode: "102040",
+    pinCode: requireEnv("VAL_PIN_CODE", "2792"),
+    unlockCode: requireEnv("VAL_UNLOCK_CODE", "102040"),
     email: "sugu.gestion@gmail.com",
-    emailSecret: "suguval-internal-2024",
+    emailSecret: requireEnv("VAL_EMAIL_SECRET", "suguval-internal-2024"),
     emailSubjectPrefix: "[SUGUVAL]",
     systemName: "Suguval",
   },
@@ -85,10 +103,10 @@ export const RESTAURANTS: Record<string, RestaurantConfig> = {
       pinBg: "from-emerald-500 to-teal-600",
       gradient: { from: "from-emerald-500/10", to: "to-teal-500/10" },
     },
-    pinCode: "2792",
-    unlockCode: "102040",
+    pinCode: requireEnv("MAILLANE_PIN_CODE", "2792"),
+    unlockCode: requireEnv("MAILLANE_UNLOCK_CODE", "102040"),
     email: "sugu.resto@gmail.com",
-    emailSecret: "sugumaillane-internal-2024",
+    emailSecret: requireEnv("MAILLANE_EMAIL_SECRET", "sugumaillane-internal-2024"),
     emailSubjectPrefix: "[SUGU MAILLANE]",
     systemName: "SUGU Maillane",
   },

@@ -4,17 +4,12 @@ import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { emailActionService } from "./emailActionService";
 import { calendarService } from "./googleCalendarService";
 import { getTodayDate } from "./baseSuguHelpers";
+import { RESTAURANTS } from "@shared/restaurants";
 
-const ZONE_NAMES: Record<number, string> = {
-  1: "CUISINE",
-  2: "SUSHI BAR",
-  3: "RÉSERVE SÈCHE",
-  4: "HYGIÈNE & CONSOMMABLES",
-  5: "BOISSONS",
-  6: "LIVRAISON & EMBALLAGES"
-};
-
-const ZONE_ORDER = [1, 2, 3, 4, 5, 6];
+// Single source of truth — read from shared restaurant config instead of duplicating here
+const VAL_CONFIG = RESTAURANTS["val"];
+const ZONE_NAMES: Record<number, string> = VAL_CONFIG.zoneNames ?? {};
+const ZONE_ORDER: number[] = VAL_CONFIG.zoneOrder ?? [];
 
 class SuguvalService {
   // Get just categories (without items) - for management

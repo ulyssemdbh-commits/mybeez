@@ -1,11 +1,15 @@
 /**
  * myBeez Standalone — Server Entry Point
+ *
+ * Multi-tenant restaurant management platform.
+ * Features: Checklists, Alfred AI assistant, SSE realtime, Discord, Calendar.
  */
 import express from "express";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import session from "express-session";
+import rateLimit from "express-rate-limit";
 import { createServer } from "http";
 import path from "path";
 import fs from "fs";
@@ -14,6 +18,11 @@ console.log(`[myBeez] Starting — PID=${process.pid}, NODE_ENV=${process.env.NO
 
 if (!process.env.DATABASE_URL) {
   console.error("[myBeez] WARNING: DATABASE_URL is not set");
+}
+
+if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+  console.error("[myBeez] FATAL: SESSION_SECRET must be set in production");
+  process.exit(1);
 }
 
 process.on("uncaughtException", (err) => {
@@ -26,40 +35,80 @@ process.on("unhandledRejection", (reason) => {
 const app = express();
 app.set("trust proxy", 1);
 
-// Security
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
 
-// Compression
 app.use(compression({ level: 6, threshold: 1024 }));
 
-// Parsers
 app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
-// Session
 app.use(session({
-  secret: process.env.SESSION_SECRET || "mybeez-standalone-secret",
+  secret: process.env.SESSION_SECRET || "mybeez-dev-secret-change-in-prod",
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === "production", maxAge: 24 * 60 * 60 * 1000 },
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    sameSite: "lax",
+  },
 }));
 
-// ── API Routes ──
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  message: { error: "Trop de requêtes, réessayez dans une minute" },
+});
+app.use("/api/", apiLimiter);
+
+const alfredLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  message: { error: "Alfred a besoin d'un moment, réessayez bientôt" },
+});
+app.use("/api/alfred/", alfredLimiter);
+
 async function registerRoutes() {
+  const { registerSSERoutes, getSseStats } = await import("./services/realtimeSync");
+  registerSSERoutes(app);
+
+  const { registerAuthRoutes } = await import("./routes/auth");
+  registerAuthRoutes(app);
+
+  const { registerAlfredRoutes } = await import("./routes/alfred");
+  registerAlfredRoutes(app);
+
   const { registerChecklistRoutes } = await import("./routes/checklist");
   registerChecklistRoutes(app);
 
-  // Health check
+  const { registerSuguvalRoutes } = await import("./routes/suguval");
+  registerSuguvalRoutes(app);
+
+  const { registerSugumaillaneRoutes } = await import("./routes/sugumaillane");
+  registerSugumaillaneRoutes(app);
+
   app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", service: "mybeez", uptime: process.uptime() });
+    res.json({
+      status: "ok",
+      service: "mybeez",
+      version: "1.0.0",
+      uptime: Math.round(process.uptime()),
+      sse: getSseStats(),
+      ai: {
+        openai: !!process.env.OPENAI_API_KEY,
+        gemini: !!process.env.GEMINI_API_KEY,
+        grok: !!process.env.XAI_API_KEY,
+      },
+      discord: !!process.env.DISCORD_BOT_TOKEN,
+      calendar: !!process.env.GOOGLE_CALENDAR_ID,
+    });
   });
 }
 
-// ── Static Files (production) ──
 function serveStatic() {
   const distPath = path.resolve(import.meta.dirname, "..", "dist", "public");
   const indexHtml = path.resolve(distPath, "index.html");
@@ -83,7 +132,6 @@ function serveStatic() {
   });
 }
 
-// ── Start ──
 const PORT = parseInt(process.env.PORT || "3000", 10);
 
 registerRoutes()
@@ -95,6 +143,7 @@ registerRoutes()
     const server = createServer(app);
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`[myBeez] Server running on port ${PORT}`);
+      console.log(`[myBeez] AI providers: OpenAI=${!!process.env.OPENAI_API_KEY} Gemini=${!!process.env.GEMINI_API_KEY} Grok=${!!process.env.XAI_API_KEY}`);
     });
   })
   .catch((err) => {

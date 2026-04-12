@@ -1,17 +1,23 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { getSessionToken } from "../middleware/auth";
 import { authService } from "../services/auth";
+import { sugumaillaneService } from "../services/sugumaillaneService";
+import { z } from "zod";
+import { emitSuguChecklistUpdated } from "../services/realtimeSync";
+
+/** Parse a route param as integer and return null if invalid. */
+function parseId(param: string): number | null {
+  const id = parseInt(param, 10);
+  return isNaN(id) ? null : id;
+}
 
 async function requireSuguAuth(req: Request, res: Response, next: NextFunction) {
   const token = getSessionToken(req);
   if (!token) return res.status(403).json({ error: "Connexion requise pour cette opération" });
   const result = await authService.validateSession(token);
-  if (!result.success) return res.status(403).json({ error: "Session invalide" });
+  if (!result) return res.status(403).json({ error: "Session invalide" });
   return next();
 }
-import { sugumaillaneService } from "../services/sugumaillaneService";
-import { z } from "zod";
-import { emitSuguChecklistUpdated } from "../services/realtimeSync";
 
 export function registerSugumaillaneRoutes(app: Express) {
   // Initialize data from Excel (run once)
@@ -90,7 +96,8 @@ export function registerSugumaillaneRoutes(app: Express) {
 
   app.patch("/api/sugumaillane/items/:id", async (req: Request, res: Response) => {
     try {
-      const itemId = parseInt(req.params.id);
+      const itemId = parseId(req.params.id);
+      if (itemId === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(itemId)) {
         res.status(400).json({ error: "Invalid item ID" });
         return;
@@ -115,7 +122,8 @@ export function registerSugumaillaneRoutes(app: Express) {
 
   app.patch("/api/sugumaillane/categories/:id", async (req: Request, res: Response) => {
     try {
-      const categoryId = parseInt(req.params.id);
+      const categoryId = parseId(req.params.id);
+      if (categoryId === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(categoryId)) {
         res.status(400).json({ error: "Invalid category ID" });
         return;

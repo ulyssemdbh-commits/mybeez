@@ -11,13 +11,19 @@ import { emitSuguChecklistUpdated } from "../services/realtimeSync";
 import { getSessionToken } from "../middleware/auth";
 import { authService } from "../services/auth";
 
+/** Parse a route param as integer and return null if invalid. */
+function parseId(param: string): number | null {
+  const id = parseInt(param, 10);
+  return isNaN(id) ? null : id;
+}
+
 // Lightweight auth check for checklist admin operations (destructive/expensive)
 // Keeps toggle/read public for staff tablets, but protects structural changes
 async function requireSuguAuth(req: Request, res: Response, next: NextFunction) {
   const token = getSessionToken(req);
   if (!token) return res.status(403).json({ error: "Connexion requise pour cette opération" });
   const result = await authService.validateSession(token);
-  if (!result.success) return res.status(403).json({ error: "Session invalide" });
+  if (!result) return res.status(403).json({ error: "Session invalide" });
   return next();
 }
 
@@ -100,7 +106,8 @@ export function registerSuguvalRoutes(app: Express) {
 
   app.patch("/api/suguval/items/:id", async (req: Request, res: Response) => {
     try {
-      const itemId = parseInt(req.params.id);
+      const itemId = parseId(req.params.id);
+      if (itemId === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(itemId)) {
         res.status(400).json({ error: "Invalid item ID" });
         return;
@@ -159,7 +166,8 @@ export function registerSuguvalRoutes(app: Express) {
 
   app.post("/api/suguval/items/:id/move", requireSuguAuth, async (req: Request, res: Response) => {
     try {
-      const itemId = parseInt(req.params.id);
+      const itemId = parseId(req.params.id);
+      if (itemId === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(itemId)) {
         res.status(400).json({ error: "Invalid item ID" });
         return;
@@ -206,7 +214,8 @@ export function registerSuguvalRoutes(app: Express) {
 
   app.patch("/api/suguval/categories/:id", async (req: Request, res: Response) => {
     try {
-      const categoryId = parseInt(req.params.id);
+      const categoryId = parseId(req.params.id);
+      if (categoryId === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(categoryId)) {
         res.status(400).json({ error: "Invalid category ID" });
         return;
@@ -242,7 +251,8 @@ export function registerSuguvalRoutes(app: Express) {
   // Delete category
   app.delete("/api/suguval/categories/:id", requireSuguAuth, async (req: Request, res: Response) => {
     try {
-      const categoryId = parseInt(req.params.id);
+      const categoryId = parseId(req.params.id);
+      if (categoryId === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(categoryId)) {
         res.status(400).json({ error: "Invalid category ID" });
         return;
@@ -277,7 +287,8 @@ export function registerSuguvalRoutes(app: Express) {
   // Delete item
   app.delete("/api/suguval/items/:id", requireSuguAuth, async (req: Request, res: Response) => {
     try {
-      const itemId = parseInt(req.params.id);
+      const itemId = parseId(req.params.id);
+      if (itemId === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(itemId)) {
         res.status(400).json({ error: "Invalid item ID" });
         return;
@@ -821,7 +832,8 @@ Ce message est une SIMULATION envoyée par Ulysse pour tester le système Suguva
 
   app.patch("/api/suguval/comments/:id", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(id)) {
         res.status(400).json({ error: "Invalid comment ID" });
         return;
@@ -846,7 +858,8 @@ Ce message est une SIMULATION envoyée par Ulysse pour tester le système Suguva
   // Delete comment
   app.delete("/api/suguval/comments/:id", requireSuguAuth, async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseId(req.params.id);
+      if (id === null) return res.status(400).json({ error: "ID invalide" });
       if (isNaN(id)) {
         res.status(400).json({ error: "Invalid comment ID" });
         return;
