@@ -2,7 +2,8 @@
  * myBeez Standalone — Server Entry Point
  *
  * Multi-tenant restaurant management platform.
- * Features: Checklists, Alfred AI assistant, SSE realtime, Discord, Calendar.
+ * Each tenant has: 8-digit client code, unique slug URL, PIN auth.
+ * URL pattern: mybeez.com/:slug
  */
 import express from "express";
 import compression from "compression";
@@ -41,7 +42,6 @@ app.use(helmet({
 }));
 
 app.use(compression({ level: 6, threshold: 1024 }));
-
 app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
@@ -58,18 +58,10 @@ app.use(session({
   },
 }));
 
-const apiLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 120,
-  message: { error: "Trop de requêtes, réessayez dans une minute" },
-});
+const apiLimiter = rateLimit({ windowMs: 60_000, max: 120, message: { error: "Trop de requêtes" } });
 app.use("/api/", apiLimiter);
 
-const alfredLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  max: 20,
-  message: { error: "Alfred a besoin d'un moment, réessayez bientôt" },
-});
+const alfredLimiter = rateLimit({ windowMs: 60_000, max: 20, message: { error: "Alfred a besoin d'un moment" } });
 app.use("/api/alfred/", alfredLimiter);
 
 async function registerRoutes() {
@@ -79,23 +71,20 @@ async function registerRoutes() {
   const { registerAuthRoutes } = await import("./routes/auth");
   registerAuthRoutes(app);
 
+  const { registerTenantRoutes } = await import("./routes/tenants");
+  registerTenantRoutes(app);
+
   const { registerAlfredRoutes } = await import("./routes/alfred");
   registerAlfredRoutes(app);
 
   const { registerChecklistRoutes } = await import("./routes/checklist");
   registerChecklistRoutes(app);
 
-  const { registerSuguvalRoutes } = await import("./routes/suguval");
-  registerSuguvalRoutes(app);
-
-  const { registerSugumaillaneRoutes } = await import("./routes/sugumaillane");
-  registerSugumaillaneRoutes(app);
-
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
       service: "mybeez",
-      version: "1.0.0",
+      version: "2.0.0",
       uptime: Math.round(process.uptime()),
       sse: getSseStats(),
       ai: {
@@ -103,8 +92,6 @@ async function registerRoutes() {
         gemini: !!process.env.GEMINI_API_KEY,
         grok: !!process.env.XAI_API_KEY,
       },
-      discord: !!process.env.DISCORD_BOT_TOKEN,
-      calendar: !!process.env.GOOGLE_CALENDAR_ID,
     });
   });
 }
@@ -118,13 +105,8 @@ function serveStatic() {
     return;
   }
 
-  app.use("/assets", express.static(path.join(distPath, "assets"), {
-    maxAge: "1y",
-    immutable: true,
-  }));
-
+  app.use("/assets", express.static(path.join(distPath, "assets"), { maxAge: "1y", immutable: true }));
   app.use(express.static(distPath, { maxAge: "1h", index: false }));
-
   app.use("*", (_req, res) => {
     res.setHeader("Cache-Control", "no-cache");
     res.setHeader("Content-Type", "text/html; charset=utf-8");
@@ -136,14 +118,11 @@ const PORT = parseInt(process.env.PORT || "3000", 10);
 
 registerRoutes()
   .then(() => {
-    if (process.env.NODE_ENV === "production") {
-      serveStatic();
-    }
-
+    if (process.env.NODE_ENV === "production") serveStatic();
     const server = createServer(app);
     server.listen(PORT, "0.0.0.0", () => {
       console.log(`[myBeez] Server running on port ${PORT}`);
-      console.log(`[myBeez] AI providers: OpenAI=${!!process.env.OPENAI_API_KEY} Gemini=${!!process.env.GEMINI_API_KEY} Grok=${!!process.env.XAI_API_KEY}`);
+      console.log(`[myBeez] AI: OpenAI=${!!process.env.OPENAI_API_KEY} Gemini=${!!process.env.GEMINI_API_KEY} Grok=${!!process.env.XAI_API_KEY}`);
     });
   })
   .catch((err) => {

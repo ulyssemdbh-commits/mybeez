@@ -1,56 +1,19 @@
 /**
  * Auth Service — myBeez
  *
- * Handles PIN-based authentication for restaurant staff.
- * Admin authentication uses a separate admin PIN.
+ * Delegates PIN authentication to tenantService.
  */
 
-import { RESTAURANTS, getBySlug } from "../../shared/restaurants";
-
-interface LoginResult {
-  success: boolean;
-  tenantId?: string;
-  role?: "staff" | "admin";
-  restaurantName?: string;
-  error?: string;
-}
-
-interface ValidateResult {
-  success: boolean;
-  tenantId?: string;
-  role?: string;
-}
+import { tenantService } from "./tenantService";
 
 class AuthService {
-  async loginWithPin(pin: string, tenantSlug?: string): Promise<LoginResult> {
-    for (const [id, config] of Object.entries(RESTAURANTS)) {
-      if (tenantSlug && config.slug !== tenantSlug) continue;
-
-      if (pin === config.pinCode) {
-        return {
-          success: true,
-          tenantId: id,
-          role: "staff",
-          restaurantName: config.name,
-        };
-      }
-
-      if (pin === config.unlockCode) {
-        return {
-          success: true,
-          tenantId: id,
-          role: "admin",
-          restaurantName: config.name,
-        };
-      }
-    }
-
-    return { success: false, error: "Code incorrect" };
+  async loginWithPin(pin: string, slug?: string) {
+    return tenantService.loginWithPin(pin, slug);
   }
 
-  async validateSession(token: string): Promise<ValidateResult> {
+  async validateSession(token: string) {
     if (!token) return { success: false };
-    return { success: true, tenantId: "val", role: "admin" };
+    return { success: true };
   }
 }
 

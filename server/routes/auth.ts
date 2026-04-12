@@ -11,33 +11,37 @@ import { authService } from "../services/auth";
 import { z } from "zod";
 
 const pinSchema = z.object({
-  pin: z.string().min(4).max(6),
-  tenant: z.string().optional(),
+  pin: z.string().min(4).max(8),
+  slug: z.string().optional(),
 });
 
 export function registerAuthRoutes(app: Express): void {
   app.post("/api/auth/pin-login", async (req: Request, res: Response) => {
     try {
       const data = pinSchema.parse(req.body);
-      const result = await authService.loginWithPin(data.pin, data.tenant);
+      const result = await authService.loginWithPin(data.pin, data.slug);
 
-      if (!result.success) {
+      if (!result.success || !result.tenant) {
         return res.status(401).json({ error: result.error || "Code incorrect" });
       }
 
       const session = req.session as any;
       session.authenticated = true;
-      session.tenantId = result.tenantId;
+      session.tenantId = result.tenant.id;
+      session.tenantSlug = result.tenant.slug;
+      session.tenantName = result.tenant.name;
+      session.clientCode = result.tenant.clientCode;
       session.role = result.role;
-      session.restaurantName = result.restaurantName;
       session.authenticatedAt = Date.now();
       session.authToken = `mybeez-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
       res.json({
         success: true,
-        tenantId: result.tenantId,
+        tenantId: result.tenant.id,
+        slug: result.tenant.slug,
+        clientCode: result.tenant.clientCode,
+        name: result.tenant.name,
         role: result.role,
-        restaurantName: result.restaurantName,
       });
     } catch (error: any) {
       if (error.name === "ZodError") {
@@ -50,9 +54,7 @@ export function registerAuthRoutes(app: Express): void {
 
   app.post("/api/auth/logout", (req: Request, res: Response) => {
     req.session.destroy((err) => {
-      if (err) {
-        return res.status(500).json({ error: "Erreur de déconnexion" });
-      }
+      if (err) return res.status(500).json({ error: "Erreur de déconnexion" });
       res.json({ success: true });
     });
   });
@@ -65,8 +67,10 @@ export function registerAuthRoutes(app: Express): void {
     res.json({
       authenticated: true,
       tenantId: session.tenantId,
+      slug: session.tenantSlug,
+      clientCode: session.clientCode,
+      name: session.tenantName,
       role: session.role,
-      restaurantName: session.restaurantName,
     });
   });
 }

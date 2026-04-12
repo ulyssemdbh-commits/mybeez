@@ -1,20 +1,15 @@
-/**
- * Auth Hook — myBeez
- *
- * Real PIN-based authentication for restaurant staff.
- * Checks session status on mount and provides login/logout methods.
- */
-
 import { useState, useEffect, useCallback } from "react";
 
-interface User {
-  tenantId: string;
+interface AuthUser {
+  tenantId: number;
+  slug: string;
+  clientCode: string;
+  name: string;
   role: "staff" | "admin";
-  restaurantName: string;
 }
 
 interface AuthState {
-  user: User | null;
+  user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
 }
@@ -34,8 +29,10 @@ export function useAuth() {
         setState({
           user: {
             tenantId: data.tenantId,
+            slug: data.slug,
+            clientCode: data.clientCode,
+            name: data.name,
             role: data.role,
-            restaurantName: data.restaurantName,
           },
           isAuthenticated: true,
           isLoading: false,
@@ -48,26 +45,25 @@ export function useAuth() {
     }
   }, []);
 
-  useEffect(() => {
-    checkSession();
-  }, [checkSession]);
+  useEffect(() => { checkSession(); }, [checkSession]);
 
-  const login = useCallback(async (pin: string, tenant?: string): Promise<{ success: boolean; error?: string }> => {
+  const login = useCallback(async (pin: string, slug?: string) => {
     try {
       const res = await fetch("/api/auth/pin-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ pin, tenant }),
+        body: JSON.stringify({ pin, slug }),
       });
-
       const data = await res.json();
       if (data.success) {
         setState({
           user: {
             tenantId: data.tenantId,
+            slug: data.slug,
+            clientCode: data.clientCode,
+            name: data.name,
             role: data.role,
-            restaurantName: data.restaurantName,
           },
           isAuthenticated: true,
           isLoading: false,
@@ -87,10 +83,5 @@ export function useAuth() {
     setState({ user: null, isAuthenticated: false, isLoading: false });
   }, []);
 
-  return {
-    ...state,
-    login,
-    logout,
-    checkSession,
-  };
+  return { ...state, login, logout, checkSession };
 }
