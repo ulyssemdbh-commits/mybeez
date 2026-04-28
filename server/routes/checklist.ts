@@ -259,11 +259,11 @@ export function registerChecklistRoutes(app: Express): void {
       const allItems = await db.select().from(items).where(and(eq(items.tenantId, tid), eq(items.isActive, true)));
       const cats = await db.select().from(categories).where(eq(categories.tenantId, tid));
 
-      let checksQuery = db.select().from(checks).where(eq(checks.tenantId, tid));
+      const conditions = [eq(checks.tenantId, tid)];
       if (month) {
-        checksQuery = checksQuery.where(gte(checks.checkDate, `${month}-01`)) as any;
+        conditions.push(gte(checks.checkDate, `${month}-01`));
       }
-      const allChecks = await checksQuery;
+      const allChecks = await db.select().from(checks).where(and(...conditions));
 
       const byDate: Record<string, { total: number; checked: number; date: string }> = {};
       const dates = [...new Set(allChecks.map((c) => c.checkDate))];

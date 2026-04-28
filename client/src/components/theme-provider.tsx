@@ -5,6 +5,7 @@ type Theme = "dark" | "light" | "system";
 interface ThemeProviderProps {
   children: ReactNode;
   defaultTheme?: Theme;
+  storageKey?: string;
 }
 
 interface ThemeContextType {
@@ -14,10 +15,14 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType>({ theme: "dark", setTheme: () => {} });
 
-export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProviderProps) {
+export function ThemeProvider({
+  children,
+  defaultTheme = "dark",
+  storageKey = "mybeez-theme",
+}: ThemeProviderProps) {
   const [theme, setTheme] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
-      return (localStorage.getItem("mybeez-theme") as Theme) || defaultTheme;
+      return (localStorage.getItem(storageKey) as Theme) || defaultTheme;
     }
     return defaultTheme;
   });
@@ -33,8 +38,8 @@ export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProvider
       root.classList.add(theme);
     }
 
-    localStorage.setItem("mybeez-theme", theme);
-  }, [theme]);
+    localStorage.setItem(storageKey, theme);
+  }, [theme, storageKey]);
 
   return (
     <ThemeContext.Provider value={{ theme, setTheme }}>
