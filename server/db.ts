@@ -18,7 +18,7 @@ export const pool = new Pool({
   statement_timeout: 30000,
 });
 
-pool.on("error", (err) => {
+pool.on("error", (err: Error) => {
   console.error("[DB] Pool error:", err.message);
 });
 
