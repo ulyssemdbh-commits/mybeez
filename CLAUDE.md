@@ -53,7 +53,6 @@ mybeez/
 ├── server/           # Express
 │   ├── index.ts                    # Bootstrap : helmet, compression, session, rate-limit, register routes, SPA fallback
 │   ├── db.ts                       # Pool pg + drizzle(pool, { schema })
-│   ├── tenantDb.ts                 # ⚠ stub no-op (renvoie `db`), commentaire obsolète
 │   ├── middleware/
 │   │   ├── tenant.ts               # resolveTenant(req.params.slug) → req.tenant + req.tenantId
 │   │   └── auth.ts                 # requireAuth, requireAdmin, getAuthSession
@@ -65,13 +64,9 @@ mybeez/
 │   └── services/
 │       ├── tenantService.ts        # CRUD tenants + cache mémoire + génération clientCode 8 chiffres
 │       ├── auth.ts                 # délègue à tenantService.loginWithPin
-│       ├── realtimeSync.ts         # SSE par tenant (legacy: nommage emitSugu*, default "val")
+│       ├── realtimeSync.ts         # SSE par tenant + emitChecklistUpdated()
 │       ├── alfred/alfredService.ts # Chat AI avec historique en mémoire par tenant
-│       ├── core/openaiClient.ts    # Factory provider AI (OpenAI > Gemini > Grok)
-│       ├── discordBotService.ts    # ⚠ ORPHELIN, jamais importé
-│       ├── googleCalendarService.ts# ⚠ ORPHELIN, jamais importé
-│       ├── translationService.ts   # ⚠ ORPHELIN, jamais importé
-│       └── emailActionService.ts   # ⚠ ORPHELIN, jamais importé
+│       └── core/openaiClient.ts    # Factory provider AI (OpenAI > Gemini > Grok)
 └── shared/           # Types et schémas partagés (back ↔ front)
     ├── schema.ts                   # re-export tenants + checklist
     └── schema/
@@ -172,11 +167,7 @@ mybeez/
 - 🟡 **Pas de CSRF token** sur les mutations alors que le cookie de session est utilisé. Mitigations en place : `sameSite: lax` + `httpOnly`.
 
 ### Dette technique
-- **Nommage legacy `emitSugu*`** dans `server/services/realtimeSync.ts` — préfixe pré-rebrand "myBeez". À renommer (`emit<Module>Updated`).
-- **Default tenantId `"val"`** dans toutes les fonctions `emitSugu*` — code legacy, devrait être obligatoire.
-- **`tenantDb.ts`** : stub no-op + commentaire factuellement faux (parle de tables `suguval_*` qui n'existent pas).
 - **`AuthSession.tenantId: string`** (middleware/auth.ts) vs `session.tenantId = result.tenant.id` (number, route auth.ts) — type incohérent. Voir aussi la comparaison `session.tenantId !== req.tenantId` dans checklist.ts.
-- **Services orphelins** : `discordBotService`, `googleCalendarService`, `translationService`, `emailActionService` ne sont jamais importés. Soit les wirer, soit les supprimer.
 - **`requireTenantAuth`** est dupliqué inline dans `checklist.ts` au lieu d'être dans `middleware/auth.ts`.
 - **Route `GET /history`** : `byDate[date].total = allItems.length` calcule le total avec les items actifs **aujourd'hui**, pas à la date X — biaise les pourcentages historiques si la liste d'items évolue.
 - **Aucun test, aucune CI** — toute régression doit être détectée à la main.
@@ -205,8 +196,8 @@ mybeez/
 | **Zone** | Zone physique du restaurant (cuisine, sushi bar, réserve). |
 | **Alfred** | Assistant IA conversationnel (chat sur la checklist). |
 | **SSE** | Server-Sent Events, canal `/api/:tenant/events` pour la sync temps réel. |
-| **Valentine / Val / Maillane** | Restaurants de référence du POC, mentionnés dans le prompt Alfred. |
-| **suguval / sugumaillane** | ⚠ Préfixes **legacy** (rebrand vers myBeez), à éliminer du code. |
+| **Valentine / Val / Maillane** | Restaurants de référence du POC, mentionnés dans le prompt Alfred (à dégénériscer en PR future). |
+| **suguval / sugumaillane** | ⚠ Préfixes **legacy** pré-rebrand. Code purgé en PR `chore/cleanup-legacy`, ne devrait plus apparaître ailleurs que dans cette ligne. |
 
 ---
 
