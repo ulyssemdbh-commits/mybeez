@@ -12,7 +12,7 @@ import { resolveTenant } from "../middleware/tenant";
 import { db } from "../db";
 import { categories, items, checks, futureItems, emailLogs, comments } from "../../shared/schema/checklist";
 import { eq, and, desc, gte } from "drizzle-orm";
-import { emitSuguChecklistUpdated } from "../services/realtimeSync";
+import { emitChecklistUpdated } from "../services/realtimeSync";
 import { z } from "zod";
 
 function parseId(param: string): number | null {
@@ -122,7 +122,7 @@ export function registerChecklistRoutes(app: Express): void {
       }
 
       res.json({ success: true });
-      emitSuguChecklistUpdated(req.tenant!.slug);
+      emitChecklistUpdated(req.tenant!.slug);
     } catch (error) {
       console.error("[Checklist] Toggle error:", error);
       res.status(500).json({ error: "Erreur" });
@@ -137,7 +137,7 @@ export function registerChecklistRoutes(app: Express): void {
         .set({ isChecked: false, checkedAt: null })
         .where(and(eq(checks.tenantId, tid), eq(checks.checkDate, today)));
       res.json({ success: true });
-      emitSuguChecklistUpdated(req.tenant!.slug);
+      emitChecklistUpdated(req.tenant!.slug);
     } catch (error) {
       console.error("[Checklist] Reset error:", error);
       res.status(500).json({ error: "Erreur" });
