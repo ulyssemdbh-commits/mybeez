@@ -103,10 +103,17 @@ mybeez/
 | `npm run check` | Typecheck (`tsc`, noEmit). **Le seul check automatisé.** |
 | `npm run db:push` | Sync du schéma Drizzle vers la DB (destructif si `--force`) |
 
-**Variables d'env** (voir aussi `replit.md`) :
+**Variables d'env** :
 - Requis : `DATABASE_URL`, `SESSION_SECRET` (obligatoire en prod, default dev fourni)
+- Pour les routes admin `/api/tenants` : `SUPERADMIN_TOKEN` (Bearer token de ≥16 chars). Sans ça, ces routes répondent 503. Mécanisme **temporaire**, remplacé par auth nominative + RBAC en PR #8-10.
 - AI : `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` (au moins un pour Alfred)
-- Optionnels : `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID`, `GOOGLE_CALENDAR_ID`, `PORT` (default 3000)
+- Optionnels : `PORT` (default 3000)
+
+**Appel des routes admin** :
+```bash
+curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenants \
+  -H "Content-Type: application/json" -d '{"name":"...", "pinCode":"...", "adminCode":"..."}'
+```
 
 ---
 
@@ -160,10 +167,11 @@ mybeez/
 - Beaucoup de tables business (suppliers, purchases, employees, payroll, absences, files, bank/cashEntries, analytics) **sont schématisées mais sans routes API ni UI**. Le seul module fonctionnel end-to-end est la **checklist quotidienne**.
 
 ### Sécurité — à corriger
-- 🔴 **`POST/GET/PATCH /api/tenants` n'ont aucune auth.** N'importe qui peut créer un tenant, lister tous les tenants, ou modifier un tenant existant (y compris ses PIN). À protéger avec un mécanisme superadmin avant prod.
-- 🟠 **`POST /api/checklist/:slug/toggle` n'exige pas `requireTenantAuth`.** Un anonyme connaissant un slug peut cocher/décocher des items. Voir `server/routes/checklist.ts:101`.
-- 🟠 **`PATCH /api/tenants/:id`** accepte un `req.body` brut (pas de Zod) et passe à `tenantService.update`. Risque de mise à jour de champs non prévus (clientCode, isActive, …).
-- 🟡 **`SESSION_SECRET` default dev** présent en clair dans `server/index.ts:50`. OK pour dev, fatal en prod (mais le code refuse de booter en prod sans secret — bonne pratique conservée).
+- ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).
+- ✅ ~~**Endpoint `/api/tenants/by-code/:code`**~~ supprimé (retournait le tenant complet incluant PIN/admin codes ; client code à 8 chiffres = brute-forçable).
+- ✅ ~~**`PATCH /api/tenants/:id`** accepte un `req.body` brut~~ → schéma Zod strict, champs autorisés explicitement listés.
+- 🟠 **`POST /api/checklist/:slug/toggle` n'exige pas `requireTenantAuth`.** Un anonyme connaissant un slug peut cocher/décocher des items. Voir `server/routes/checklist.ts:101`. À fixer en PR #4.
+- 🟡 **`SESSION_SECRET` default dev** présent en clair dans `server/index.ts`. OK pour dev, fatal en prod (mais le code refuse de booter en prod sans secret — bonne pratique conservée).
 - 🟡 **Pas de CSRF token** sur les mutations alors que le cookie de session est utilisé. Mitigations en place : `sameSite: lax` + `httpOnly`.
 
 ### Dette technique
