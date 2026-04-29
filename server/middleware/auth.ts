@@ -81,3 +81,33 @@ export function requireSuperadmin(req: Request, res: Response, next: NextFunctio
 
   return next();
 }
+
+/**
+ * requireTenantAuth — gate mutating tenant-scoped routes.
+ *
+ * Requires:
+ *   1. an authenticated session (`session.authenticated === true`)
+ *   2. that the session's `tenantId` matches the resolved `req.tenantId`
+ *      set by `resolveTenant`, unless the session role is `superadmin`.
+ *
+ * Must run AFTER `resolveTenant` so `req.tenantId` is populated.
+ *
+ * - 401 if not authenticated
+ * - 403 if authenticated for a different tenant
+ */
+interface TenantSessionLike {
+  authenticated?: boolean;
+  tenantId?: number;
+  role?: string;
+}
+
+export function requireTenantAuth(req: Request, res: Response, next: NextFunction) {
+  const session = req.session as unknown as TenantSessionLike | undefined;
+  if (!session?.authenticated) {
+    return res.status(401).json({ error: "Authentification requise" });
+  }
+  if (req.tenantId && session.tenantId !== req.tenantId && session.role !== "superadmin") {
+    return res.status(403).json({ error: "Accès interdit à ce restaurant" });
+  }
+  return next();
+}

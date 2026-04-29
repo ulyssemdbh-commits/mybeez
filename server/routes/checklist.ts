@@ -7,8 +7,9 @@
  * The resolveTenant middleware attaches req.tenant and req.tenantId.
  */
 
-import type { Express, Request, Response, NextFunction } from "express";
+import type { Express, Request, Response } from "express";
 import { resolveTenant } from "../middleware/tenant";
+import { requireTenantAuth } from "../middleware/auth";
 import { db } from "../db";
 import { categories, items, checks, futureItems, emailLogs, comments } from "../../shared/schema/checklist";
 import { eq, and, desc, gte } from "drizzle-orm";
@@ -25,17 +26,6 @@ function getTodayDate(): string {
   const paris = new Date(now.toLocaleString("en-US", { timeZone: "Europe/Paris" }));
   if (paris.getHours() < 2) paris.setDate(paris.getDate() - 1);
   return paris.toISOString().split("T")[0];
-}
-
-async function requireTenantAuth(req: Request, res: Response, next: NextFunction) {
-  const session = req.session as any;
-  if (!session?.authenticated) {
-    return res.status(401).json({ error: "Authentification requise" });
-  }
-  if (req.tenantId && session.tenantId !== req.tenantId && session.role !== "superadmin") {
-    return res.status(403).json({ error: "Accès interdit à ce restaurant" });
-  }
-  next();
 }
 
 const toggleSchema = z.object({ itemId: z.number(), isChecked: z.boolean() });
@@ -98,7 +88,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.post(`${r}/toggle`, resolveTenant, async (req: Request, res: Response) => {
+  app.post(`${r}/toggle`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const data = toggleSchema.parse(req.body);
@@ -236,7 +226,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.post(`${r}/comments`, resolveTenant, async (req: Request, res: Response) => {
+  app.post(`${r}/comments`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const data = addCommentSchema.parse(req.body);

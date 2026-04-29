@@ -170,13 +170,13 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 - ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).
 - ✅ ~~**Endpoint `/api/tenants/by-code/:code`**~~ supprimé (retournait le tenant complet incluant PIN/admin codes ; client code à 8 chiffres = brute-forçable).
 - ✅ ~~**`PATCH /api/tenants/:id`** accepte un `req.body` brut~~ → schéma Zod strict, champs autorisés explicitement listés.
-- 🟠 **`POST /api/checklist/:slug/toggle` n'exige pas `requireTenantAuth`.** Un anonyme connaissant un slug peut cocher/décocher des items. Voir `server/routes/checklist.ts:101`. À fixer en PR #4.
+- ✅ ~~**`POST /api/checklist/:slug/toggle` n'exige pas `requireTenantAuth`.**~~ Gatée. Idem pour `POST /api/checklist/:slug/comments` (deuxième mutation non documentée comme trou, fixée dans la même PR).
 - 🟡 **`SESSION_SECRET` default dev** présent en clair dans `server/index.ts`. OK pour dev, fatal en prod (mais le code refuse de booter en prod sans secret — bonne pratique conservée).
 - 🟡 **Pas de CSRF token** sur les mutations alors que le cookie de session est utilisé. Mitigations en place : `sameSite: lax` + `httpOnly`.
 
 ### Dette technique
 - **`AuthSession.tenantId: string`** (middleware/auth.ts) vs `session.tenantId = result.tenant.id` (number, route auth.ts) — type incohérent. Voir aussi la comparaison `session.tenantId !== req.tenantId` dans checklist.ts.
-- **`requireTenantAuth`** est dupliqué inline dans `checklist.ts` au lieu d'être dans `middleware/auth.ts`.
+- ✅ ~~`requireTenantAuth` dupliqué inline dans `checklist.ts`~~ — déplacé dans `server/middleware/auth.ts`, importé là où nécessaire, couvert par `requireTenantAuth.test.ts` (6 tests).
 - **Route `GET /history`** : `byDate[date].total = allItems.length` calcule le total avec les items actifs **aujourd'hui**, pas à la date X — biaise les pourcentages historiques si la liste d'items évolue.
 - **Aucun test, aucune CI** — toute régression doit être détectée à la main.
 - **`refetchOnWindowFocus: true` + `refetchInterval: 30000`** sur la checklist : beaucoup de fetchs alors qu'on a déjà du SSE branché. Choisir un seul mécanisme.
