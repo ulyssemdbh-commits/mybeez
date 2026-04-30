@@ -26,6 +26,13 @@ if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
   process.exit(1);
 }
 
+if (!process.env.SUPERADMIN_TOKEN || process.env.SUPERADMIN_TOKEN.length < 16) {
+  const msg =
+    "[myBeez] WARNING: SUPERADMIN_TOKEN is not set (or shorter than 16 chars). " +
+    "Admin routes (/api/tenants) will respond 503 until configured.";
+  console.warn(msg);
+}
+
 process.on("uncaughtException", (err) => {
   console.error("[FATAL] Uncaught exception:", err.message, err.stack);
 });
