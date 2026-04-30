@@ -79,6 +79,7 @@ mybeez/
 │       ├── tenants.ts              # table tenants (multi-tenant root)
 │       ├── domains.ts              # tenant_domains (custom domains uniquement, vérification + SSL status)
 │       ├── templates.ts            # business_templates : catalogue vertical-agnostic, self-FK 2 niveaux
+│       ├── users.ts                # users + user_tenants (M2M role) + tokens (reset/verify) + mfa_secrets + audit_log
 │       └── checklist.ts            # categories, items, checks, futureItems, emailLogs, comments,
 │                                   # suppliers, purchases, generalExpenses, files, bankEntries,
 │                                   # cashEntries, employees, payroll, absences, analytics
@@ -203,7 +204,8 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
   - ✅ `tenants.templateId/vocabulary/modulesEnabled` ajoutés (PR #10a). `businessType` et `features` deprecated, conservés pour compat tant que `templateId` est nullable.
   - ✅ Colonnes `items.nameVi/nameTh` et `categories.nameVi/nameTh` supprimées (purge restaurant-ism : c'était spécifique à un Sushi Bar).
   - ✅ Alfred prompt dégénéricisé : nom du tenant + vocabulary dynamiques, plus de Valentine/Maillane/Sushi hardcodés.
-  - ⏳ **Reste** : signup public avec template picker (PR séparée après auth nominative), passer `tenant.templateId` en NOT NULL et droper `businessType` (post-migration des données).
+  - ✅ Schéma auth (PR #11) : `users`, `user_tenants` (M2M avec role), `password_reset_tokens`, `email_verification_tokens`, `mfa_secrets`, `audit_log`. Session store basculé vers Postgres (`connect-pg-simple` → table `user_sessions` créée auto).
+  - ⏳ **Reste** : routes auth nominative (PR #12 email/password + RBAC), MFA + audit (PR #13), signup public avec template picker (PR séparée après l'auth), passer `tenant.templateId` en NOT NULL et droper `businessType` (post-migration des données).
 
 ### Sécurité — à corriger
 - ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).
@@ -235,6 +237,9 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 | **Tenant** | Un compte client (peut être restaurant, salon, garage, boutique...). Une row dans `tenants`. |
 | **Template** | Un archétype d'activité (restaurant, coiffure, boutique...). Détermine modules, vocabulaire, TVA par défaut. Source de vérité = `server/seed/templates.ts`. |
 | **Vertical** | Catégorie top-level de templates : `commerce_de_bouche`, `entreprise_services`, `retail_b2c`. |
+| **User** | Une personne réelle (compte nominatif). Une row dans `users`. Cross-tenant : peut être Owner d'un tenant et Manager d'un autre. |
+| **Role (tenant role)** | Pouvoir d'un user dans un tenant donné : `owner` > `admin` > `manager` > `staff` > `viewer`. Stocké dans `user_tenants.role`. |
+| **Superadmin** | Membre interne myBeez (`users.isSuperadmin = true`), distinct de tout role tenant. À ne pas confondre avec `SUPERADMIN_TOKEN` qui est un Bearer pour les routes admin temporaires. |
 | **Slug** | Nom URL-friendly du tenant (ex: `valentine`, `maillane`). Unique. |
 | **Client code** | Code à 8 chiffres généré à la création, montré à l'utilisateur. |
 | **PIN code** | Code staff (4–8 chiffres) — accès checklist quotidienne. |

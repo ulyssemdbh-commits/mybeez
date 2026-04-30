@@ -7,3 +7,4 @@ export * from "./schema/tenants";
 export * from "./schema/checklist";
 export * from "./schema/domains";
 export * from "./schema/templates";
+export * from "./schema/users";
