@@ -54,7 +54,7 @@ mybeez/
 │   ├── index.ts                    # Bootstrap : helmet, compression, session, rate-limit, register routes, SPA fallback
 │   ├── db.ts                       # Pool pg + drizzle(pool, { schema })
 │   ├── middleware/
-│   │   ├── tenant.ts               # resolveTenant(req.params.slug) → req.tenant + req.tenantId
+│   │   ├── tenant.ts               # resolveTenant: hostname-first (subdomain ou custom domain), fallback :slug
 │   │   └── auth.ts                 # requireAuth, requireAdmin, getAuthSession
 │   ├── routes/
 │   │   ├── auth.ts                 # /api/auth/{pin-login, logout, me}
@@ -63,14 +63,16 @@ mybeez/
 │   │   └── alfred.ts               # /api/alfred/{chat, analyze, clear}
 │   └── services/
 │       ├── tenantService.ts        # CRUD tenants + cache mémoire + génération clientCode 8 chiffres
+│       ├── domainService.ts        # resolveTenantByHost (subdomain + custom domain) + cache 60s
 │       ├── auth.ts                 # délègue à tenantService.loginWithPin
 │       ├── realtimeSync.ts         # SSE par tenant + emitChecklistUpdated()
 │       ├── alfred/alfredService.ts # Chat AI avec historique en mémoire par tenant
 │       └── core/openaiClient.ts    # Factory provider AI (OpenAI > Gemini > Grok)
 └── shared/           # Types et schémas partagés (back ↔ front)
-    ├── schema.ts                   # re-export tenants + checklist
+    ├── schema.ts                   # re-export tenants + checklist + domains
     └── schema/
         ├── tenants.ts              # table tenants (multi-tenant root)
+        ├── domains.ts              # tenant_domains (custom domains uniquement, vérification + SSL status)
         └── checklist.ts            # categories, items, checks, futureItems, emailLogs, comments,
                                     # suppliers, purchases, generalExpenses, files, bankEntries,
                                     # cashEntries, employees, payroll, absences, analytics
@@ -87,7 +89,12 @@ mybeez/
 
 - **Single DB, single schema** : toutes les tables business ont une colonne `tenant_id` (integer, FK logique vers `tenants.id`).
 - **Aucune RLS PostgreSQL** : l'isolation est garantie uniquement par les `where(eq(table.tenantId, tid))` côté Drizzle. Toute requête manquant ce filtre = fuite trans-tenant.
-- **Résolution** : middleware `resolveTenant` lit `req.params.slug`, charge le tenant (avec cache `tenantService.cache`), peuple `req.tenant` + `req.tenantId`.
+- **Résolution (PR #7)** : middleware `resolveTenant` essaye **hostname-first** (via `domainService.resolveTenantByHost`) :
+  - subdomain `<slug>.<root>` (les `<root>` viennent de `ROOT_DOMAINS`, default `mybeez.com,localhost`)
+  - sinon custom domain (lookup `tenant_domains` avec `verifiedAt IS NOT NULL`)
+  - **fallback legacy** sur `req.params.slug` si la résolution par host échoue (transition douce, à retirer)
+  - 400 si `:slug` URL ne matche pas le tenant résolu par host
+- **Dev local** : `*.localhost` est reconnu (RFC 6761 résout vers 127.0.0.1). `valentine.localhost:3000` ⇒ tenant `valentine`. Pas besoin de toucher `/etc/hosts`.
 - **Auth de session** vs **scope tenant** : la session contient `session.tenantId` (numérique). Pour les routes mutantes, comparer `session.tenantId === req.tenantId` (voir `requireTenantAuth` dans `routes/checklist.ts`).
 
 ---
@@ -106,6 +113,7 @@ mybeez/
 **Variables d'env** :
 - Requis : `DATABASE_URL`, `SESSION_SECRET` (obligatoire en prod, default dev fourni)
 - Pour les routes admin `/api/tenants` : `SUPERADMIN_TOKEN` (Bearer token de ≥16 chars). Sans ça, ces routes répondent 503. Mécanisme **temporaire**, remplacé par auth nominative + RBAC en PR #8-10.
+- Tenancy : `ROOT_DOMAINS` (csv ; default `mybeez.com,localhost`). Tout host ne matchant aucun root est traité comme custom domain et passe par `tenant_domains`.
 - AI : `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` (au moins un pour Alfred)
 - Optionnels : `PORT` (default 3000)
 
