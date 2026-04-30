@@ -4,3 +4,8 @@ dist/
 .env.local
 *.log
 .DS_Store
+
+# Local backup artefacts (never commit DB dumps)
+backups/
+*.dump
+*.sql.gz

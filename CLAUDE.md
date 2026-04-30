@@ -68,14 +68,21 @@ mybeez/
 │       ├── realtimeSync.ts         # SSE par tenant + emitChecklistUpdated()
 │       ├── alfred/alfredService.ts # Chat AI avec historique en mémoire par tenant
 │       └── core/openaiClient.ts    # Factory provider AI (OpenAI > Gemini > Grok)
-└── shared/           # Types et schémas partagés (back ↔ front)
-    ├── schema.ts                   # re-export tenants + checklist + domains
-    └── schema/
-        ├── tenants.ts              # table tenants (multi-tenant root)
-        ├── domains.ts              # tenant_domains (custom domains uniquement, vérification + SSL status)
-        └── checklist.ts            # categories, items, checks, futureItems, emailLogs, comments,
-                                    # suppliers, purchases, generalExpenses, files, bankEntries,
-                                    # cashEntries, employees, payroll, absences, analytics
+├── shared/           # Types et schémas partagés (back ↔ front)
+│   ├── schema.ts                   # re-export tenants + checklist + domains
+│   └── schema/
+│       ├── tenants.ts              # table tenants (multi-tenant root)
+│       ├── domains.ts              # tenant_domains (custom domains uniquement, vérification + SSL status)
+│       └── checklist.ts            # categories, items, checks, futureItems, emailLogs, comments,
+│                                   # suppliers, purchases, generalExpenses, files, bankEntries,
+│                                   # cashEntries, employees, payroll, absences, analytics
+└── scripts/          # Tâches ops, exécutées via tsx (jamais bundlées)
+    ├── _lib/
+    │   ├── r2.ts                   # client S3 pointé sur R2 + helpers (upload/list/download/delete)
+    │   └── backup.ts               # fonctions pures (backupKey, retention, sort) — testées
+    ├── backup-postgres.ts          # pg_dump | gzip | upload R2 + retention sweep
+    ├── restore-postgres.ts         # liste / restore depuis R2 (dry-run par défaut)
+    └── __tests__/                  # vitest sur les helpers purs
 ```
 
 ### Aliases TS / Vite
@@ -109,11 +116,14 @@ mybeez/
 | `npm run start` | Lance le bundle prod (`node dist/index.cjs`) |
 | `npm run check` | Typecheck (`tsc`, noEmit). **Le seul check automatisé.** |
 | `npm run db:push` | Sync du schéma Drizzle vers la DB (destructif si `--force`) |
+| `npm run backup` | Dump Postgres → gzip → R2 (`mybeezdb/YYYY-MM-DD/...sql.gz`) + retention sweep |
+| `npm run restore -- <key\|latest>` | Restore depuis R2 vers `DATABASE_URL` (sans arg = liste les 20 dumps les plus récents) |
 
-**Variables d'env** :
+**Variables d'env** : voir `.env.example` (à la racine) pour la liste complète et commentée.
 - Requis : `DATABASE_URL`, `SESSION_SECRET` (obligatoire en prod, default dev fourni)
 - Pour les routes admin `/api/tenants` : `SUPERADMIN_TOKEN` (Bearer token de ≥16 chars). Sans ça, ces routes répondent 503. Mécanisme **temporaire**, remplacé par auth nominative + RBAC en PR #8-10.
 - Tenancy : `ROOT_DOMAINS` (csv ; default `mybeez.com,localhost`). Tout host ne matchant aucun root est traité comme custom domain et passe par `tenant_domains`.
+- Backups R2 : `R2_ENDPOINT`, `R2_BUCKET` (= `r2mybeez`), `R2_PREFIX` (= `mybeezdb/`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `BACKUP_RETENTION_DAYS` (default 30).
 - AI : `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` (au moins un pour Alfred)
 - Optionnels : `PORT` (default 3000)
 
@@ -122,6 +132,13 @@ mybeez/
 curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenants \
   -H "Content-Type: application/json" -d '{"name":"...", "pinCode":"...", "adminCode":"..."}'
 ```
+
+**Backups Postgres → R2** (`scripts/backup-postgres.ts`, `scripts/restore-postgres.ts`) :
+- Pipeline en streaming (constant memory) : `pg_dump --no-owner --no-privileges` | `gzip` | upload multipart vers R2 (`mybeezdb/YYYY-MM-DD/postgres-...sql.gz`).
+- Retention auto (default 30 jours, override `BACKUP_RETENTION_DAYS`). Les objets foreign dans le bucket ne sont **jamais** supprimés (parsing strict de la key).
+- Cron prévu sur Hetzner via systemd timer (à wirer au moment du déploiement). En attendant, `npm run backup` fonctionne en local pour valider la chaîne.
+- **Restore** : `npm run restore` liste les 20 dumps les plus récents. `npm run restore -- latest` ou `npm run restore -- <key>` lance la restore en **dry-run** par défaut. Pour réellement écraser : `RESTORE_CONFIRM=I_KNOW_WHAT_IM_DOING npm run restore -- latest`.
+- **Ne PAS** confondre R2 avec une DB. R2 = stockage objet, c'est où les dumps atterrissent. Postgres reste sur Hetzner (NVMe local).
 
 ---
 
