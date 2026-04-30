@@ -1,9 +1,11 @@
 /**
  * myBeez Standalone — Server Entry Point
  *
- * Multi-tenant restaurant management platform.
- * Each tenant has: 8-digit client code, unique slug URL, PIN auth.
- * URL pattern: mybeez.com/:slug
+ * Multi-tenant SaaS platform.
+ * Tenant resolution: by request hostname.
+ *   - Subdomain: `<slug>.<root>` (root configured via ROOT_DOMAINS env)
+ *   - Custom domain: verified entry in `tenant_domains`
+ *   - Path-based `/:slug` is still accepted as legacy fallback (PR #7)
  */
 import express from "express";
 import compression from "compression";
@@ -128,7 +130,9 @@ registerRoutes()
     if (process.env.NODE_ENV === "production") serveStatic();
     const server = createServer(app);
     server.listen(PORT, "0.0.0.0", () => {
+      const roots = process.env.ROOT_DOMAINS || "mybeez.com,localhost";
       console.log(`[myBeez] Server running on port ${PORT}`);
+      console.log(`[myBeez] Tenant root domains: ${roots}`);
       console.log(`[myBeez] AI: OpenAI=${!!process.env.OPENAI_API_KEY} Gemini=${!!process.env.GEMINI_API_KEY} Grok=${!!process.env.XAI_API_KEY}`);
     });
   })
