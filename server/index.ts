@@ -12,10 +12,12 @@ import compression from "compression";
 import cookieParser from "cookie-parser";
 import helmet from "helmet";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { createServer } from "http";
 import path from "path";
 import fs from "fs";
+import { pool } from "./db";
 
 console.log(`[myBeez] Starting — PID=${process.pid}, NODE_ENV=${process.env.NODE_ENV || "development"}`);
 
@@ -55,10 +57,29 @@ app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true }));
 
+/**
+ * Session store: Postgres-backed via connect-pg-simple (PR #11).
+ * Replaces the default in-memory store, which loses sessions on every
+ * restart and leaks memory in production.
+ *
+ * `createTableIfMissing: true` provisions the `user_sessions` table at
+ * boot if absent — safe with concurrent boots (CREATE TABLE IF NOT
+ * EXISTS). Schema kept stable across deploys; no manual migration.
+ */
+const PgSessionStore = connectPgSimple(session);
+const sessionStore = new PgSessionStore({
+  pool,
+  tableName: "user_sessions",
+  createTableIfMissing: true,
+  pruneSessionInterval: 60 * 15,
+});
+
 app.use(session({
+  store: sessionStore,
   secret: process.env.SESSION_SECRET || "mybeez-dev-secret-change-in-prod",
   resave: false,
   saveUninitialized: false,
+  rolling: true,
   cookie: {
     secure: process.env.NODE_ENV === "production",
     maxAge: 24 * 60 * 60 * 1000,
