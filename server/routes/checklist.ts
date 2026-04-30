@@ -31,8 +31,6 @@ function getTodayDate(): string {
 const toggleSchema = z.object({ itemId: z.number(), isChecked: z.boolean() });
 const updateItemSchema = z.object({
   name: z.string().optional(),
-  nameVi: z.string().nullable().optional(),
-  nameTh: z.string().nullable().optional(),
   categoryId: z.number().optional(),
 });
 const createItemSchema = z.object({ name: z.string().min(1), categoryId: z.number() });

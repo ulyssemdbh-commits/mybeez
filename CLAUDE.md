@@ -68,7 +68,8 @@ mybeez/
 │   │   ├── templateService.ts      # catalog business_templates en cache mémoire (small set)
 │   │   ├── auth.ts                 # délègue à tenantService.loginWithPin
 │   │   ├── realtimeSync.ts         # SSE par tenant + emitChecklistUpdated()
-│   │   ├── alfred/alfredService.ts # Chat AI avec historique en mémoire par tenant
+│   │   ├── alfred/alfredService.ts # Chat AI : history en mémoire par tenant slug + provider chain
+│   │   ├── alfred/prompt.ts        # buildSystemPrompt(tenant) — pure, testable, dynamique (vocabulary)
 │   │   └── core/openaiClient.ts    # Factory provider AI (OpenAI > Gemini > Grok)
 │   └── seed/
 │       └── templates.ts            # 14 verticals (3 top + 11 sub) — source of truth pour seed:templates
@@ -197,6 +198,12 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 ### Chantiers en cours / pages stub
 - `TenantAdmin`, `TenantHistory`, `TenantManagement` ne sont que des placeholders « en cours de développement ».
 - Beaucoup de tables business (suppliers, purchases, employees, payroll, absences, files, bank/cashEntries, analytics) **sont schématisées mais sans routes API ni UI**. Le seul module fonctionnel end-to-end est la **checklist quotidienne**.
+- **Migration restaurant → SaaS générique en cours** :
+  - ✅ Catalogue `business_templates` + API publique (PR #9)
+  - ✅ `tenants.templateId/vocabulary/modulesEnabled` ajoutés (PR #10a). `businessType` et `features` deprecated, conservés pour compat tant que `templateId` est nullable.
+  - ✅ Colonnes `items.nameVi/nameTh` et `categories.nameVi/nameTh` supprimées (purge restaurant-ism : c'était spécifique à un Sushi Bar).
+  - ✅ Alfred prompt dégénéricisé : nom du tenant + vocabulary dynamiques, plus de Valentine/Maillane/Sushi hardcodés.
+  - ⏳ **Reste** : signup public avec template picker (PR séparée après auth nominative), passer `tenant.templateId` en NOT NULL et droper `businessType` (post-migration des données).
 
 ### Sécurité — à corriger
 - ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).
@@ -208,6 +215,7 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 ### Dette technique
 - **`AuthSession.tenantId: string`** (middleware/auth.ts) vs `session.tenantId = result.tenant.id` (number, route auth.ts) — type incohérent. Voir aussi la comparaison `session.tenantId !== req.tenantId` dans checklist.ts.
+- **Routes Alfred** : reçoivent `tenantId` dans le body (qui est en réalité un slug, legacy nom). À refactorer pour utiliser `resolveTenant` middleware comme le reste du code (= URL `/api/alfred/:slug/*`). Actuellement le default `"val"` a été retiré ; envoie d'un slug obligatoire, lookup interne.
 - ✅ ~~`requireTenantAuth` dupliqué inline dans `checklist.ts`~~ — déplacé dans `server/middleware/auth.ts`, importé là où nécessaire, couvert par `requireTenantAuth.test.ts` (6 tests).
 - **Route `GET /history`** : `byDate[date].total = allItems.length` calcule le total avec les items actifs **aujourd'hui**, pas à la date X — biaise les pourcentages historiques si la liste d'items évolue.
 - **Aucun test, aucune CI** — toute régression doit être détectée à la main.
