@@ -24,7 +24,10 @@ const updateTenantSchema = z
   .object({
     name: z.string().min(1).max(100).optional(),
     shortName: z.string().max(50).nullable().optional(),
+    templateId: z.number().int().positive().optional(),
     businessType: z.string().max(50).optional(),
+    vocabulary: z.record(z.string(), z.string()).optional(),
+    modulesEnabled: z.array(z.string()).optional(),
     pinCode: z.string().min(4).max(8).optional(),
     adminCode: z.string().min(4).max(8).optional(),
     email: z.string().email().nullable().optional(),

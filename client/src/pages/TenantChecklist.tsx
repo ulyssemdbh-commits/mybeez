@@ -17,8 +17,6 @@ interface TenantChecklistProps {
 interface Category {
   id: number;
   name: string;
-  nameVi?: string;
-  nameTh?: string;
   zone?: number;
   items: Item[];
 }
@@ -26,8 +24,6 @@ interface Category {
 interface Item {
   id: number;
   name: string;
-  nameVi?: string;
-  nameTh?: string;
   isChecked: boolean;
 }
 
@@ -204,7 +200,6 @@ export default function TenantChecklist({ slug }: TenantChecklistProps) {
           <div key={cat.id} className="space-y-1" data-testid={`category-${cat.id}`}>
             <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide px-1">
               {cat.name}
-              {cat.nameVi && <span className="ml-2 text-xs font-normal opacity-50">{cat.nameVi}</span>}
             </h2>
             <div className="bg-card rounded-xl border divide-y">
               {cat.items.map((item) => (
@@ -229,9 +224,6 @@ export default function TenantChecklist({ slug }: TenantChecklistProps) {
                   )}>
                     {item.name}
                   </span>
-                  {item.nameVi && (
-                    <span className="text-xs text-muted-foreground/50">{item.nameVi}</span>
-                  )}
                 </button>
               ))}
               {cat.items.length === 0 && (

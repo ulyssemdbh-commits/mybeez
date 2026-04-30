@@ -3,11 +3,19 @@
  *
  * Manages tenant lifecycle: creation, lookup, client code generation.
  * Each tenant gets a unique 8-digit client code at creation.
+ *
+ * Template hydration (PR #10a):
+ *   - If `data.templateId` is set, the corresponding business template
+ *     is loaded and its `modules` / `vocabulary` populate the tenant
+ *     defaults UNLESS the caller passed explicit values.
+ *   - Caller-provided values always win — the template only fills the
+ *     gaps. This lets the admin override at creation time.
  */
 
 import { db } from "../db";
 import { tenants, type Tenant, type InsertTenant } from "../../shared/schema/tenants";
 import { eq } from "drizzle-orm";
+import { templateService } from "./templateService";
 
 class TenantService {
   private cache: Map<string, Tenant> = new Map();
@@ -22,10 +30,32 @@ class TenantService {
     return name
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[̀-ͯ]/g, "")
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")
       .substring(0, 30);
+  }
+
+  /**
+   * Hydrates tenant defaults from a template. Returns the partial
+   * "patch" to merge — caller-supplied values take precedence.
+   *
+   * Pure-ish function (only DB read via templateService cache); broken
+   * out so the create() pipeline stays linear.
+   */
+  private async hydrateFromTemplate(
+    templateId: number | null | undefined,
+    data: InsertTenant,
+  ): Promise<{ vocabulary?: Record<string, string>; modulesEnabled?: string[] }> {
+    if (!templateId) return {};
+    const tpl = await templateService.getById(templateId);
+    if (!tpl) {
+      throw new Error(`tenantService.create: unknown templateId=${templateId}`);
+    }
+    const patch: { vocabulary?: Record<string, string>; modulesEnabled?: string[] } = {};
+    if (data.vocabulary === undefined) patch.vocabulary = tpl.vocabulary;
+    if (data.modulesEnabled === undefined) patch.modulesEnabled = tpl.modules;
+    return patch;
   }
 
   async create(data: InsertTenant): Promise<Tenant> {
@@ -40,16 +70,24 @@ class TenantService {
     }
 
     const slug = data.slug || this.slugify(data.name);
+    const templatePatch = await this.hydrateFromTemplate(data.templateId, data);
 
-    const [tenant] = await db.insert(tenants).values({
-      ...data,
-      clientCode,
-      slug,
-    }).returning();
+    const [tenant] = await db
+      .insert(tenants)
+      .values({
+        ...data,
+        ...templatePatch,
+        clientCode,
+        slug,
+      })
+      .returning();
 
     this.cache.set(slug, tenant);
     this.cache.set(clientCode, tenant);
-    console.log(`[Tenant] Created: ${tenant.name} (${clientCode}) → /${slug}`);
+    console.log(
+      `[Tenant] Created: ${tenant.name} (${clientCode}) → /${slug}` +
+        (tenant.templateId ? ` [templateId=${tenant.templateId}]` : ""),
+    );
     return tenant;
   }
 
@@ -85,7 +123,8 @@ class TenantService {
   }
 
   async update(id: number, data: Partial<InsertTenant>): Promise<Tenant | null> {
-    const [tenant] = await db.update(tenants)
+    const [tenant] = await db
+      .update(tenants)
       .set({ ...data, updatedAt: new Date() })
       .where(eq(tenants.id, id))
       .returning();
@@ -97,9 +136,12 @@ class TenantService {
     return tenant || null;
   }
 
-  async loginWithPin(pin: string, slug?: string): Promise<{ success: boolean; tenant?: Tenant; role?: string; error?: string }> {
+  async loginWithPin(
+    pin: string,
+    slug?: string,
+  ): Promise<{ success: boolean; tenant?: Tenant; role?: string; error?: string }> {
     const allTenants = slug
-      ? [await this.getBySlug(slug)].filter(Boolean) as Tenant[]
+      ? ([await this.getBySlug(slug)].filter(Boolean) as Tenant[])
       : await this.listAll();
 
     for (const tenant of allTenants) {
