@@ -58,21 +58,26 @@ mybeez/
 │   │   └── auth.ts                 # requireAuth, requireAdmin, getAuthSession
 │   ├── routes/
 │   │   ├── auth.ts                 # /api/auth/{pin-login, logout, me}
-│   │   ├── tenants.ts              # /api/tenants — ⚠ AUCUNE AUTH
+│   │   ├── tenants.ts              # /api/tenants — gatées par requireSuperadmin (Bearer)
+│   │   ├── templates.ts            # /api/templates (public, read-only catalog vertical-agnostic)
 │   │   ├── checklist.ts            # /api/checklist/:slug/* — toutes scopées par tenant
 │   │   └── alfred.ts               # /api/alfred/{chat, analyze, clear}
-│   └── services/
-│       ├── tenantService.ts        # CRUD tenants + cache mémoire + génération clientCode 8 chiffres
-│       ├── domainService.ts        # resolveTenantByHost (subdomain + custom domain) + cache 60s
-│       ├── auth.ts                 # délègue à tenantService.loginWithPin
-│       ├── realtimeSync.ts         # SSE par tenant + emitChecklistUpdated()
-│       ├── alfred/alfredService.ts # Chat AI avec historique en mémoire par tenant
-│       └── core/openaiClient.ts    # Factory provider AI (OpenAI > Gemini > Grok)
+│   ├── services/
+│   │   ├── tenantService.ts        # CRUD tenants + cache mémoire + génération clientCode 8 chiffres
+│   │   ├── domainService.ts        # resolveTenantByHost (subdomain + custom domain) + cache 60s
+│   │   ├── templateService.ts      # catalog business_templates en cache mémoire (small set)
+│   │   ├── auth.ts                 # délègue à tenantService.loginWithPin
+│   │   ├── realtimeSync.ts         # SSE par tenant + emitChecklistUpdated()
+│   │   ├── alfred/alfredService.ts # Chat AI avec historique en mémoire par tenant
+│   │   └── core/openaiClient.ts    # Factory provider AI (OpenAI > Gemini > Grok)
+│   └── seed/
+│       └── templates.ts            # 14 verticals (3 top + 11 sub) — source of truth pour seed:templates
 ├── shared/           # Types et schémas partagés (back ↔ front)
-│   ├── schema.ts                   # re-export tenants + checklist + domains
+│   ├── schema.ts                   # re-export tenants + checklist + domains + templates
 │   └── schema/
 │       ├── tenants.ts              # table tenants (multi-tenant root)
 │       ├── domains.ts              # tenant_domains (custom domains uniquement, vérification + SSL status)
+│       ├── templates.ts            # business_templates : catalogue vertical-agnostic, self-FK 2 niveaux
 │       └── checklist.ts            # categories, items, checks, futureItems, emailLogs, comments,
 │                                   # suppliers, purchases, generalExpenses, files, bankEntries,
 │                                   # cashEntries, employees, payroll, absences, analytics
@@ -82,6 +87,7 @@ mybeez/
     │   └── backup.ts               # fonctions pures (backupKey, retention, sort) — testées
     ├── backup-postgres.ts          # pg_dump | gzip | upload R2 + retention sweep
     ├── restore-postgres.ts         # liste / restore depuis R2 (dry-run par défaut)
+    ├── seed-templates.ts           # upsert idempotent depuis server/seed/templates.ts
     └── __tests__/                  # vitest sur les helpers purs
 ```
 
@@ -118,6 +124,7 @@ mybeez/
 | `npm run db:push` | Sync du schéma Drizzle vers la DB (destructif si `--force`) |
 | `npm run backup` | Dump Postgres → gzip → R2 (`mybeezdb/YYYY-MM-DD/...sql.gz`) + retention sweep |
 | `npm run restore -- <key\|latest>` | Restore depuis R2 vers `DATABASE_URL` (sans arg = liste les 20 dumps les plus récents) |
+| `npm run seed:templates` | Upsert le catalogue `business_templates` depuis `server/seed/templates.ts` (idempotent) |
 
 **Variables d'env** : voir `.env.example` (à la racine) pour la liste complète et commentée.
 - Requis : `DATABASE_URL`, `SESSION_SECRET` (obligatoire en prod, default dev fourni)
@@ -217,7 +224,9 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 | Terme | Définition |
 |---|---|
-| **Tenant** | Un restaurant client. Une row dans la table `tenants`. |
+| **Tenant** | Un compte client (peut être restaurant, salon, garage, boutique...). Une row dans `tenants`. |
+| **Template** | Un archétype d'activité (restaurant, coiffure, boutique...). Détermine modules, vocabulaire, TVA par défaut. Source de vérité = `server/seed/templates.ts`. |
+| **Vertical** | Catégorie top-level de templates : `commerce_de_bouche`, `entreprise_services`, `retail_b2c`. |
 | **Slug** | Nom URL-friendly du tenant (ex: `valentine`, `maillane`). Unique. |
 | **Client code** | Code à 8 chiffres généré à la création, montré à l'utilisateur. |
 | **PIN code** | Code staff (4–8 chiffres) — accès checklist quotidienne. |

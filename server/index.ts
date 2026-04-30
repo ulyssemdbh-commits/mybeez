@@ -83,6 +83,9 @@ async function registerRoutes() {
   const { registerTenantRoutes } = await import("./routes/tenants");
   registerTenantRoutes(app);
 
+  const { registerTemplateRoutes } = await import("./routes/templates");
+  registerTemplateRoutes(app);
+
   const { registerAlfredRoutes } = await import("./routes/alfred");
   registerAlfredRoutes(app);
 
