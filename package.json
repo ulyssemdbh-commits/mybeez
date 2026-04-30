@@ -16,7 +16,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "backup": "tsx scripts/backup-postgres.ts",
-    "restore": "tsx scripts/restore-postgres.ts"
+    "restore": "tsx scripts/restore-postgres.ts",
+    "seed:templates": "tsx scripts/seed-templates.ts"
   },
   "engines": {
     "node": ">=20.0.0"
