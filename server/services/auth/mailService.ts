@@ -25,7 +25,7 @@ interface SendArgs {
   html: string;
 }
 
-const FROM_DEFAULT = "myBeez <noreply@mybeez.com>";
+const FROM_DEFAULT = "myBeez <noreply@mybeez-ai.com>";
 
 function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   const apiKey = env.RESEND_API_KEY;
