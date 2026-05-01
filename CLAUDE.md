@@ -111,7 +111,7 @@ mybeez/
 - **Single DB, single schema** : toutes les tables business ont une colonne `tenant_id` (integer, FK logique vers `tenants.id`).
 - **Aucune RLS PostgreSQL** : l'isolation est garantie uniquement par les `where(eq(table.tenantId, tid))` côté Drizzle. Toute requête manquant ce filtre = fuite trans-tenant.
 - **Résolution (PR #7)** : middleware `resolveTenant` essaye **hostname-first** (via `domainService.resolveTenantByHost`) :
-  - subdomain `<slug>.<root>` (les `<root>` viennent de `ROOT_DOMAINS`, default `mybeez.com,localhost`)
+  - subdomain `<slug>.<root>` (les `<root>` viennent de `ROOT_DOMAINS`, default `mybeez-ai.com,localhost`)
   - sinon custom domain (lookup `tenant_domains` avec `verifiedAt IS NOT NULL`)
   - **fallback legacy** sur `req.params.slug` si la résolution par host échoue (transition douce, à retirer)
   - 400 si `:slug` URL ne matche pas le tenant résolu par host
@@ -137,7 +137,7 @@ mybeez/
 **Variables d'env** : voir `.env.example` (à la racine) pour la liste complète et commentée.
 - Requis : `DATABASE_URL`, `SESSION_SECRET` (obligatoire en prod, default dev fourni)
 - Pour les routes admin `/api/tenants` : `SUPERADMIN_TOKEN` (Bearer token de ≥16 chars). Sans ça, ces routes répondent 503. Mécanisme **temporaire**, remplacé par auth nominative + RBAC en PR #8-10.
-- Tenancy : `ROOT_DOMAINS` (csv ; default `mybeez.com,localhost`). Tout host ne matchant aucun root est traité comme custom domain et passe par `tenant_domains`.
+- Tenancy : `ROOT_DOMAINS` (csv ; default `mybeez-ai.com,localhost`). Tout host ne matchant aucun root est traité comme custom domain et passe par `tenant_domains`.
 - Backups R2 : `R2_ENDPOINT`, `R2_BUCKET` (= `r2mybeez`), `R2_PREFIX` (= `mybeezdb/`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `BACKUP_RETENTION_DAYS` (default 30).
 - AI : `OPENAI_API_KEY`, `GEMINI_API_KEY`, `XAI_API_KEY` (au moins un pour Alfred)
 - Optionnels : `PORT` (default 3000)

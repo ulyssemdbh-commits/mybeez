@@ -161,7 +161,7 @@ registerRoutes()
     if (process.env.NODE_ENV === "production") serveStatic();
     const server = createServer(app);
     server.listen(PORT, "0.0.0.0", () => {
-      const roots = process.env.ROOT_DOMAINS || "mybeez.com,localhost";
+      const roots = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
       console.log(`[myBeez] Server running on port ${PORT}`);
       console.log(`[myBeez] Tenant root domains: ${roots}`);
       console.log(`[myBeez] AI: OpenAI=${!!process.env.OPENAI_API_KEY} Gemini=${!!process.env.GEMINI_API_KEY} Grok=${!!process.env.XAI_API_KEY}`);

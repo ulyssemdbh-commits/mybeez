@@ -10,9 +10,9 @@
  *      → tenantService.getBySlug(subdomain)
  *   4. Else → custom domain lookup in `tenant_domains` (must be verified)
  *
- * ROOT_DOMAINS env var: comma-separated list (default `mybeez.com,localhost`).
+ * ROOT_DOMAINS env var: comma-separated list (default `mybeez-ai.com,localhost`).
  *
- * The default subdomain `<slug>.mybeez.com` is NEVER stored in
+ * The default subdomain `<slug>.mybeez-ai.com` is NEVER stored in
  * `tenant_domains` — it is computed. Only customer-owned hostnames are
  * persisted there.
  */
@@ -24,7 +24,7 @@ import type { Tenant } from "../../shared/schema/tenants";
 import { and, eq, isNotNull } from "drizzle-orm";
 
 function getRootDomains(): string[] {
-  const raw = process.env.ROOT_DOMAINS || "mybeez.com,localhost";
+  const raw = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
   return raw
     .split(",")
     .map((d) => d.trim().toLowerCase())
