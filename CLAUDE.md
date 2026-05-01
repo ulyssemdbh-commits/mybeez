@@ -270,3 +270,40 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 - Avant de toucher à un service AI, vérifier la chaîne de fallback dans `services/core/openaiClient.ts`.
 - Pour exécuter le serveur en local sur Windows : préfixer `NODE_ENV` via PowerShell (cf. §6).
 - Privilégier la **suppression de code mort** (services orphelins, `emitSugu*` legacy) plutôt que l'ajout, sauf demande explicite.
+
+---
+
+## 9. Déploiement (Hetzner)
+
+**Cible** : Hetzner AX422 `65.21.209.102`, partagé avec macommande, ulyssepro.org et autres apps. Pattern aligné sur macommande.
+
+**Domaine** : `mybeez-ai.com` (Cloudflare, proxy ON, SSL Full strict). DNS apex + wildcard `*.mybeez-ai.com` → host. **Apex sert l'app** (page accueil/signup/login) ; chaque tenant accessible via `<slug>.mybeez-ai.com`. Pas de site marketing séparé pour l'instant.
+
+**Artefacts** (tous dans le repo) :
+- `Dockerfile` — multi-stage Node 20 alpine, expose 3000.
+- `docker-compose.yml` — 2 services :
+  - `app` → build local, port `127.0.0.1:3000:3000`, `env_file: .env.production`.
+  - `db` → `postgres:16-alpine`, port `127.0.0.1:5434:5432` (5433 occupé par macommande), volume `pgdata`, healthcheck `pg_isready`.
+  - Network bridge `mybeez-net`. Postgres mybeez **isolé** du Postgres host (5432) et de macommande.
+- `.env.production.example` — template ; copier en `.env.production` sur le host (jamais committé, ajouté au `.gitignore`).
+- `deploy/nginx/mybeez-ai.com.conf` — vhost (apex + wildcard, redirect 80→443, Cloudflare Origin Cert à `/etc/ssl/cloudflare/mybeez-ai.com.{pem,key}`, WebSocket/SSE).
+- `deploy/deploy.sh` — `git pull` → `docker compose up -d --build` → `npm run db:push` → `nginx reload`.
+
+**Path host** : `/opt/mybeez/` (convention macommande).
+
+**Première mise en place (one-time)** sur le host :
+1. `git clone https://github.com/ulyssemdbh-commits/mybeez.git /opt/mybeez`
+2. `cp /opt/mybeez/.env.production.example /opt/mybeez/.env.production` puis remplir secrets (`SESSION_SECRET`, `SUPERADMIN_TOKEN`, `POSTGRES_PASSWORD`, `DATABASE_URL` avec le même password, `RESEND_API_KEY`, `R2_*`, AI keys).
+3. Poser le Cloudflare Origin Cert : `/etc/ssl/cloudflare/mybeez-ai.com.{pem,key}` (apex + wildcard, déjà généré dans le dashboard CF).
+4. Symlink vhost : `ln -s /opt/mybeez/deploy/nginx/mybeez-ai.com.conf /etc/nginx/sites-enabled/`.
+5. `cd /opt/mybeez && bash deploy/deploy.sh`.
+
+**Re-déploiements** : `cd /opt/mybeez && bash deploy/deploy.sh` (pull + rebuild + push schema + reload nginx).
+
+**Backups** : `npm run backup` (déjà codé) à wirer en cron systemd timer une fois la prod stable. Bucket R2 `r2mybeez` préfixe `mybeezdb/`.
+
+**À ne PAS oublier** :
+- `APP_BASE_URL` REQUIRED en prod (sinon le serveur refuse de booter — Host-header injection guard).
+- `SESSION_SECRET` REQUIRED en prod (idem).
+- Cloudflare SSL mode = **Full (strict)** (pas Flexible) sinon le browser sert mais l'app reçoit du HTTP.
+- Le port 3000 est libre côté host (cf. `reference_mybeez_hetzner` mémoire).
