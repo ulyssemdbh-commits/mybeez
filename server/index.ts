@@ -31,6 +31,15 @@ if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
   process.exit(1);
 }
 
+// APP_BASE_URL is required in production — it backs auth email links
+// (verify, reset). Without it, getAppBaseUrl() falls back to the request's
+// Host header, which is attacker-controlled (Host-header injection ⇒
+// reset/verify links pointing at a domain owned by the attacker).
+if (process.env.NODE_ENV === "production" && !process.env.APP_BASE_URL) {
+  console.error("[myBeez] FATAL: APP_BASE_URL must be set in production (e.g. https://app.mybeez-ai.com)");
+  process.exit(1);
+}
+
 if (!process.env.SUPERADMIN_TOKEN || process.env.SUPERADMIN_TOKEN.length < 16) {
   const msg =
     "[myBeez] WARNING: SUPERADMIN_TOKEN is not set (or shorter than 16 chars). " +
