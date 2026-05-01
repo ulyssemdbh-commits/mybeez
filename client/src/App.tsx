@@ -50,7 +50,7 @@ function Home() {
             Connectez-vous avec votre code client à 8 chiffres ou accédez directement à votre restaurant via son URL dédiée.
           </p>
           <div className="text-xs text-muted-foreground/60">
-            Format URL : mybeez.com/<span className="font-mono text-primary">votre-restaurant</span>
+            Format URL : mybeez-ai.com/<span className="font-mono text-primary">votre-restaurant</span>
           </div>
         </div>
       </div>
