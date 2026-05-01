@@ -37,6 +37,10 @@ if (!process.env.SUPERADMIN_TOKEN || process.env.SUPERADMIN_TOKEN.length < 16) {
   console.warn(msg);
 }
 
+// One-shot warning if Resend (auth emails) isn't configured.
+const { warnIfMailNotConfigured } = await import("./services/auth/mailService");
+warnIfMailNotConfigured();
+
 process.on("uncaughtException", (err) => {
   console.error("[FATAL] Uncaught exception:", err.message, err.stack);
 });
@@ -100,6 +104,9 @@ async function registerRoutes() {
 
   const { registerAuthRoutes } = await import("./routes/auth");
   registerAuthRoutes(app);
+
+  const { registerUserAuthRoutes } = await import("./routes/userAuth");
+  registerUserAuthRoutes(app);
 
   const { registerTenantRoutes } = await import("./routes/tenants");
   registerTenantRoutes(app);
