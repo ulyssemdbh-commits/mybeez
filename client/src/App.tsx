@@ -11,6 +11,7 @@ const TenantChecklist = lazy(() => import("@/pages/TenantChecklist"));
 const TenantAdmin = lazy(() => import("@/pages/TenantAdmin"));
 const TenantHistory = lazy(() => import("@/pages/TenantHistory"));
 const TenantManagement = lazy(() => import("@/pages/TenantManagement"));
+const AuthLogin = lazy(() => import("@/pages/AuthLogin"));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return (
@@ -79,6 +80,10 @@ function App() {
           <main id="main-content">
             <Switch>
               <Route path="/" component={Home} />
+
+              <Route path="/auth/login">
+                {() => <LazyPage><AuthLogin /></LazyPage>}
+              </Route>
 
               <Route path="/:slug">
                 {(params) => <LazyPage><TenantChecklist slug={params.slug} /></LazyPage>}

@@ -55,9 +55,10 @@ mybeez/
 │   ├── db.ts                       # Pool pg + drizzle(pool, { schema })
 │   ├── middleware/
 │   │   ├── tenant.ts               # resolveTenant: hostname-first (subdomain ou custom domain), fallback :slug
-│   │   └── auth.ts                 # requireAuth, requireAdmin, getAuthSession
+│   │   └── auth.ts                 # PIN: requireAuth/requireAdmin/requireTenantAuth ; nominative: requireUser/requireRole(...) ; legacy: requireSuperadmin (Bearer token)
 │   ├── routes/
-│   │   ├── auth.ts                 # /api/auth/{pin-login, logout, me}
+│   │   ├── auth.ts                 # /api/auth/{pin-login, logout, me}  (legacy PIN)
+│   │   ├── userAuth.ts             # /api/auth/user/{signup, login, logout, me, verify-email, forgot-password, reset-password}  (nominative)
 │   │   ├── tenants.ts              # /api/tenants — gatées par requireSuperadmin (Bearer)
 │   │   ├── templates.ts            # /api/templates (public, read-only catalog vertical-agnostic)
 │   │   ├── checklist.ts            # /api/checklist/:slug/* — toutes scopées par tenant
@@ -66,7 +67,12 @@ mybeez/
 │   │   ├── tenantService.ts        # CRUD tenants + cache mémoire + génération clientCode 8 chiffres
 │   │   ├── domainService.ts        # resolveTenantByHost (subdomain + custom domain) + cache 60s
 │   │   ├── templateService.ts      # catalog business_templates en cache mémoire (small set)
-│   │   ├── auth.ts                 # délègue à tenantService.loginWithPin
+│   │   ├── auth.ts                 # délègue à tenantService.loginWithPin (legacy PIN)
+│   │   ├── auth/passwordService.ts # argon2id hash/verify + bornes longueur (OWASP 2024)
+│   │   ├── auth/tokenService.ts    # tokens reset/verify : random 32B base64url, sha256 hash, TTL constants
+│   │   ├── auth/userService.ts     # CRUD users + lifecycle tokens (issue/consume verify + reset)
+│   │   ├── auth/userTenantService.ts # CRUD user_tenants (M2M user↔tenant + role)
+│   │   ├── auth/mailService.ts     # Resend client + templates verify/reset, fail-soft (logs si pas de RESEND_API_KEY)
 │   │   ├── realtimeSync.ts         # SSE par tenant + emitChecklistUpdated()
 │   │   ├── alfred/alfredService.ts # Chat AI : history en mémoire par tenant slug + provider chain
 │   │   ├── alfred/prompt.ts        # buildSystemPrompt(tenant) — pure, testable, dynamique (vocabulary)
@@ -205,7 +211,8 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
   - ✅ Colonnes `items.nameVi/nameTh` et `categories.nameVi/nameTh` supprimées (purge restaurant-ism : c'était spécifique à un Sushi Bar).
   - ✅ Alfred prompt dégénéricisé : nom du tenant + vocabulary dynamiques, plus de Valentine/Maillane/Sushi hardcodés.
   - ✅ Schéma auth (PR #11) : `users`, `user_tenants` (M2M avec role), `password_reset_tokens`, `email_verification_tokens`, `mfa_secrets`, `audit_log`. Session store basculé vers Postgres (`connect-pg-simple` → table `user_sessions` créée auto).
-  - ⏳ **Reste** : routes auth nominative (PR #12 email/password + RBAC), MFA + audit (PR #13), signup public avec template picker (PR séparée après l'auth), passer `tenant.templateId` en NOT NULL et droper `businessType` (post-migration des données).
+  - ✅ Auth nominative email/password (PR #12) : argon2id, routes `/api/auth/user/*`, middleware `requireUser` + `requireRole(...)`, mailService Resend (fail-soft dev), page `/auth/login` minimale. PIN auth coexiste pendant la migration.
+  - ⏳ **Reste** : MFA TOTP + audit log writes + rate limit/lockout (PR #13), application de `requireRole` aux routes existantes (à la place de `requireTenantAuth` qui est PIN-only), signup public avec template picker (PR après #13), purge PIN auth, passer `tenant.templateId` en NOT NULL et droper `businessType`.
 
 ### Sécurité — à corriger
 - ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).

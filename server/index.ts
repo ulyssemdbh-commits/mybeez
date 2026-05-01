@@ -18,6 +18,7 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { pool } from "./db";
+import { warnIfMailNotConfigured } from "./services/auth/mailService";
 
 console.log(`[myBeez] Starting — PID=${process.pid}, NODE_ENV=${process.env.NODE_ENV || "development"}`);
 
@@ -36,6 +37,9 @@ if (!process.env.SUPERADMIN_TOKEN || process.env.SUPERADMIN_TOKEN.length < 16) {
     "Admin routes (/api/tenants) will respond 503 until configured.";
   console.warn(msg);
 }
+
+// One-shot warning if Resend (auth emails) isn't configured.
+warnIfMailNotConfigured();
 
 process.on("uncaughtException", (err) => {
   console.error("[FATAL] Uncaught exception:", err.message, err.stack);
@@ -100,6 +104,9 @@ async function registerRoutes() {
 
   const { registerAuthRoutes } = await import("./routes/auth");
   registerAuthRoutes(app);
+
+  const { registerUserAuthRoutes } = await import("./routes/userAuth");
+  registerUserAuthRoutes(app);
 
   const { registerTenantRoutes } = await import("./routes/tenants");
   registerTenantRoutes(app);
