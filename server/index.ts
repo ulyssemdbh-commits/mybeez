@@ -18,6 +18,7 @@ import { createServer } from "http";
 import path from "path";
 import fs from "fs";
 import { pool } from "./db";
+import { warnIfMailNotConfigured } from "./services/auth/mailService";
 
 console.log(`[myBeez] Starting — PID=${process.pid}, NODE_ENV=${process.env.NODE_ENV || "development"}`);
 
@@ -38,7 +39,6 @@ if (!process.env.SUPERADMIN_TOKEN || process.env.SUPERADMIN_TOKEN.length < 16) {
 }
 
 // One-shot warning if Resend (auth emails) isn't configured.
-const { warnIfMailNotConfigured } = await import("./services/auth/mailService");
 warnIfMailNotConfigured();
 
 process.on("uncaughtException", (err) => {
