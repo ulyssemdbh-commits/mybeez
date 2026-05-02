@@ -275,6 +275,8 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 ## 9. Déploiement (Hetzner)
 
+**Statut (2026-05-02)** : déployé et accessible sur `https://mybeez-ai.com`. Boot propre, schéma drizzle posté (22+ tables), nginx + CF Origin Cert OK.
+
 **Cible** : Hetzner AX422 `65.21.209.102`, partagé avec macommande, ulyssepro.org et autres apps. Pattern aligné sur macommande.
 
 **Domaine** : `mybeez-ai.com` (Cloudflare, proxy ON, SSL Full strict). DNS apex + wildcard `*.mybeez-ai.com` → host. **Apex sert l'app** (page accueil/signup/login) ; chaque tenant accessible via `<slug>.mybeez-ai.com`. Pas de site marketing séparé pour l'instant.
@@ -307,3 +309,13 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 - `SESSION_SECRET` REQUIRED en prod (idem).
 - Cloudflare SSL mode = **Full (strict)** (pas Flexible) sinon le browser sert mais l'app reçoit du HTTP.
 - Le port 3000 est libre côté host (cf. `reference_mybeez_hetzner` mémoire).
+
+**Pièges rencontrés au premier déploiement (résolus, retenir pour les futurs cas)** :
+- `import.meta.dirname` n'est PAS polyfill par esbuild en bundle CJS (`--format=cjs`) → undefined au runtime, crash. Si tu en ajoutes ailleurs côté serveur, prévois un fallback compat CJS (PR #18 a basculé `serveStatic()` vers `process.cwd()`).
+- Le runner stage du Dockerfile doit copier `drizzle.config.ts` ET `shared/` pour que `npm run db:push` fonctionne dans le container. Sinon `drizzle-kit` cherche `drizzle.config.json` et échoue (PR #19).
+- Quand tu édites `.env.production` avec `nano`, **prends garde** de ne pas inclure la commande shell elle-même dans le buffer ; docker compose plante avec `unexpected character in variable name`.
+
+**Reste à faire post-déploiement initial** :
+- Cron systemd timer pour `npm run backup` (backups Postgres → R2).
+- Compléter `RESEND_API_KEY` quand l'inscription d'un user réel doit recevoir l'email verify.
+- Surveiller les logs au premier signup : `docker compose logs -f app`.
