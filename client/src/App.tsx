@@ -16,6 +16,7 @@ const AuthForgotPassword = lazy(() => import("@/pages/AuthForgotPassword"));
 const AuthResetPassword = lazy(() => import("@/pages/AuthResetPassword"));
 const AuthVerify = lazy(() => import("@/pages/AuthVerify"));
 const Landing = lazy(() => import("@/pages/Landing"));
+const Admin = lazy(() => import("@/pages/Admin"));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return (
@@ -69,6 +70,10 @@ function App() {
               </Route>
               <Route path="/auth/verify">
                 {() => <LazyPage><AuthVerify /></LazyPage>}
+              </Route>
+
+              <Route path="/123admin">
+                {() => <LazyPage><Admin /></LazyPage>}
               </Route>
 
               <Route path="/:slug">
