@@ -146,7 +146,11 @@ async function registerRoutes() {
 }
 
 function serveStatic() {
-  const distPath = path.resolve(import.meta.dirname, "..", "dist", "public");
+  // process.cwd() instead of import.meta.dirname: esbuild bundles this file
+  // as CJS (`--format=cjs`) and does NOT polyfill `import.meta.dirname`,
+  // so it resolves to undefined at runtime → path.resolve crashes. cwd is
+  // /app in the Docker container (WORKDIR) and the repo root in dev.
+  const distPath = path.resolve(process.cwd(), "dist", "public");
   const indexHtml = path.resolve(distPath, "index.html");
 
   if (!fs.existsSync(distPath)) {
