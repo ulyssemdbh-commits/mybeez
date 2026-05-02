@@ -14,24 +14,24 @@
   --popover: 0 0% 100%;
   --popover-foreground: 224 71% 4%;
   
-  --primary: 226 70% 55%;
-  --primary-foreground: 210 40% 98%;
-  
+  --primary: 30 95% 53%;
+  --primary-foreground: 0 0% 100%;
+
   --secondary: 220 14% 96%;
   --secondary-foreground: 224 71% 4%;
-  
+
   --muted: 220 14% 96%;
   --muted-foreground: 220 9% 46%;
-  
+
   --accent: 243 75% 59%;
   --accent-foreground: 210 40% 98%;
-  
+
   --destructive: 0 84% 60%;
   --destructive-foreground: 210 40% 98%;
 
   --border: 220 13% 91%;
   --input: 220 13% 91%;
-  --ring: 226 70% 55%;
+  --ring: 30 95% 53%;
   
   --radius: 0.75rem;
 
@@ -55,24 +55,24 @@
   --popover: 222 47% 8%;
   --popover-foreground: 210 40% 96%;
   
-  --primary: 226 70% 55%;
-  --primary-foreground: 210 40% 98%;
-  
+  --primary: 30 95% 58%;
+  --primary-foreground: 0 0% 100%;
+
   --secondary: 222 47% 14%;
   --secondary-foreground: 210 40% 96%;
-  
+
   --muted: 222 47% 12%;
   --muted-foreground: 215 20% 60%;
-  
+
   --accent: 243 75% 59%;
   --accent-foreground: 210 40% 98%;
-  
+
   --destructive: 0 63% 45%;
   --destructive-foreground: 210 40% 98%;
 
   --border: 222 30% 18%;
   --input: 222 30% 18%;
-  --ring: 226 70% 55%;
+  --ring: 30 95% 58%;
   
   /* AI accent colors - brighter in dark mode */
   --ai-gradient-from: 226 75% 60%;
