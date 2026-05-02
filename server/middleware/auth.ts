@@ -16,6 +16,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { timingSafeEqual } from "crypto";
 import { userTenantService } from "../services/auth/userTenantService";
+import { userService } from "../services/auth/userService";
 import { TENANT_ROLES, type TenantRole } from "../../shared/schema/users";
 
 export interface AuthSession {
@@ -143,6 +144,30 @@ export function getUserSession(req: Request): UserSession | null {
 export function requireUser(req: Request, res: Response, next: NextFunction) {
   const u = getUserSession(req);
   if (!u) return res.status(401).json({ error: "Connexion requise" });
+  return next();
+}
+
+/**
+ * `requireSuperadminUser` — gates a route on a logged-in user with
+ * `users.isSuperadmin = true`. Distinct from the legacy `requireSuperadmin`
+ * (Bearer token), which exists only for the temporary /api/tenants gate.
+ *
+ * - 401 if no nominative session
+ * - 401 if the session points at a deleted/disabled user (clears the session)
+ * - 403 if the user is not a superadmin
+ */
+export async function requireSuperadminUser(req: Request, res: Response, next: NextFunction) {
+  const u = getUserSession(req);
+  if (!u) return res.status(401).json({ error: "Connexion requise" });
+  const user = await userService.getById(u.userId);
+  if (!user || !user.isActive) {
+    const session = req.session as unknown as { userId?: number };
+    delete session.userId;
+    return res.status(401).json({ error: "Session invalide" });
+  }
+  if (!user.isSuperadmin) {
+    return res.status(403).json({ error: "Accès refusé" });
+  }
   return next();
 }
 
