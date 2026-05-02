@@ -12,6 +12,9 @@ const TenantAdmin = lazy(() => import("@/pages/TenantAdmin"));
 const TenantHistory = lazy(() => import("@/pages/TenantHistory"));
 const TenantManagement = lazy(() => import("@/pages/TenantManagement"));
 const AuthLogin = lazy(() => import("@/pages/AuthLogin"));
+const AuthForgotPassword = lazy(() => import("@/pages/AuthForgotPassword"));
+const AuthResetPassword = lazy(() => import("@/pages/AuthResetPassword"));
+const AuthVerify = lazy(() => import("@/pages/AuthVerify"));
 const Landing = lazy(() => import("@/pages/Landing"));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
@@ -57,6 +60,15 @@ function App() {
 
               <Route path="/auth/login">
                 {() => <LazyPage><AuthLogin /></LazyPage>}
+              </Route>
+              <Route path="/auth/forgot-password">
+                {() => <LazyPage><AuthForgotPassword /></LazyPage>}
+              </Route>
+              <Route path="/auth/reset">
+                {() => <LazyPage><AuthResetPassword /></LazyPage>}
+              </Route>
+              <Route path="/auth/verify">
+                {() => <LazyPage><AuthVerify /></LazyPage>}
               </Route>
 
               <Route path="/:slug">
