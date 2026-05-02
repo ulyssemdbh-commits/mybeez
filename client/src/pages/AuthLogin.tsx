@@ -43,61 +43,92 @@ export default function AuthLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <form
-        onSubmit={onSubmit}
-        className="w-full max-w-sm space-y-4 bg-card rounded-2xl border p-6"
-        data-testid="auth-login-form"
-      >
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold">Connexion</h1>
-          <p className="text-sm text-muted-foreground">Accédez à votre espace myBeez.</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm space-y-6">
+        <a href="/" className="block text-center space-y-3" aria-label="Retour à l'accueil myBeez">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+            <span className="text-2xl font-bold text-white">B</span>
+          </div>
+          <span className="block text-2xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
+            myBeez
+          </span>
+        </a>
 
-        <div className="space-y-1">
-          <label htmlFor="email" className="text-sm font-medium">Email</label>
-          <input
-            id="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            data-testid="auth-login-email"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label htmlFor="password" className="text-sm font-medium">Mot de passe</label>
-          <input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            minLength={12}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            data-testid="auth-login-password"
-          />
-        </div>
-
-        {(localError || loginError) && (
-          <p className="text-sm text-destructive" role="alert">
-            {localError ?? loginError}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={isLoggingIn}
-          className="w-full rounded-lg bg-primary text-primary-foreground py-2 text-sm font-medium disabled:opacity-50"
-          data-testid="auth-login-submit"
+        <form
+          onSubmit={onSubmit}
+          className="space-y-4 bg-white/80 dark:bg-zinc-800/80 backdrop-blur rounded-2xl border p-6"
+          data-testid="auth-login-form"
         >
-          {isLoggingIn ? "Connexion..." : "Se connecter"}
-        </button>
-      </form>
+          <div className="space-y-1">
+            <h1 className="text-xl font-semibold">Connexion</h1>
+            <p className="text-sm text-muted-foreground">Accédez à votre espace myBeez.</p>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="email" className="text-sm font-medium">Email</label>
+            <input
+              id="email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              data-testid="auth-login-email"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label htmlFor="password" className="text-sm font-medium">Mot de passe</label>
+              <a
+                href="/auth/forgot-password"
+                className="text-xs text-primary hover:underline"
+                data-testid="auth-login-forgot"
+              >
+                Mot de passe oublié ?
+              </a>
+            </div>
+            <input
+              id="password"
+              type="password"
+              autoComplete="current-password"
+              required
+              minLength={12}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              data-testid="auth-login-password"
+            />
+          </div>
+
+          {(localError || loginError) && (
+            <p className="text-sm text-destructive" role="alert">
+              {localError ?? loginError}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={isLoggingIn}
+            className="w-full rounded-lg bg-primary text-primary-foreground py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50 transition-opacity"
+            data-testid="auth-login-submit"
+          >
+            {isLoggingIn ? "Connexion..." : "Se connecter"}
+          </button>
+
+          <p className="text-center text-sm text-muted-foreground pt-2 border-t">
+            Pas encore de compte ?{" "}
+            <a
+              href="/auth/signup"
+              className="text-primary font-medium hover:underline"
+              data-testid="auth-login-signup-link"
+            >
+              S'inscrire
+            </a>
+          </p>
+        </form>
+      </div>
     </div>
   );
 }
