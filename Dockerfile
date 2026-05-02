@@ -24,5 +24,8 @@ COPY --from=builder /app/shared ./shared
 # invoked via `docker compose exec app npx tsx scripts/...` — need the source.
 COPY --from=builder /app/scripts ./scripts
 
+# scripts/seed-templates.ts imports the catalog from server/seed/templates.ts.
+COPY --from=builder /app/server/seed ./server/seed
+
 EXPOSE 3000
 CMD ["node", "dist/index.cjs"]
