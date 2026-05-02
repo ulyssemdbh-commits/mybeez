@@ -20,5 +20,9 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/drizzle.config.ts ./drizzle.config.ts
 COPY --from=builder /app/shared ./shared
 
+# tsx ops scripts (grant-superadmin, backup, restore, seed:templates) are
+# invoked via `docker compose exec app npx tsx scripts/...` — need the source.
+COPY --from=builder /app/scripts ./scripts
+
 EXPOSE 3000
 CMD ["node", "dist/index.cjs"]
