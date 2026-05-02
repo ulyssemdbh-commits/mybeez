@@ -12,6 +12,7 @@ const TenantAdmin = lazy(() => import("@/pages/TenantAdmin"));
 const TenantHistory = lazy(() => import("@/pages/TenantHistory"));
 const TenantManagement = lazy(() => import("@/pages/TenantManagement"));
 const AuthLogin = lazy(() => import("@/pages/AuthLogin"));
+const Landing = lazy(() => import("@/pages/Landing"));
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return (
@@ -27,35 +28,6 @@ function LazyPage({ children }: { children: React.ReactNode }) {
     }>
       {children}
     </Suspense>
-  );
-}
-
-function Home() {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
-      <div className="text-center space-y-8 max-w-lg w-full">
-        <div className="space-y-3">
-          <div className="w-20 h-20 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-            <span className="text-3xl font-bold text-white">B</span>
-          </div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
-            myBeez
-          </h1>
-          <p className="text-muted-foreground text-sm">
-            La plateforme de gestion pour entrepreneurs
-          </p>
-        </div>
-
-        <div className="bg-white/80 dark:bg-zinc-800/80 backdrop-blur rounded-2xl border p-6 space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Connectez-vous à votre espace ou accédez directement à votre activité via son URL dédiée.
-          </p>
-          <div className="text-xs text-muted-foreground/60">
-            Format URL : <span className="font-mono text-primary">votre-entreprise</span>.mybeez-ai.com
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -79,7 +51,9 @@ function App() {
           <SkipLink />
           <main id="main-content">
             <Switch>
-              <Route path="/" component={Home} />
+              <Route path="/">
+                {() => <LazyPage><Landing /></LazyPage>}
+              </Route>
 
               <Route path="/auth/login">
                 {() => <LazyPage><AuthLogin /></LazyPage>}
