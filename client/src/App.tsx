@@ -42,16 +42,16 @@ function Home() {
             myBeez
           </h1>
           <p className="text-muted-foreground text-sm">
-            Gestion multi-tenant pour la restauration
+            La plateforme de gestion pour entrepreneurs
           </p>
         </div>
 
         <div className="bg-white/80 dark:bg-zinc-800/80 backdrop-blur rounded-2xl border p-6 space-y-4">
           <p className="text-sm text-muted-foreground">
-            Connectez-vous avec votre code client à 8 chiffres ou accédez directement à votre restaurant via son URL dédiée.
+            Connectez-vous à votre espace ou accédez directement à votre activité via son URL dédiée.
           </p>
           <div className="text-xs text-muted-foreground/60">
-            Format URL : mybeez-ai.com/<span className="font-mono text-primary">votre-restaurant</span>
+            Format URL : <span className="font-mono text-primary">votre-entreprise</span>.mybeez-ai.com
           </div>
         </div>
       </div>
@@ -63,8 +63,8 @@ function NotFound() {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center space-y-4">
-        <h2 className="text-2xl font-bold text-foreground">Restaurant non trouvé</h2>
-        <p className="text-muted-foreground">Vérifiez votre URL ou contactez votre administrateur.</p>
+        <h2 className="text-2xl font-bold text-foreground">Page non trouvée</h2>
+        <p className="text-muted-foreground">Vérifiez l'URL ou contactez votre administrateur.</p>
         <a href="/" className="text-primary hover:underline text-sm">Retour à l'accueil</a>
       </div>
     </div>
