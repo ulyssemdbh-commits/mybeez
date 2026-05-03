@@ -44,6 +44,8 @@ import {
   boolean,
   timestamp,
   jsonb,
+  json,
+  varchar,
   index,
   primaryKey,
   uniqueIndex,
@@ -213,3 +215,25 @@ export type PasswordResetToken = typeof passwordResetTokens.$inferSelect;
 export type EmailVerificationToken = typeof emailVerificationTokens.$inferSelect;
 export type MfaSecret = typeof mfaSecrets.$inferSelect;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
+
+/**
+ * `user_sessions` is the express-session store provisioned by
+ * `connect-pg-simple` with `createTableIfMissing: true` (see
+ * server/index.ts). The schema is owned by that library, NOT by the app.
+ *
+ * We declare it here so drizzle-kit recognises it during `db:push` and
+ * stops trying to drop it (which would log every active user out, and
+ * kills non-interactive `db:push -T` because the prompt cannot be
+ * answered). The columns mirror connect-pg-simple's table.sql exactly.
+ */
+export const userSessions = pgTable(
+  "user_sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: json("sess").notNull(),
+    expire: timestamp("expire", { precision: 6 }).notNull(),
+  },
+  (table) => ({
+    expireIdx: index("IDX_session_expire").on(table.expire),
+  }),
+);

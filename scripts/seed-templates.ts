@@ -15,10 +15,13 @@
  * Required env: DATABASE_URL.
  */
 
-import { db } from "../server/db.ts";
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
 import { businessTemplates } from "../shared/schema/templates.ts";
 import { SEED_TEMPLATES } from "../server/seed/templates.ts";
 import { eq } from "drizzle-orm";
+
+const { Pool } = pg;
 
 function log(msg: string) {
   console.log(`[seed:templates] ${msg}`);
@@ -29,6 +32,11 @@ function fail(msg: string, err?: unknown): never {
   if (err) console.error(err);
   process.exit(1);
 }
+
+if (!process.env.DATABASE_URL) fail("DATABASE_URL is not set");
+
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const db = drizzle(pool, { schema: { businessTemplates } });
 
 async function upsertOne(parentId: number | null, t: (typeof SEED_TEMPLATES)[number]) {
   const values = {
@@ -56,8 +64,6 @@ async function upsertOne(parentId: number | null, t: (typeof SEED_TEMPLATES)[num
 }
 
 async function main() {
-  if (!process.env.DATABASE_URL) fail("DATABASE_URL is not set");
-
   log(`upserting ${SEED_TEMPLATES.length} templates`);
 
   // Pass 1: top-level
@@ -97,4 +103,8 @@ async function main() {
   void eq;
 }
 
-await main();
+try {
+  await main();
+} finally {
+  await pool.end();
+}
