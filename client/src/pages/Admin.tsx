@@ -525,6 +525,7 @@ export default function Admin() {
 
       {createUserOpen && (
         <CreateUserDialog
+          tenants={tenants}
           onCancel={() => setCreateUserOpen(false)}
           onCreated={async () => {
             setCreateUserOpen(false);
@@ -742,19 +743,52 @@ function EditTenantDialog({
   );
 }
 
+const ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
+type Role = (typeof ROLES)[number];
+const ROLE_LABEL: Record<Role, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  manager: "Manager",
+  staff: "Staff",
+  viewer: "Viewer",
+};
+
 function CreateUserDialog({
+  tenants,
   onCancel,
   onCreated,
 }: {
+  tenants: AdminTenant[];
   onCancel: () => void;
   onCreated: () => Promise<void>;
 }) {
+  // Identité
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
+  const [locale, setLocale] = useState<"fr" | "en">("fr");
+  // Accès & rattachement
   const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [tenantId, setTenantId] = useState<string>("");
+  const [tenantRole, setTenantRole] = useState<Role>("staff");
+  // Activation
+  const [password, setPassword] = useState("");
+  const [isActive, setIsActive] = useState(true);
+  const [markEmailVerified, setMarkEmailVerified] = useState(false);
+  // Notes
+  const [adminNotes, setAdminNotes] = useState("");
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function generatePassword() {
+    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    let out = "";
+    const arr = new Uint32Array(16);
+    crypto.getRandomValues(arr);
+    for (let i = 0; i < 16; i++) out += alphabet[arr[i] % alphabet.length];
+    setPassword(out);
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -763,18 +797,30 @@ function CreateUserDialog({
       setError("Le mot de passe doit faire au moins 12 caractères");
       return;
     }
+    if (tenantId && !isSuperadmin) {
+      // OK, regular tenant member
+    }
     setSubmitting(true);
     try {
+      const body: Record<string, unknown> = {
+        email,
+        password,
+        fullName: fullName || undefined,
+        phone: phone || undefined,
+        locale,
+        isSuperadmin,
+        isActive,
+        markEmailVerified,
+        adminNotes: adminNotes || undefined,
+      };
+      if (tenantId) {
+        body.tenantMembership = { tenantId: Number(tenantId), role: tenantRole };
+      }
       const res = await fetch("/api/admin/users", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          fullName: fullName || undefined,
-          isSuperadmin,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -790,77 +836,212 @@ function CreateUserDialog({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onCancel}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto" onClick={onCancel}>
       <form
         onSubmit={onSubmit}
-        className="bg-white dark:bg-zinc-900 rounded-2xl border shadow-xl max-w-md w-full p-6 space-y-4"
+        className="bg-white dark:bg-zinc-900 rounded-2xl border shadow-xl max-w-2xl w-full my-8 p-6 sm:p-8 space-y-6"
         onClick={(e) => e.stopPropagation()}
         data-testid="create-user-form"
       >
         <div className="flex items-start justify-between gap-4">
-          <h3 className="text-lg font-semibold">Ajouter un utilisateur</h3>
+          <div>
+            <h3 className="text-xl font-semibold">Ajouter un utilisateur</h3>
+            <p className="text-xs text-muted-foreground">Création d'un compte nominatif. Tous les champs avec * sont requis.</p>
+          </div>
           <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Fermer">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="space-y-1">
-          <label htmlFor="create-user-email" className="text-sm font-medium">Email</label>
-          <input
-            id="create-user-email"
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-            data-testid="create-user-email"
-          />
-        </div>
+        {/* ===== IDENTITÉ ===== */}
+        <fieldset className="space-y-4">
+          <legend className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+            Identité
+          </legend>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div className="space-y-1 sm:col-span-2">
+              <label htmlFor="cu-email" className="text-sm font-medium">Email *</label>
+              <input
+                id="cu-email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                data-testid="create-user-email"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="cu-fullname" className="text-sm font-medium">Nom complet</label>
+              <input
+                id="cu-fullname"
+                type="text"
+                maxLength={120}
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="cu-phone" className="text-sm font-medium">Téléphone</label>
+              <input
+                id="cu-phone"
+                type="tel"
+                maxLength={40}
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+33 6 12 34 56 78"
+                className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="space-y-1 sm:col-span-2">
+              <label htmlFor="cu-locale" className="text-sm font-medium">Langue préférée</label>
+              <select
+                id="cu-locale"
+                value={locale}
+                onChange={(e) => setLocale(e.target.value as "fr" | "en")}
+                className="w-full sm:w-48 rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              >
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
 
-        <div className="space-y-1">
-          <label htmlFor="create-user-fullname" className="text-sm font-medium">
-            Nom complet <span className="text-muted-foreground font-normal">(optionnel)</span>
+        {/* ===== ACCÈS & RATTACHEMENT ===== */}
+        <fieldset className="space-y-4">
+          <legend className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+            Accès et rattachement
+          </legend>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isSuperadmin}
+              onChange={(e) => setIsSuperadmin(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-primary"
+              data-testid="create-user-superadmin"
+            />
+            <span className="text-sm">
+              Super-administrateur (équipe myBeez)
+              <span className="block text-xs text-muted-foreground">Accès à /123admin. Réservé à l'équipe interne.</span>
+            </span>
           </label>
-          <input
-            id="create-user-fullname"
-            type="text"
-            maxLength={120}
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-          />
-        </div>
 
-        <div className="space-y-1">
-          <label htmlFor="create-user-password" className="text-sm font-medium">Mot de passe initial</label>
-          <input
-            id="create-user-password"
-            type="text"
-            required
-            minLength={12}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
-            data-testid="create-user-password"
-          />
-          <p className="text-xs text-muted-foreground">
-            12 caractères minimum. Communiquez-le à l'utilisateur ; il pourra le changer via "Mot de passe oublié".
-          </p>
-        </div>
+          <div className="rounded-lg border bg-zinc-50 dark:bg-zinc-800/40 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">Rattacher à un tenant existant</p>
+              <span className="text-xs text-muted-foreground">Optionnel</span>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label htmlFor="cu-tenant" className="text-xs text-muted-foreground">Tenant</label>
+                <select
+                  id="cu-tenant"
+                  value={tenantId}
+                  onChange={(e) => setTenantId(e.target.value)}
+                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">— Aucun rattachement —</option>
+                  {tenants.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.slug})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="cu-tenant-role" className="text-xs text-muted-foreground">Rôle dans ce tenant</label>
+                <select
+                  id="cu-tenant-role"
+                  value={tenantRole}
+                  onChange={(e) => setTenantRole(e.target.value as Role)}
+                  disabled={!tenantId}
+                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+                >
+                  {ROLES.map((r) => (
+                    <option key={r} value={r}>{ROLE_LABEL[r]}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        </fieldset>
 
-        <label className="flex items-start gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={isSuperadmin}
-            onChange={(e) => setIsSuperadmin(e.target.checked)}
-            className="mt-0.5 w-4 h-4 accent-primary"
-            data-testid="create-user-superadmin"
+        {/* ===== ACTIVATION ===== */}
+        <fieldset className="space-y-4">
+          <legend className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+            Activation
+          </legend>
+
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label htmlFor="cu-password" className="text-sm font-medium">Mot de passe initial *</label>
+              <button
+                type="button"
+                onClick={generatePassword}
+                className="text-xs text-primary hover:underline"
+              >
+                Générer un mot de passe sécurisé
+              </button>
+            </div>
+            <input
+              id="cu-password"
+              type="text"
+              required
+              minLength={12}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+              data-testid="create-user-password"
+            />
+            <p className="text-xs text-muted-foreground">
+              12 caractères minimum. Communiquez-le à l'utilisateur ; il pourra le changer via « Mot de passe oublié ».
+            </p>
+          </div>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={markEmailVerified}
+              onChange={(e) => setMarkEmailVerified(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-primary"
+            />
+            <span className="text-sm">
+              Marquer l'email comme déjà vérifié
+              <span className="block text-xs text-muted-foreground">Évite l'étape email verify si l'identité est connue.</span>
+            </span>
+          </label>
+
+          <label className="flex items-start gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isActive}
+              onChange={(e) => setIsActive(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-primary"
+            />
+            <span className="text-sm">
+              Compte actif
+              <span className="block text-xs text-muted-foreground">Décochez pour créer un compte désactivé (préparation à l'avance).</span>
+            </span>
+          </label>
+        </fieldset>
+
+        {/* ===== NOTES ADMIN ===== */}
+        <fieldset className="space-y-2">
+          <legend className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+            Notes admin (interne)
+          </legend>
+          <textarea
+            value={adminNotes}
+            onChange={(e) => setAdminNotes(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            placeholder="Visible uniquement pour l'équipe myBeez. Ex : contexte de la création, demande commerciale, etc."
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
           />
-          <span className="text-sm">
-            Super-administrateur
-            <span className="block text-xs text-muted-foreground">Accès à /123admin et à tous les tenants. À utiliser avec parcimonie.</span>
-          </span>
-        </label>
+        </fieldset>
 
         {error && (
           <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2" role="alert">
@@ -868,7 +1049,7 @@ function CreateUserDialog({
           </p>
         )}
 
-        <div className="flex items-center justify-end gap-2 pt-2">
+        <div className="flex items-center justify-end gap-2 pt-2 border-t">
           <button
             type="button"
             onClick={onCancel}
@@ -879,10 +1060,10 @@ function CreateUserDialog({
           <button
             type="submit"
             disabled={submitting}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+            className="px-5 py-2 rounded-lg text-sm font-semibold bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
             data-testid="create-user-submit"
           >
-            {submitting ? "Création…" : "Créer"}
+            {submitting ? "Création…" : "Créer le compte"}
           </button>
         </div>
       </form>

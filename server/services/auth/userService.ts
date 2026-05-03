@@ -50,8 +50,12 @@ class UserService {
     email: string;
     password: string;
     fullName?: string | null;
+    phone?: string | null;
     locale?: string;
     isSuperadmin?: boolean;
+    isActive?: boolean;
+    adminNotes?: string | null;
+    markEmailVerified?: boolean;
   }): Promise<User> {
     const email = normalizeEmail(data.email);
     const existing = await this.findByEmail(email);
@@ -64,8 +68,12 @@ class UserService {
         email,
         passwordHash,
         fullName: data.fullName ?? null,
+        phone: data.phone ?? null,
         locale: data.locale ?? "fr",
         isSuperadmin: data.isSuperadmin ?? false,
+        isActive: data.isActive ?? true,
+        adminNotes: data.adminNotes ?? null,
+        emailVerifiedAt: data.markEmailVerified ? new Date() : null,
       })
       .returning();
     return row;
