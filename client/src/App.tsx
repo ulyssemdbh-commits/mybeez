@@ -12,6 +12,7 @@ const TenantAdmin = lazy(() => import("@/pages/TenantAdmin"));
 const TenantHistory = lazy(() => import("@/pages/TenantHistory"));
 const TenantManagement = lazy(() => import("@/pages/TenantManagement"));
 const AuthLogin = lazy(() => import("@/pages/AuthLogin"));
+const AuthSignup = lazy(() => import("@/pages/AuthSignup"));
 const AuthForgotPassword = lazy(() => import("@/pages/AuthForgotPassword"));
 const AuthResetPassword = lazy(() => import("@/pages/AuthResetPassword"));
 const AuthVerify = lazy(() => import("@/pages/AuthVerify"));
@@ -62,6 +63,9 @@ function App() {
 
               <Route path="/auth/login">
                 {() => <LazyPage><AuthLogin /></LazyPage>}
+              </Route>
+              <Route path="/auth/signup">
+                {() => <LazyPage><AuthSignup /></LazyPage>}
               </Route>
               <Route path="/auth/forgot-password">
                 {() => <LazyPage><AuthForgotPassword /></LazyPage>}
