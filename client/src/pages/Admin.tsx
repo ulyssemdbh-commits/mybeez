@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Logo } from "@/components/Logo";
 
 interface SuperadminMe {
   id: number;
@@ -228,13 +229,8 @@ export default function Admin() {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <header className="bg-white dark:bg-zinc-900 border-b border-amber-100/60 dark:border-zinc-800 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <a href="/" className="flex items-center gap-2" aria-label="Accueil myBeez">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm shadow-amber-500/20">
-              <span className="text-base font-bold text-white">B</span>
-            </div>
-            <span className="text-lg font-bold bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
-              myBeez
-            </span>
+          <a href="/" aria-label="Accueil myBeez" className="flex items-center gap-2">
+            <Logo variant="horizontal" className="h-9" />
             <span className="hidden sm:inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 text-xs font-medium">
               <ShieldCheck className="w-3 h-3" />
               Admin

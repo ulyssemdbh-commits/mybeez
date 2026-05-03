@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Logo } from "@/components/Logo";
 import {
   ArrowRight,
   Check,
@@ -290,13 +291,8 @@ function Header() {
   return (
     <header className="sticky top-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-lg border-b border-amber-100/60 dark:border-zinc-800">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-        <a href="/" className="flex items-center gap-2" aria-label="Accueil myBeez">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm shadow-amber-500/20">
-            <span className="text-base font-bold text-white">B</span>
-          </div>
-          <span className="text-lg font-bold bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
-            myBeez
-          </span>
+        <a href="/" aria-label="Accueil myBeez">
+          <Logo variant="horizontal" className="h-9" />
         </a>
         <nav className="hidden md:flex items-center gap-6 text-sm text-zinc-600 dark:text-zinc-300">
           <a href="#verticales" className="hover:text-foreground transition-colors">Pour qui ?</a>
@@ -852,13 +848,8 @@ function Footer() {
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8 mb-8">
           <div className="sm:col-span-2 md:col-span-1 space-y-3">
-            <a href="/" className="flex items-center gap-2" aria-label="Accueil myBeez">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-sm shadow-amber-500/20">
-                <span className="text-base font-bold text-white">B</span>
-              </div>
-              <span className="text-lg font-bold bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
-                myBeez
-              </span>
+            <a href="/" aria-label="Accueil myBeez" className="block">
+              <Logo variant="horizontal" className="h-9" />
             </a>
             <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-xs leading-relaxed">
               Les abeilles font le miel. Vous faites le business. myBeez fait le reste.

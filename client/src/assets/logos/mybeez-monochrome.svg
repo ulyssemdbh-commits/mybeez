@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 520 480" width="520" height="480">
+  <title>myBeez-ai — monochrome noir</title>
+  <g transform="translate(260, 180)">
+    <polygon points="-72,36 -50,24 -28,36 -28,60 -50,72 -72,60" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="-22,36 0,24 22,36 22,60 0,72 -22,60" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="28,36 50,24 72,36 72,60 50,72 28,60" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="-47,-12 -25,-24 -3,-12 -3,12 -25,24 -47,12" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="3,-12 25,-24 47,-12 47,12 25,24 3,12" fill="none" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/>
+    <polygon points="-22,-60 0,-72 22,-60 22,-36 0,-24 -22,-36" fill="#1A1A1A" stroke="#1A1A1A" stroke-width="3" stroke-linejoin="round"/>
+  </g>
+  <text x="260" y="320" font-family="'Helvetica Neue', Arial, sans-serif" font-size="50" font-weight="500" text-anchor="middle" fill="#1A1A1A" letter-spacing="-1">myBeez-ai</text>
+  <text x="260" y="360" font-family="'Helvetica Neue', Arial, sans-serif" font-size="12" text-anchor="middle" fill="#666666" letter-spacing="3">PLATEFORME BUSINESS INTELLIGENT</text>
+</svg>
