@@ -87,6 +87,21 @@ const sessionStore = new PgSessionStore({
   pruneSessionInterval: 60 * 15,
 });
 
+/**
+ * Cookie scope: in production we need the session cookie to flow across
+ * subdomains so a user logged in on `mybeez-ai.com` (signup, /123admin)
+ * stays logged in when redirected to `<slug>.mybeez-ai.com`. Setting
+ * `domain` to `.<primary-root-domain>` does that. In dev we leave it
+ * unset (browsers reject `.localhost` for security).
+ */
+function sessionCookieDomain(): string | undefined {
+  if (process.env.NODE_ENV !== "production") return undefined;
+  const raw = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
+  const root = raw.split(",")[0]!.trim().toLowerCase();
+  if (!root || root === "localhost") return undefined;
+  return `.${root}`;
+}
+
 app.use(session({
   store: sessionStore,
   secret: process.env.SESSION_SECRET || "mybeez-dev-secret-change-in-prod",
@@ -98,6 +113,7 @@ app.use(session({
     maxAge: 24 * 60 * 60 * 1000,
     httpOnly: true,
     sameSite: "lax",
+    domain: sessionCookieDomain(),
   },
 }));
 
