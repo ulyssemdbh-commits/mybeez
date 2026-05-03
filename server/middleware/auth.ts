@@ -116,7 +116,20 @@ interface TenantSessionLike {
   role?: string;
 }
 
-export function requireTenantAuth(req: Request, res: Response, next: NextFunction) {
+export async function requireTenantAuth(req: Request, res: Response, next: NextFunction) {
+  // Nominative bypass: a logged-in user with a user_tenants row for the
+  // resolved tenant is considered authenticated. This lets owners / admins
+  // / managers hit the checklist directly via subdomain after a regular
+  // email-password login, without typing the legacy PIN.
+  //
+  // The PIN path below stays for the device-paired tablet scenario where
+  // staff don't have nominative accounts.
+  const u = getUserSession(req);
+  if (u && typeof req.tenantId === "number") {
+    const role = await userTenantService.getRole(u.userId, req.tenantId);
+    if (role) return next();
+  }
+
   const session = req.session as unknown as TenantSessionLike | undefined;
   if (!session?.authenticated) {
     return res.status(401).json({ error: "Authentification requise" });
