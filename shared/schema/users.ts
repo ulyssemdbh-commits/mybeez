@@ -68,12 +68,16 @@ export const users = pgTable(
     /** argon2id encoded string (PHC format). Never plaintext. */
     passwordHash: text("password_hash").notNull(),
     fullName: text("full_name"),
+    /** E.164-ish phone (no normalisation enforced at DB; UI hint only). */
+    phone: text("phone"),
     locale: text("locale").notNull().default("fr"),
     /** Cross-tenant superadmin (myBeez staff). Distinct from any tenant role. */
     isSuperadmin: boolean("is_superadmin").notNull().default(false),
     lastLoginAt: timestamp("last_login_at"),
     /** Soft-disable a user without deleting their audit trail. */
     isActive: boolean("is_active").notNull().default(true),
+    /** Internal admin notes — never shown to the user. Free-form. */
+    adminNotes: text("admin_notes"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

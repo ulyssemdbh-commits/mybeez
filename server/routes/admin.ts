@@ -119,19 +119,58 @@ export function registerAdminRoutes(app: Express): void {
     email: z.string().email().max(254),
     password: z.string().min(PASSWORD_LIMITS.min).max(PASSWORD_LIMITS.max),
     fullName: z.string().min(1).max(120).optional(),
+    phone: z.string().max(40).optional(),
+    locale: z.enum(["fr", "en"]).optional(),
     isSuperadmin: z.boolean().optional(),
+    isActive: z.boolean().optional(),
+    markEmailVerified: z.boolean().optional(),
+    adminNotes: z.string().max(2000).optional(),
+    tenantMembership: z
+      .object({
+        tenantId: z.number().int().positive(),
+        role: z.enum(TENANT_ROLES as readonly [TenantRole, ...TenantRole[]]),
+      })
+      .optional(),
   });
 
   app.post("/api/admin/users", requireSuperadminUser, async (req: Request, res: Response) => {
     try {
       const data = userCreateSchema.parse(req.body);
+
+      // If a tenant membership is requested, verify the tenant exists first
+      // so we don't create an orphan user when the rest fails.
+      if (data.tenantMembership) {
+        const [tenant] = await db
+          .select({ id: tenants.id })
+          .from(tenants)
+          .where(eq(tenants.id, data.tenantMembership.tenantId));
+        if (!tenant) {
+          return res.status(400).json({ error: "Tenant inconnu", field: "tenantMembership" });
+        }
+      }
+
       const user = await userService.create({
         email: data.email,
         password: data.password,
         fullName: data.fullName ?? null,
-        locale: "fr",
+        phone: data.phone ?? null,
+        locale: data.locale ?? "fr",
         isSuperadmin: data.isSuperadmin ?? false,
+        isActive: data.isActive ?? true,
+        markEmailVerified: data.markEmailVerified ?? false,
+        adminNotes: data.adminNotes ?? null,
       });
+
+      if (data.tenantMembership) {
+        const me = getUserSession(req)!;
+        await userTenantService.upsert(
+          user.id,
+          data.tenantMembership.tenantId,
+          data.tenantMembership.role,
+          me.userId,
+        );
+      }
+
       res.status(201).json({
         user: {
           id: user.id,
