@@ -16,11 +16,12 @@ import type { Express, Request, Response } from "express";
 import { z } from "zod";
 import { sql, desc, eq, and, ne } from "drizzle-orm";
 import { db } from "../db";
-import { users, userTenants } from "../../shared/schema/users";
+import { users, userTenants, TENANT_ROLES, type TenantRole } from "../../shared/schema/users";
 import { tenants } from "../../shared/schema/tenants";
 import { businessTemplates } from "../../shared/schema/templates";
 import { requireSuperadminUser, getUserSession } from "../middleware/auth";
 import { userService } from "../services/auth/userService";
+import { userTenantService } from "../services/auth/userTenantService";
 import { sendPasswordResetEmail } from "../services/auth/mailService";
 
 function getAppBaseUrl(req: Request): string {
@@ -324,6 +325,135 @@ export function registerAdminRoutes(app: Express): void {
       res.json({ success: true });
     } catch (error) {
       console.error("[admin] delete tenant error:", error);
+      res.status(500).json({ error: "Erreur" });
+    }
+  });
+
+  // ====================== tenant detail + members ======================
+
+  app.get("/api/admin/tenants/:id/detail", requireSuperadminUser, async (req: Request, res: Response) => {
+    try {
+      const id = Number(req.params.id);
+      if (!Number.isInteger(id) || id <= 0) {
+        return res.status(400).json({ error: "id invalide" });
+      }
+      const [t] = await db
+        .select({
+          id: tenants.id,
+          slug: tenants.slug,
+          name: tenants.name,
+          shortName: tenants.shortName,
+          isActive: tenants.isActive,
+          businessType: tenants.businessType,
+          templateId: tenants.templateId,
+          templateName: businessTemplates.name,
+          modulesEnabled: tenants.modulesEnabled,
+          email: tenants.email,
+          phone: tenants.phone,
+          address: tenants.address,
+          timezone: tenants.timezone,
+          createdAt: tenants.createdAt,
+          updatedAt: tenants.updatedAt,
+        })
+        .from(tenants)
+        .leftJoin(businessTemplates, eq(tenants.templateId, businessTemplates.id))
+        .where(eq(tenants.id, id));
+      if (!t) return res.status(404).json({ error: "Tenant introuvable" });
+
+      const members = await db
+        .select({
+          userId: users.id,
+          email: users.email,
+          fullName: users.fullName,
+          isActive: users.isActive,
+          isSuperadmin: users.isSuperadmin,
+          role: userTenants.role,
+          invitedAt: userTenants.invitedAt,
+          acceptedAt: userTenants.acceptedAt,
+        })
+        .from(userTenants)
+        .innerJoin(users, eq(userTenants.userId, users.id))
+        .where(eq(userTenants.tenantId, id))
+        .orderBy(users.email);
+
+      res.json({ tenant: t, members });
+    } catch (error) {
+      console.error("[admin] tenant detail error:", error);
+      res.status(500).json({ error: "Erreur" });
+    }
+  });
+
+  const memberAddSchema = z.object({
+    email: z.string().email().max(254),
+    role: z.enum(TENANT_ROLES as readonly [TenantRole, ...TenantRole[]]),
+  });
+
+  app.post("/api/admin/tenants/:id/members", requireSuperadminUser, async (req: Request, res: Response) => {
+    try {
+      const tenantId = Number(req.params.id);
+      if (!Number.isInteger(tenantId) || tenantId <= 0) {
+        return res.status(400).json({ error: "id invalide" });
+      }
+      const data = memberAddSchema.parse(req.body);
+      const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, tenantId));
+      if (!tenant) return res.status(404).json({ error: "Tenant introuvable" });
+
+      const user = await userService.findByEmail(data.email);
+      if (!user) {
+        return res.status(404).json({
+          error: "Aucun utilisateur avec cet email. Demandez-lui de s'inscrire d'abord, puis réessayez.",
+        });
+      }
+      const me = getUserSession(req)!;
+      await userTenantService.upsert(user.id, tenantId, data.role, me.userId);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Données invalides", details: error.errors });
+      }
+      console.error("[admin] add member error:", error);
+      res.status(500).json({ error: "Erreur" });
+    }
+  });
+
+  const memberPatchSchema = z.object({
+    role: z.enum(TENANT_ROLES as readonly [TenantRole, ...TenantRole[]]),
+  });
+
+  app.patch("/api/admin/tenants/:id/members/:userId", requireSuperadminUser, async (req: Request, res: Response) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const userId = Number(req.params.userId);
+      if (!Number.isInteger(tenantId) || tenantId <= 0 || !Number.isInteger(userId) || userId <= 0) {
+        return res.status(400).json({ error: "id invalide" });
+      }
+      const data = memberPatchSchema.parse(req.body);
+      const existing = await userTenantService.getRole(userId, tenantId);
+      if (!existing) return res.status(404).json({ error: "Membre introuvable" });
+      await userTenantService.upsert(userId, tenantId, data.role);
+      res.json({ success: true });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Données invalides", details: error.errors });
+      }
+      console.error("[admin] patch member error:", error);
+      res.status(500).json({ error: "Erreur" });
+    }
+  });
+
+  app.delete("/api/admin/tenants/:id/members/:userId", requireSuperadminUser, async (req: Request, res: Response) => {
+    try {
+      const tenantId = Number(req.params.id);
+      const userId = Number(req.params.userId);
+      if (!Number.isInteger(tenantId) || tenantId <= 0 || !Number.isInteger(userId) || userId <= 0) {
+        return res.status(400).json({ error: "id invalide" });
+      }
+      const existing = await userTenantService.getRole(userId, tenantId);
+      if (!existing) return res.status(404).json({ error: "Membre introuvable" });
+      await userTenantService.remove(userId, tenantId);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[admin] delete member error:", error);
       res.status(500).json({ error: "Erreur" });
     }
   });
