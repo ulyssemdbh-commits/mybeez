@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Logo } from "@/components/Logo";
 
 type Status = "pending" | "success" | "error";
 
@@ -44,13 +45,8 @@ export default function AuthVerify() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
-        <a href="/" className="block text-center space-y-3" aria-label="Retour à l'accueil myBeez">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-            <span className="text-2xl font-bold text-white">B</span>
-          </div>
-          <span className="block text-2xl font-bold bg-gradient-to-r from-amber-600 to-orange-600 dark:from-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
-            myBeez
-          </span>
+        <a href="/" className="block" aria-label="Retour à l'accueil myBeez">
+          <Logo variant="principal" className="h-28 mx-auto" />
         </a>
 
         <div className="bg-white/80 dark:bg-zinc-800/80 backdrop-blur rounded-2xl border p-6 space-y-4 text-center" data-testid="verify-card">

@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SkipLink } from "@/components/SkipLink";
+import { Logo } from "@/components/Logo";
 
 const TenantChecklist = lazy(() => import("@/pages/TenantChecklist"));
 const TenantAdmin = lazy(() => import("@/pages/TenantAdmin"));
@@ -25,9 +26,7 @@ function LazyPage({ children }: { children: React.ReactNode }) {
     <Suspense fallback={
       <div className="min-h-screen bg-background flex items-center justify-center" role="status">
         <div className="text-center space-y-3">
-          <div className="w-10 h-10 mx-auto rounded-xl bg-primary/10 flex items-center justify-center animate-pulse">
-            <span className="text-lg font-bold text-primary">B</span>
-          </div>
+          <Logo variant="picto" className="w-12 h-12 mx-auto animate-pulse" />
           <p className="text-sm text-muted-foreground">Chargement...</p>
         </div>
       </div>
