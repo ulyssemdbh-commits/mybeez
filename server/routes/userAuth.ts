@@ -27,11 +27,26 @@
 
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { userTenants } from "../../shared/schema/users";
+import { tenants } from "../../shared/schema/tenants";
 import { userService, EmailAlreadyExistsError, normalizeEmail } from "../services/auth/userService";
 import { verifyPassword } from "../services/auth/passwordService";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../services/auth/mailService";
 import { requireUser, getUserSession } from "../middleware/auth";
 import { PASSWORD_LIMITS } from "../services/auth/passwordService";
+
+function getPrimaryRootDomain(): string {
+  const raw = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
+  return raw.split(",")[0]!.trim().toLowerCase();
+}
+
+function tenantUrlFor(slug: string): string {
+  const root = getPrimaryRootDomain();
+  const proto = process.env.NODE_ENV === "production" ? "https" : "http";
+  return `${proto}://${slug}.${root}`;
+}
 
 const emailSchema = z.string().email().max(254);
 const passwordSchema = z.string().min(PASSWORD_LIMITS.min).max(PASSWORD_LIMITS.max);
@@ -164,7 +179,30 @@ export function registerUserAuthRoutes(app: Express): void {
         delete session.userId;
         return res.status(401).json({ error: "Session invalide" });
       }
-      res.json({ user: publicUserShape(user) });
+      const memberships = await db
+        .select({
+          id: tenants.id,
+          slug: tenants.slug,
+          name: tenants.name,
+          isActive: tenants.isActive,
+          role: userTenants.role,
+        })
+        .from(userTenants)
+        .innerJoin(tenants, eq(userTenants.tenantId, tenants.id))
+        .where(eq(userTenants.userId, user.id))
+        .orderBy(tenants.name);
+
+      res.json({
+        user: publicUserShape(user),
+        tenants: memberships.map((m) => ({
+          id: m.id,
+          slug: m.slug,
+          name: m.name,
+          isActive: m.isActive,
+          role: m.role,
+          url: tenantUrlFor(m.slug),
+        })),
+      });
     } catch (error) {
       console.error("[auth] me error:", error);
       res.status(500).json({ error: "Erreur" });
