@@ -290,9 +290,9 @@ function Header() {
   const [open, setOpen] = useState(false);
   return (
     <header className="sticky top-0 z-50 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-lg border-b border-amber-100/60 dark:border-zinc-800">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 h-24 flex items-center justify-between">
         <a href="/" aria-label="Accueil myBeez">
-          <Logo variant="horizontal" className="h-9" />
+          <Logo variant="horizontal" className="h-[72px]" />
         </a>
         <nav className="hidden md:flex items-center gap-6 text-sm text-zinc-600 dark:text-zinc-300">
           <a href="#verticales" className="hover:text-foreground transition-colors">Pour qui ?</a>
@@ -849,7 +849,7 @@ function Footer() {
         <div className="grid sm:grid-cols-2 md:grid-cols-4 gap-8 mb-8">
           <div className="sm:col-span-2 md:col-span-1 space-y-3">
             <a href="/" aria-label="Accueil myBeez" className="block">
-              <Logo variant="horizontal" className="h-9" />
+              <Logo variant="horizontal" className="h-[72px]" />
             </a>
             <p className="text-sm text-zinc-600 dark:text-zinc-400 max-w-xs leading-relaxed">
               Les abeilles font le miel. Vous faites le business. myBeez fait le reste.
