@@ -228,9 +228,9 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <header className="bg-white dark:bg-zinc-900 border-b border-amber-100/60 dark:border-zinc-800 sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-24 flex items-center justify-between gap-4">
           <a href="/" aria-label="Accueil myBeez" className="flex items-center gap-2">
-            <Logo variant="horizontal" className="h-9" />
+            <Logo variant="horizontal" className="h-[72px]" />
             <span className="hidden sm:inline-flex items-center gap-1 ml-2 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-500/20 text-amber-800 dark:text-amber-300 text-xs font-medium">
               <ShieldCheck className="w-3 h-3" />
               Admin
