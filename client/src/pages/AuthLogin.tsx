@@ -10,12 +10,14 @@
 import { useState, type FormEvent } from "react";
 import { useUserSession } from "@/hooks/useUserSession";
 import { Logo } from "@/components/Logo";
+import { ArrowRight, Building2, ShieldCheck, LogOut } from "lucide-react";
 
 export default function AuthLogin() {
-  const { login, isLoggingIn, loginError, user } = useUserSession();
+  const { login, isLoggingIn, loginError, user, tenants, logout } = useUserSession();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -31,13 +33,102 @@ export default function AuthLogin() {
     }
   }
 
+  async function handleLogout() {
+    setIsLoggingOut(true);
+    try {
+      await logout();
+      // Force a fresh page so all per-route guards re-evaluate.
+      window.location.href = "/";
+    } catch {
+      setIsLoggingOut(false);
+    }
+  }
+
   if (user) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <div className="text-center space-y-2">
-          <p className="text-sm text-muted-foreground">Connecté en tant que</p>
-          <p className="font-medium">{user.fullName ?? user.email}</p>
-          <a href="/" className="text-primary hover:underline text-sm">Retour à l'accueil</a>
+      <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-md space-y-6">
+          <a href="/" className="block" aria-label="Retour à l'accueil myBeez">
+            <Logo variant="principal" className="h-28 mx-auto" />
+          </a>
+
+          <div className="bg-white/85 dark:bg-zinc-800/85 backdrop-blur rounded-2xl border p-6 space-y-5">
+            <div className="space-y-1 text-center">
+              <p className="text-sm text-muted-foreground">Vous êtes déjà connecté</p>
+              <p className="text-lg font-semibold">{user.fullName ?? user.email}</p>
+              {user.fullName && <p className="text-xs text-muted-foreground">{user.email}</p>}
+            </div>
+
+            {(user.isSuperadmin || tenants.length > 0) && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                  Aller à
+                </p>
+                <div className="space-y-2">
+                  {user.isSuperadmin && (
+                    <a
+                      href="/123admin"
+                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-amber-200 dark:border-amber-500/40 bg-amber-50/50 dark:bg-amber-500/10 hover:bg-amber-50 dark:hover:bg-amber-500/20 transition-colors"
+                      data-testid="logged-in-admin-link"
+                    >
+                      <div className="flex items-center gap-3">
+                        <ShieldCheck className="w-5 h-5 text-amber-700 dark:text-amber-400" />
+                        <div>
+                          <p className="text-sm font-medium">Admin master</p>
+                          <p className="text-xs text-muted-foreground">/123admin</p>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-amber-700 dark:text-amber-400" />
+                    </a>
+                  )}
+                  {tenants.map((t) => (
+                    <a
+                      key={t.id}
+                      href={t.url}
+                      className="flex items-center justify-between gap-3 px-4 py-3 rounded-lg border hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                      data-testid={`logged-in-tenant-${t.slug}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <Building2 className="w-5 h-5 text-muted-foreground" />
+                        <div>
+                          <p className="text-sm font-medium">{t.name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{t.slug}.mybeez-ai.com · {t.role}</p>
+                        </div>
+                      </div>
+                      <ArrowRight className="w-4 h-4 text-muted-foreground" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {!user.isSuperadmin && tenants.length === 0 && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-500/10 dark:border-amber-500/40 p-4 text-sm text-amber-900 dark:text-amber-200">
+                Vous n'êtes rattaché à aucun espace pour le moment. Demandez à un administrateur de vous inviter, ou créez votre propre espace.
+                <div className="mt-3">
+                  <a href="/auth/signup" className="inline-flex items-center gap-1 text-sm font-semibold text-amber-700 dark:text-amber-300 hover:underline">
+                    Créer un espace
+                    <ArrowRight className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-2 border-t">
+              <button
+                onClick={handleLogout}
+                disabled={isLoggingOut}
+                className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+                data-testid="logged-in-logout"
+              >
+                <LogOut className="w-4 h-4" />
+                {isLoggingOut ? "Déconnexion…" : "Se déconnecter"}
+              </button>
+              <a href="/" className="text-sm text-primary hover:underline">
+                Retour à l'accueil
+              </a>
+            </div>
+          </div>
         </div>
       </div>
     );

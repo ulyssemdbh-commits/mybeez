@@ -17,20 +17,33 @@ export interface UserSessionUser {
   isSuperadmin: boolean;
 }
 
+export interface UserSessionTenant {
+  id: number;
+  slug: string;
+  name: string;
+  isActive: boolean;
+  role: string;
+  url: string;
+}
+
+interface MeResponse {
+  user: UserSessionUser;
+  tenants: UserSessionTenant[];
+}
+
 const ME_KEY = ["/api/auth/user/me"] as const;
 
-async function fetchMe(): Promise<UserSessionUser | null> {
+async function fetchMe(): Promise<MeResponse | null> {
   const res = await fetch("/api/auth/user/me", { credentials: "include" });
   if (res.status === 401) return null;
   if (!res.ok) throw new Error(`me ${res.status}`);
-  const data = (await res.json()) as { user: UserSessionUser };
-  return data.user;
+  return (await res.json()) as MeResponse;
 }
 
 export function useUserSession() {
   const queryClient = useQueryClient();
 
-  const meQuery = useQuery<UserSessionUser | null>({
+  const meQuery = useQuery<MeResponse | null>({
     queryKey: ME_KEY,
     queryFn: fetchMe,
     staleTime: 60_000,
@@ -52,8 +65,9 @@ export function useUserSession() {
       const data = (await res.json()) as { user: UserSessionUser };
       return data.user;
     },
-    onSuccess: (user) => {
-      queryClient.setQueryData(ME_KEY, user);
+    onSuccess: () => {
+      // Login response only includes user — refetch /me to pick up tenants.
+      queryClient.invalidateQueries({ queryKey: ME_KEY });
     },
   });
 
@@ -67,7 +81,8 @@ export function useUserSession() {
   });
 
   return {
-    user: meQuery.data ?? null,
+    user: meQuery.data?.user ?? null,
+    tenants: meQuery.data?.tenants ?? [],
     isLoading: meQuery.isLoading,
     isLoggedIn: !!meQuery.data,
     refetch: meQuery.refetch,
