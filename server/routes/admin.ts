@@ -20,9 +20,10 @@ import { users, userTenants, TENANT_ROLES, type TenantRole } from "../../shared/
 import { tenants } from "../../shared/schema/tenants";
 import { businessTemplates } from "../../shared/schema/templates";
 import { requireSuperadminUser, getUserSession } from "../middleware/auth";
-import { userService } from "../services/auth/userService";
+import { userService, EmailAlreadyExistsError } from "../services/auth/userService";
 import { userTenantService } from "../services/auth/userTenantService";
 import { sendPasswordResetEmail } from "../services/auth/mailService";
+import { PASSWORD_LIMITS } from "../services/auth/passwordService";
 
 function getAppBaseUrl(req: Request): string {
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/+$/, "");
@@ -109,6 +110,44 @@ export function registerAdminRoutes(app: Express): void {
       res.json({ users: rows });
     } catch (error) {
       console.error("[admin] users error:", error);
+      res.status(500).json({ error: "Erreur" });
+    }
+  });
+
+  // ====================== users — create ======================
+  const userCreateSchema = z.object({
+    email: z.string().email().max(254),
+    password: z.string().min(PASSWORD_LIMITS.min).max(PASSWORD_LIMITS.max),
+    fullName: z.string().min(1).max(120).optional(),
+    isSuperadmin: z.boolean().optional(),
+  });
+
+  app.post("/api/admin/users", requireSuperadminUser, async (req: Request, res: Response) => {
+    try {
+      const data = userCreateSchema.parse(req.body);
+      const user = await userService.create({
+        email: data.email,
+        password: data.password,
+        fullName: data.fullName ?? null,
+        locale: "fr",
+        isSuperadmin: data.isSuperadmin ?? false,
+      });
+      res.status(201).json({
+        user: {
+          id: user.id,
+          email: user.email,
+          fullName: user.fullName,
+          isSuperadmin: user.isSuperadmin,
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Données invalides", details: error.errors });
+      }
+      if (error instanceof EmailAlreadyExistsError) {
+        return res.status(409).json({ error: "Cet email est déjà utilisé", field: "email" });
+      }
+      console.error("[admin] create user error:", error);
       res.status(500).json({ error: "Erreur" });
     }
   });

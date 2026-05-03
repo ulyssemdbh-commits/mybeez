@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import {
   ShieldCheck,
@@ -12,6 +12,7 @@ import {
   KeyRound,
   Trash2,
   Pencil,
+  UserPlus,
   X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -127,6 +128,7 @@ export default function Admin() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; body: string; danger?: boolean; onConfirm: () => void } | null>(null);
   const [editTenant, setEditTenant] = useState<AdminTenant | null>(null);
+  const [createUserOpen, setCreateUserOpen] = useState(false);
 
   async function refreshAll() {
     const [s, u, t] = await Promise.all([
@@ -267,10 +269,21 @@ export default function Admin() {
         )}
 
         <section className="space-y-3">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <UsersIcon className="w-5 h-5 text-amber-600" />
-            Utilisateurs ({users.length})
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold flex items-center gap-2">
+              <UsersIcon className="w-5 h-5 text-amber-600" />
+              Utilisateurs ({users.length})
+            </h2>
+            <button
+              type="button"
+              onClick={() => setCreateUserOpen(true)}
+              className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+              data-testid="admin-add-user"
+            >
+              <UserPlus className="w-4 h-4" />
+              Ajouter un utilisateur
+            </button>
+          </div>
           <div className="bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -513,6 +526,17 @@ export default function Admin() {
           }}
         />
       )}
+
+      {createUserOpen && (
+        <CreateUserDialog
+          onCancel={() => setCreateUserOpen(false)}
+          onCreated={async () => {
+            setCreateUserOpen(false);
+            toast({ title: "Utilisateur créé" });
+            await refreshAll();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -718,6 +742,154 @@ function EditTenantDialog({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CreateUserDialog({
+  onCancel,
+  onCreated,
+}: {
+  onCancel: () => void;
+  onCreated: () => Promise<void>;
+}) {
+  const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [password, setPassword] = useState("");
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    setError(null);
+    if (password.length < 12) {
+      setError("Le mot de passe doit faire au moins 12 caractères");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          fullName: fullName || undefined,
+          isSuperadmin,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      await onCreated();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur réseau");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onCancel}>
+      <form
+        onSubmit={onSubmit}
+        className="bg-white dark:bg-zinc-900 rounded-2xl border shadow-xl max-w-md w-full p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+        data-testid="create-user-form"
+      >
+        <div className="flex items-start justify-between gap-4">
+          <h3 className="text-lg font-semibold">Ajouter un utilisateur</h3>
+          <button type="button" onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Fermer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="create-user-email" className="text-sm font-medium">Email</label>
+          <input
+            id="create-user-email"
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            data-testid="create-user-email"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="create-user-fullname" className="text-sm font-medium">
+            Nom complet <span className="text-muted-foreground font-normal">(optionnel)</span>
+          </label>
+          <input
+            id="create-user-fullname"
+            type="text"
+            maxLength={120}
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <label htmlFor="create-user-password" className="text-sm font-medium">Mot de passe initial</label>
+          <input
+            id="create-user-password"
+            type="text"
+            required
+            minLength={12}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full rounded-lg border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"
+            data-testid="create-user-password"
+          />
+          <p className="text-xs text-muted-foreground">
+            12 caractères minimum. Communiquez-le à l'utilisateur ; il pourra le changer via "Mot de passe oublié".
+          </p>
+        </div>
+
+        <label className="flex items-start gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isSuperadmin}
+            onChange={(e) => setIsSuperadmin(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-primary"
+            data-testid="create-user-superadmin"
+          />
+          <span className="text-sm">
+            Super-administrateur
+            <span className="block text-xs text-muted-foreground">Accès à /123admin et à tous les tenants. À utiliser avec parcimonie.</span>
+          </span>
+        </label>
+
+        {error && (
+          <p className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-lg px-3 py-2" role="alert">
+            {error}
+          </p>
+        )}
+
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-50 transition-opacity"
+            data-testid="create-user-submit"
+          >
+            {submitting ? "Création…" : "Créer"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
