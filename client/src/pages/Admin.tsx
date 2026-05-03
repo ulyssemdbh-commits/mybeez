@@ -129,7 +129,7 @@ export default function Admin() {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ title: string; body: string; danger?: boolean; onConfirm: () => void } | null>(null);
   const [editTenant, setEditTenant] = useState<AdminTenant | null>(null);
-  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [createUserContext, setCreateUserContext] = useState<"staff" | "client" | null>(null);
 
   async function refreshAll() {
     const [s, u, t] = await Promise.all([
@@ -264,135 +264,33 @@ export default function Admin() {
           </section>
         )}
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold flex items-center gap-2">
-              <UsersIcon className="w-5 h-5 text-amber-600" />
-              Utilisateurs ({users.length})
-            </h2>
-            <button
-              type="button"
-              onClick={() => setCreateUserOpen(true)}
-              className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
-              data-testid="admin-add-user"
-            >
-              <UserPlus className="w-4 h-4" />
-              Ajouter un utilisateur
-            </button>
-          </div>
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b">
-                  <tr className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                    <th className="px-4 py-3">Email</th>
-                    <th className="px-4 py-3">Nom</th>
-                    <th className="px-4 py-3">Rôles</th>
-                    <th className="px-4 py-3">Tenants</th>
-                    <th className="px-4 py-3">Vérifié</th>
-                    <th className="px-4 py-3">Dernière connexion</th>
-                    <th className="px-4 py-3">Créé</th>
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                  {users.length === 0 ? (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-6 text-center text-sm text-muted-foreground">
-                        Aucun utilisateur.
-                      </td>
-                    </tr>
-                  ) : (
-                    users.map((u) => {
-                      const isSelf = me?.id === u.id;
-                      const busy = pendingId?.startsWith(`u${u.id}-`) ?? false;
-                      return (
-                        <tr key={u.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
-                          <td className="px-4 py-3 font-medium">{u.email}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{u.fullName ?? "—"}</td>
-                          <td className="px-4 py-3 space-x-1">
-                            {u.isSuperadmin && <Badge variant="amber">Superadmin</Badge>}
-                            {!u.isActive && <Badge variant="red">Désactivé</Badge>}
-                            {u.isActive && !u.isSuperadmin && <Badge variant="zinc">Standard</Badge>}
-                          </td>
-                          <td className="px-4 py-3 tabular-nums">{u.tenantCount}</td>
-                          <td className="px-4 py-3">
-                            {u.emailVerifiedAt ? <Badge variant="green">Oui</Badge> : <Badge variant="zinc">Non</Badge>}
-                          </td>
-                          <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(u.lastLoginAt)}</td>
-                          <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(u.createdAt)}</td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1">
-                              <IconButton
-                                title={u.isActive ? "Désactiver" : "Réactiver"}
-                                disabled={busy || isSelf}
-                                onClick={() =>
-                                  runMutation(
-                                    `u${u.id}-active`,
-                                    () => mutate(`/api/admin/users/${u.id}`, "PATCH", { isActive: !u.isActive }),
-                                    u.isActive ? "Utilisateur désactivé" : "Utilisateur réactivé",
-                                  )
-                                }
-                              >
-                                {u.isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                              </IconButton>
-                              <IconButton
-                                title={u.isSuperadmin ? "Démoter" : "Promouvoir superadmin"}
-                                disabled={busy || isSelf}
-                                onClick={() =>
-                                  runMutation(
-                                    `u${u.id}-super`,
-                                    () => mutate(`/api/admin/users/${u.id}`, "PATCH", { isSuperadmin: !u.isSuperadmin }),
-                                    u.isSuperadmin ? "Démoté" : "Promu superadmin",
-                                  )
-                                }
-                              >
-                                {u.isSuperadmin ? <ShieldOff className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
-                              </IconButton>
-                              <IconButton
-                                title="Envoyer un lien de réinitialisation"
-                                disabled={busy || !u.isActive}
-                                onClick={() =>
-                                  runMutation(
-                                    `u${u.id}-reset`,
-                                    () => mutate(`/api/admin/users/${u.id}/send-reset`, "POST"),
-                                    "Lien de réinitialisation envoyé",
-                                  )
-                                }
-                              >
-                                <KeyRound className="w-4 h-4" />
-                              </IconButton>
-                              <IconButton
-                                title="Supprimer"
-                                variant="danger"
-                                disabled={busy || isSelf}
-                                onClick={() =>
-                                  setConfirm({
-                                    title: "Supprimer cet utilisateur ?",
-                                    body: `${u.email} sera supprimé définitivement, ainsi que ses appartenances aux tenants. Cette action est irréversible.`,
-                                    danger: true,
-                                    onConfirm: () =>
-                                      runMutation(
-                                        `u${u.id}-del`,
-                                        () => mutate(`/api/admin/users/${u.id}`, "DELETE"),
-                                        "Utilisateur supprimé",
-                                      ),
-                                  })
-                                }
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </IconButton>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </section>
+        <UsersTable
+          title="Équipe myBeez"
+          subtitle="Super-administrateurs ayant accès à /123admin et à tous les tenants. Réservé à l'équipe interne."
+          icon={ShieldCheck}
+          accent="amber"
+          users={users.filter((u) => u.isSuperadmin)}
+          me={me}
+          pendingId={pendingId}
+          setConfirm={setConfirm}
+          runMutation={runMutation}
+          addLabel="Ajouter à l'équipe myBeez"
+          onAdd={() => setCreateUserContext("staff")}
+        />
+
+        <UsersTable
+          title="Utilisateurs clients"
+          subtitle="Comptes nominatifs des entrepreneurs et de leurs équipes."
+          icon={UsersIcon}
+          accent="zinc"
+          users={users.filter((u) => !u.isSuperadmin)}
+          me={me}
+          pendingId={pendingId}
+          setConfirm={setConfirm}
+          runMutation={runMutation}
+          addLabel="Ajouter un utilisateur client"
+          onAdd={() => setCreateUserContext("client")}
+        />
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -523,12 +421,13 @@ export default function Admin() {
         />
       )}
 
-      {createUserOpen && (
+      {createUserContext && (
         <CreateUserDialog
           tenants={tenants}
-          onCancel={() => setCreateUserOpen(false)}
+          defaultIsSuperadmin={createUserContext === "staff"}
+          onCancel={() => setCreateUserContext(null)}
           onCreated={async () => {
-            setCreateUserOpen(false);
+            setCreateUserContext(null);
             toast({ title: "Utilisateur créé" });
             await refreshAll();
           }}
@@ -602,6 +501,169 @@ function IconButton({
     >
       {children}
     </button>
+  );
+}
+
+function UsersTable({
+  title,
+  subtitle,
+  icon: Icon,
+  accent,
+  users,
+  me,
+  pendingId,
+  setConfirm,
+  runMutation,
+  addLabel,
+  onAdd,
+}: {
+  title: string;
+  subtitle?: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: "amber" | "zinc";
+  users: AdminUser[];
+  me: SuperadminMe | null;
+  pendingId: string | null;
+  setConfirm: (c: { title: string; body: string; danger?: boolean; onConfirm: () => void }) => void;
+  runMutation: (key: string, fn: () => Promise<void>, msg: string) => Promise<void>;
+  addLabel: string;
+  onAdd: () => void;
+}) {
+  const headerAccent = accent === "amber"
+    ? "text-amber-600"
+    : "text-zinc-500";
+  return (
+    <section className="space-y-3">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Icon className={`w-5 h-5 ${headerAccent}`} />
+            {title} ({users.length})
+          </h2>
+          {subtitle && <p className="text-sm text-muted-foreground max-w-xl">{subtitle}</p>}
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="inline-flex items-center gap-1.5 bg-primary text-primary-foreground rounded-lg px-3 py-2 text-sm font-medium hover:opacity-90 transition-opacity"
+        >
+          <UserPlus className="w-4 h-4" />
+          {addLabel}
+        </button>
+      </div>
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-50 dark:bg-zinc-800/50 border-b">
+              <tr className="text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Nom</th>
+                <th className="px-4 py-3">Rôles</th>
+                <th className="px-4 py-3">Tenants</th>
+                <th className="px-4 py-3">Vérifié</th>
+                <th className="px-4 py-3">Dernière connexion</th>
+                <th className="px-4 py-3">Créé</th>
+                <th className="px-4 py-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+              {users.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                    Aucun utilisateur dans cette section.
+                  </td>
+                </tr>
+              ) : (
+                users.map((u) => {
+                  const isSelf = me?.id === u.id;
+                  const busy = pendingId?.startsWith(`u${u.id}-`) ?? false;
+                  return (
+                    <tr key={u.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                      <td className="px-4 py-3 font-medium">{u.email}</td>
+                      <td className="px-4 py-3 text-muted-foreground">{u.fullName ?? "—"}</td>
+                      <td className="px-4 py-3 space-x-1">
+                        {u.isSuperadmin && <Badge variant="amber">Superadmin</Badge>}
+                        {!u.isActive && <Badge variant="red">Désactivé</Badge>}
+                        {u.isActive && !u.isSuperadmin && <Badge variant="zinc">Standard</Badge>}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums">{u.tenantCount}</td>
+                      <td className="px-4 py-3">
+                        {u.emailVerifiedAt ? <Badge variant="green">Oui</Badge> : <Badge variant="zinc">Non</Badge>}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(u.lastLoginAt)}</td>
+                      <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(u.createdAt)}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center justify-end gap-1">
+                          <IconButton
+                            title={u.isActive ? "Désactiver" : "Réactiver"}
+                            disabled={busy || isSelf}
+                            onClick={() =>
+                              runMutation(
+                                `u${u.id}-active`,
+                                () => mutate(`/api/admin/users/${u.id}`, "PATCH", { isActive: !u.isActive }),
+                                u.isActive ? "Utilisateur désactivé" : "Utilisateur réactivé",
+                              )
+                            }
+                          >
+                            {u.isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                          </IconButton>
+                          <IconButton
+                            title={u.isSuperadmin ? "Démoter" : "Promouvoir superadmin"}
+                            disabled={busy || isSelf}
+                            onClick={() =>
+                              runMutation(
+                                `u${u.id}-super`,
+                                () => mutate(`/api/admin/users/${u.id}`, "PATCH", { isSuperadmin: !u.isSuperadmin }),
+                                u.isSuperadmin ? "Démoté" : "Promu superadmin",
+                              )
+                            }
+                          >
+                            {u.isSuperadmin ? <ShieldOff className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                          </IconButton>
+                          <IconButton
+                            title="Envoyer un lien de réinitialisation"
+                            disabled={busy || !u.isActive}
+                            onClick={() =>
+                              runMutation(
+                                `u${u.id}-reset`,
+                                () => mutate(`/api/admin/users/${u.id}/send-reset`, "POST"),
+                                "Lien de réinitialisation envoyé",
+                              )
+                            }
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </IconButton>
+                          <IconButton
+                            title="Supprimer"
+                            variant="danger"
+                            disabled={busy || isSelf}
+                            onClick={() =>
+                              setConfirm({
+                                title: "Supprimer cet utilisateur ?",
+                                body: `${u.email} sera supprimé définitivement, ainsi que ses appartenances aux tenants. Cette action est irréversible.`,
+                                danger: true,
+                                onConfirm: () =>
+                                  runMutation(
+                                    `u${u.id}-del`,
+                                    () => mutate(`/api/admin/users/${u.id}`, "DELETE"),
+                                    "Utilisateur supprimé",
+                                  ),
+                              })
+                            }
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </IconButton>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -755,10 +817,12 @@ const ROLE_LABEL: Record<Role, string> = {
 
 function CreateUserDialog({
   tenants,
+  defaultIsSuperadmin = false,
   onCancel,
   onCreated,
 }: {
   tenants: AdminTenant[];
+  defaultIsSuperadmin?: boolean;
   onCancel: () => void;
   onCreated: () => Promise<void>;
 }) {
@@ -768,7 +832,7 @@ function CreateUserDialog({
   const [phone, setPhone] = useState("");
   const [locale, setLocale] = useState<"fr" | "en">("fr");
   // Accès & rattachement
-  const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [isSuperadmin, setIsSuperadmin] = useState(defaultIsSuperadmin);
   const [tenantId, setTenantId] = useState<string>("");
   const [tenantRole, setTenantRole] = useState<Role>("staff");
   // Activation
