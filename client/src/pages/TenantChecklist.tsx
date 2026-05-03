@@ -5,9 +5,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { useUserSession } from "@/hooks/useUserSession";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { AlfredChat } from "@/components/alfred/AlfredChat";
+import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
 
 interface TenantChecklistProps {
@@ -36,11 +38,16 @@ interface Dashboard {
 }
 
 export default function TenantChecklist({ slug }: TenantChecklistProps) {
-  const { user, isAuthenticated, isLoading: authLoading, login } = useAuth();
+  const { user, isAuthenticated: pinAuthenticated, isLoading: authLoading, login } = useAuth();
+  const { user: nomUser, tenants: nomTenants, isLoading: nomLoading } = useUserSession();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [pin, setPin] = useState("");
   const [pinError, setPinError] = useState("");
+
+  // A nominative user who is a member of this tenant doesn't need the PIN.
+  const isNominativelyMember = !!nomUser && nomTenants.some((t) => t.slug === slug);
+  const isAuthenticated = pinAuthenticated || isNominativelyMember;
 
   const { data: categories, isLoading: catsLoading } = useQuery<Category[]>({
     queryKey: ["/api/checklist", slug, "categories"],
@@ -92,7 +99,7 @@ export default function TenantChecklist({ slug }: TenantChecklistProps) {
     }
   };
 
-  if (authLoading) {
+  if (authLoading || nomLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Chargement...</div>
@@ -104,9 +111,7 @@ export default function TenantChecklist({ slug }: TenantChecklistProps) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
         <div className="w-full max-w-xs space-y-6 text-center">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg">
-            <span className="text-2xl font-bold text-white">B</span>
-          </div>
+          <Logo variant="principal" className="h-24 mx-auto" />
           <h1 className="text-xl font-bold text-foreground capitalize">{slug}</h1>
           <p className="text-sm text-muted-foreground">Entrez votre code PIN</p>
 
