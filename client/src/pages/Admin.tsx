@@ -1,6 +1,20 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { ShieldCheck, Users as UsersIcon, Building2, LayoutGrid, LogOut } from "lucide-react";
+import {
+  ShieldCheck,
+  ShieldOff,
+  Users as UsersIcon,
+  Building2,
+  LayoutGrid,
+  LogOut,
+  Pause,
+  Play,
+  KeyRound,
+  Trash2,
+  Pencil,
+  X,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface SuperadminMe {
   id: number;
@@ -39,6 +53,32 @@ interface AdminTenant {
   memberCount: number;
 }
 
+interface Template {
+  id: number;
+  slug: string;
+  name: string;
+  parentId: number | null;
+}
+
+interface ApiTemplateNode {
+  id: number;
+  slug: string;
+  name: string;
+  parentId: number | null;
+  children?: ApiTemplateNode[];
+}
+
+function flattenTemplates(tree: ApiTemplateNode[]): Template[] {
+  const out: Template[] = [];
+  for (const top of tree) {
+    out.push({ id: top.id, slug: top.slug, name: top.name, parentId: top.parentId });
+    for (const child of top.children ?? []) {
+      out.push({ id: child.id, slug: child.slug, name: child.name, parentId: child.parentId });
+    }
+  }
+  return out;
+}
+
 function fmt(date: string | null): string {
   if (!date) return "—";
   return new Date(date).toLocaleString("fr-FR", {
@@ -61,14 +101,43 @@ async function fetchJson<T>(url: string): Promise<T> {
   return res.json();
 }
 
+async function mutate(url: string, method: "PATCH" | "DELETE" | "POST", body?: unknown): Promise<void> {
+  const res = await fetch(url, {
+    method,
+    credentials: "include",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error ?? `HTTP ${res.status}`);
+  }
+}
+
 export default function Admin() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [me, setMe] = useState<SuperadminMe | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [tenants, setTenants] = useState<AdminTenant[]>([]);
+  const [templates, setTemplates] = useState<Template[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ title: string; body: string; danger?: boolean; onConfirm: () => void } | null>(null);
+  const [editTenant, setEditTenant] = useState<AdminTenant | null>(null);
+
+  async function refreshAll() {
+    const [s, u, t] = await Promise.all([
+      fetchJson<Stats>("/api/admin/stats"),
+      fetchJson<{ users: AdminUser[] }>("/api/admin/users"),
+      fetchJson<{ tenants: AdminTenant[] }>("/api/admin/tenants"),
+    ]);
+    setStats(s);
+    setUsers(u.users);
+    setTenants(t.tenants);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -78,15 +147,17 @@ export default function Admin() {
         if (cancelled) return;
         setMe(meData.user);
 
-        const [s, u, t] = await Promise.all([
+        const [s, u, t, tpl] = await Promise.all([
           fetchJson<Stats>("/api/admin/stats"),
           fetchJson<{ users: AdminUser[] }>("/api/admin/users"),
           fetchJson<{ tenants: AdminTenant[] }>("/api/admin/tenants"),
+          fetchJson<{ templates: ApiTemplateNode[] }>("/api/templates"),
         ]);
         if (cancelled) return;
         setStats(s);
         setUsers(u.users);
         setTenants(t.tenants);
+        setTemplates(flattenTemplates(tpl.templates));
       } catch (err) {
         if (cancelled) return;
         const e = err as Error & { status?: number };
@@ -107,6 +178,23 @@ export default function Admin() {
       cancelled = true;
     };
   }, [setLocation]);
+
+  async function runMutation(key: string, fn: () => Promise<void>, successMsg: string) {
+    setPendingId(key);
+    try {
+      await fn();
+      toast({ title: successMsg });
+      await refreshAll();
+    } catch (err) {
+      toast({
+        title: "Erreur",
+        description: err instanceof Error ? err.message : "Action impossible",
+        variant: "destructive",
+      });
+    } finally {
+      setPendingId(null);
+    }
+  }
 
   async function logout() {
     await fetch("/api/auth/user/logout", { method: "POST", credentials: "include" });
@@ -195,33 +283,101 @@ export default function Admin() {
                     <th className="px-4 py-3">Vérifié</th>
                     <th className="px-4 py-3">Dernière connexion</th>
                     <th className="px-4 py-3">Créé</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {users.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      <td colSpan={8} className="px-4 py-6 text-center text-sm text-muted-foreground">
                         Aucun utilisateur.
                       </td>
                     </tr>
                   ) : (
-                    users.map((u) => (
-                      <tr key={u.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
-                        <td className="px-4 py-3 font-medium">{u.email}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{u.fullName ?? "—"}</td>
-                        <td className="px-4 py-3 space-x-1">
-                          {u.isSuperadmin && <Badge variant="amber">Superadmin</Badge>}
-                          {!u.isActive && <Badge variant="red">Désactivé</Badge>}
-                          {u.isActive && !u.isSuperadmin && <Badge variant="zinc">Standard</Badge>}
-                        </td>
-                        <td className="px-4 py-3 tabular-nums">{u.tenantCount}</td>
-                        <td className="px-4 py-3">
-                          {u.emailVerifiedAt ? <Badge variant="green">Oui</Badge> : <Badge variant="zinc">Non</Badge>}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(u.lastLoginAt)}</td>
-                        <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(u.createdAt)}</td>
-                      </tr>
-                    ))
+                    users.map((u) => {
+                      const isSelf = me?.id === u.id;
+                      const busy = pendingId?.startsWith(`u${u.id}-`) ?? false;
+                      return (
+                        <tr key={u.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                          <td className="px-4 py-3 font-medium">{u.email}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{u.fullName ?? "—"}</td>
+                          <td className="px-4 py-3 space-x-1">
+                            {u.isSuperadmin && <Badge variant="amber">Superadmin</Badge>}
+                            {!u.isActive && <Badge variant="red">Désactivé</Badge>}
+                            {u.isActive && !u.isSuperadmin && <Badge variant="zinc">Standard</Badge>}
+                          </td>
+                          <td className="px-4 py-3 tabular-nums">{u.tenantCount}</td>
+                          <td className="px-4 py-3">
+                            {u.emailVerifiedAt ? <Badge variant="green">Oui</Badge> : <Badge variant="zinc">Non</Badge>}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(u.lastLoginAt)}</td>
+                          <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(u.createdAt)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <IconButton
+                                title={u.isActive ? "Désactiver" : "Réactiver"}
+                                disabled={busy || isSelf}
+                                onClick={() =>
+                                  runMutation(
+                                    `u${u.id}-active`,
+                                    () => mutate(`/api/admin/users/${u.id}`, "PATCH", { isActive: !u.isActive }),
+                                    u.isActive ? "Utilisateur désactivé" : "Utilisateur réactivé",
+                                  )
+                                }
+                              >
+                                {u.isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                              </IconButton>
+                              <IconButton
+                                title={u.isSuperadmin ? "Démoter" : "Promouvoir superadmin"}
+                                disabled={busy || isSelf}
+                                onClick={() =>
+                                  runMutation(
+                                    `u${u.id}-super`,
+                                    () => mutate(`/api/admin/users/${u.id}`, "PATCH", { isSuperadmin: !u.isSuperadmin }),
+                                    u.isSuperadmin ? "Démoté" : "Promu superadmin",
+                                  )
+                                }
+                              >
+                                {u.isSuperadmin ? <ShieldOff className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                              </IconButton>
+                              <IconButton
+                                title="Envoyer un lien de réinitialisation"
+                                disabled={busy || !u.isActive}
+                                onClick={() =>
+                                  runMutation(
+                                    `u${u.id}-reset`,
+                                    () => mutate(`/api/admin/users/${u.id}/send-reset`, "POST"),
+                                    "Lien de réinitialisation envoyé",
+                                  )
+                                }
+                              >
+                                <KeyRound className="w-4 h-4" />
+                              </IconButton>
+                              <IconButton
+                                title="Supprimer"
+                                variant="danger"
+                                disabled={busy || isSelf}
+                                onClick={() =>
+                                  setConfirm({
+                                    title: "Supprimer cet utilisateur ?",
+                                    body: `${u.email} sera supprimé définitivement, ainsi que ses appartenances aux tenants. Cette action est irréversible.`,
+                                    danger: true,
+                                    onConfirm: () =>
+                                      runMutation(
+                                        `u${u.id}-del`,
+                                        () => mutate(`/api/admin/users/${u.id}`, "DELETE"),
+                                        "Utilisateur supprimé",
+                                      ),
+                                  })
+                                }
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </IconButton>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -245,28 +401,72 @@ export default function Admin() {
                     <th className="px-4 py-3">Membres</th>
                     <th className="px-4 py-3">État</th>
                     <th className="px-4 py-3">Créé</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                   {tenants.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-6 text-center text-sm text-muted-foreground">
+                      <td colSpan={7} className="px-4 py-6 text-center text-sm text-muted-foreground">
                         Aucun tenant.
                       </td>
                     </tr>
                   ) : (
-                    tenants.map((t) => (
-                      <tr key={t.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
-                        <td className="px-4 py-3 font-mono text-xs">{t.slug}</td>
-                        <td className="px-4 py-3 font-medium">{t.name}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{t.templateName ?? t.businessType ?? "—"}</td>
-                        <td className="px-4 py-3 tabular-nums">{t.memberCount}</td>
-                        <td className="px-4 py-3">
-                          {t.isActive ? <Badge variant="green">Actif</Badge> : <Badge variant="red">Inactif</Badge>}
-                        </td>
-                        <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(t.createdAt)}</td>
-                      </tr>
-                    ))
+                    tenants.map((t) => {
+                      const busy = pendingId?.startsWith(`t${t.id}-`) ?? false;
+                      return (
+                        <tr key={t.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
+                          <td className="px-4 py-3 font-mono text-xs">{t.slug}</td>
+                          <td className="px-4 py-3 font-medium">{t.name}</td>
+                          <td className="px-4 py-3 text-muted-foreground">{t.templateName ?? t.businessType ?? "—"}</td>
+                          <td className="px-4 py-3 tabular-nums">{t.memberCount}</td>
+                          <td className="px-4 py-3">
+                            {t.isActive ? <Badge variant="green">Actif</Badge> : <Badge variant="red">Inactif</Badge>}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground tabular-nums">{fmt(t.createdAt)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              <IconButton
+                                title={t.isActive ? "Désactiver" : "Réactiver"}
+                                disabled={busy}
+                                onClick={() =>
+                                  runMutation(
+                                    `t${t.id}-active`,
+                                    () => mutate(`/api/admin/tenants/${t.id}`, "PATCH", { isActive: !t.isActive }),
+                                    t.isActive ? "Tenant désactivé" : "Tenant réactivé",
+                                  )
+                                }
+                              >
+                                {t.isActive ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                              </IconButton>
+                              <IconButton title="Modifier" disabled={busy} onClick={() => setEditTenant(t)}>
+                                <Pencil className="w-4 h-4" />
+                              </IconButton>
+                              <IconButton
+                                title="Supprimer"
+                                variant="danger"
+                                disabled={busy}
+                                onClick={() =>
+                                  setConfirm({
+                                    title: "Supprimer ce tenant ?",
+                                    body: `Le tenant ${t.slug} (${t.name}) sera supprimé définitivement, ainsi que toutes les données associées (membres, checklists, etc). Cette action est irréversible.`,
+                                    danger: true,
+                                    onConfirm: () =>
+                                      runMutation(
+                                        `t${t.id}-del`,
+                                        () => mutate(`/api/admin/tenants/${t.id}`, "DELETE"),
+                                        "Tenant supprimé",
+                                      ),
+                                  })
+                                }
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </IconButton>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
@@ -274,6 +474,37 @@ export default function Admin() {
           </div>
         </section>
       </main>
+
+      {confirm && (
+        <ConfirmDialog
+          title={confirm.title}
+          body={confirm.body}
+          danger={confirm.danger}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const fn = confirm.onConfirm;
+            setConfirm(null);
+            fn();
+          }}
+        />
+      )}
+
+      {editTenant && (
+        <EditTenantDialog
+          tenant={editTenant}
+          templates={templates}
+          onCancel={() => setEditTenant(null)}
+          onSave={async (patch) => {
+            const id = editTenant.id;
+            setEditTenant(null);
+            await runMutation(
+              `t${id}-edit`,
+              () => mutate(`/api/admin/tenants/${id}`, "PATCH", patch),
+              "Tenant mis à jour",
+            );
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -301,7 +532,7 @@ function StatCard({
   );
 }
 
-function Badge({ variant, children }: { variant: "amber" | "green" | "red" | "zinc"; children: React.ReactNode }) {
+function Badge({ variant, children }: { variant: "amber" | "green" | "red" | "zinc"; children: ReactNode }) {
   const styles = {
     amber: "bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300",
     green: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300",
@@ -312,5 +543,173 @@ function Badge({ variant, children }: { variant: "amber" | "green" | "red" | "zi
     <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${styles[variant]}`}>
       {children}
     </span>
+  );
+}
+
+function IconButton({
+  children,
+  onClick,
+  title,
+  disabled,
+  variant = "default",
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  title: string;
+  disabled?: boolean;
+  variant?: "default" | "danger";
+}) {
+  const styles = variant === "danger"
+    ? "text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-500/10"
+    : "text-muted-foreground hover:text-foreground hover:bg-zinc-100 dark:hover:bg-zinc-800";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      className={`p-2 rounded-md transition-colors disabled:opacity-30 disabled:cursor-not-allowed ${styles}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ConfirmDialog({
+  title,
+  body,
+  danger,
+  onCancel,
+  onConfirm,
+}: {
+  title: string;
+  body: string;
+  danger?: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onCancel}>
+      <div
+        className="bg-white dark:bg-zinc-900 rounded-2xl border shadow-xl max-w-md w-full p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <h3 className="text-lg font-semibold">{title}</h3>
+          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Fermer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground leading-relaxed">{body}</p>
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`px-4 py-2 rounded-lg text-sm font-medium text-white transition-opacity hover:opacity-90 ${
+              danger ? "bg-red-600" : "bg-primary"
+            }`}
+            data-testid="confirm-dialog-confirm"
+          >
+            Confirmer
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditTenantDialog({
+  tenant,
+  templates,
+  onCancel,
+  onSave,
+}: {
+  tenant: AdminTenant;
+  templates: Template[];
+  onCancel: () => void;
+  onSave: (patch: { name?: string; templateId?: number | null }) => void;
+}) {
+  const [name, setName] = useState(tenant.name);
+  const [templateId, setTemplateId] = useState<string>(tenant.templateId !== null ? String(tenant.templateId) : "");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onCancel}>
+      <div
+        className="bg-white dark:bg-zinc-900 rounded-2xl border shadow-xl max-w-md w-full p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-semibold">Modifier le tenant</h3>
+            <p className="text-xs text-muted-foreground">Slug : <span className="font-mono">{tenant.slug}</span> (non modifiable)</p>
+          </div>
+          <button onClick={onCancel} className="text-muted-foreground hover:text-foreground" aria-label="Fermer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-3">
+          <div className="space-y-1">
+            <label htmlFor="edit-tenant-name" className="text-sm font-medium">Nom</label>
+            <input
+              id="edit-tenant-name"
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              required
+              maxLength={120}
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="edit-tenant-template" className="text-sm font-medium">Template</label>
+            <select
+              id="edit-tenant-template"
+              value={templateId}
+              onChange={(e) => setTemplateId(e.target.value)}
+              className="w-full rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <option value="">— Aucun —</option>
+              {templates
+                .filter((t) => t.parentId !== null)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+            </select>
+          </div>
+        </div>
+        <div className="flex items-center justify-end gap-2 pt-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
+          >
+            Annuler
+          </button>
+          <button
+            onClick={() => {
+              const patch: { name?: string; templateId?: number | null } = {};
+              if (name !== tenant.name) patch.name = name;
+              const newTpl = templateId === "" ? null : Number(templateId);
+              if (newTpl !== tenant.templateId) patch.templateId = newTpl;
+              if (Object.keys(patch).length === 0) {
+                onCancel();
+                return;
+              }
+              onSave(patch);
+            }}
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
+          >
+            Enregistrer
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
