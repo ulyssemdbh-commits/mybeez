@@ -104,7 +104,12 @@ function App() {
               )}
               {tenantSlug && (
                 <Route path="/management">
-                  {() => <LazyPage><TenantManagement slug={tenantSlug} /></LazyPage>}
+                  {() => <LazyPage><TenantManagement slug={tenantSlug} isSubdomain={true} /></LazyPage>}
+                </Route>
+              )}
+              {tenantSlug && (
+                <Route path="/management/:section">
+                  {(params) => <LazyPage><TenantManagement slug={tenantSlug} section={params.section} isSubdomain={true} /></LazyPage>}
                 </Route>
               )}
 
@@ -162,7 +167,12 @@ function App() {
               )}
               {!tenantSlug && (
                 <Route path="/:slug/management">
-                  {(params) => <LazyPage><TenantManagement slug={params.slug} /></LazyPage>}
+                  {(params) => <LazyPage><TenantManagement slug={params.slug} isSubdomain={false} /></LazyPage>}
+                </Route>
+              )}
+              {!tenantSlug && (
+                <Route path="/:slug/management/:section">
+                  {(params) => <LazyPage><TenantManagement slug={params.slug} section={params.section} isSubdomain={false} /></LazyPage>}
                 </Route>
               )}
 
