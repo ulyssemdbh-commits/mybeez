@@ -416,8 +416,16 @@ export default function Admin() {
                       const busy = pendingId?.startsWith(`t${t.id}-`) ?? false;
                       return (
                         <tr key={t.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/30 transition-colors">
-                          <td className="px-4 py-3 font-mono text-xs">{t.slug}</td>
-                          <td className="px-4 py-3 font-medium">{t.name}</td>
+                          <td className="px-4 py-3 font-mono text-xs">
+                            <a href={`/123admin/tenants/${t.id}`} className="text-primary hover:underline">
+                              {t.slug}
+                            </a>
+                          </td>
+                          <td className="px-4 py-3 font-medium">
+                            <a href={`/123admin/tenants/${t.id}`} className="hover:underline">
+                              {t.name}
+                            </a>
+                          </td>
                           <td className="px-4 py-3 text-muted-foreground">{t.templateName ?? t.businessType ?? "—"}</td>
                           <td className="px-4 py-3 tabular-nums">{t.memberCount}</td>
                           <td className="px-4 py-3">
