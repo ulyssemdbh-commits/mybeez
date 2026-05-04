@@ -1,17 +1,20 @@
-import { tenantPath } from "@/lib/tenantHost";
+/**
+ * TenantAdmin — section "Paramètres" of the tenant app shell.
+ *
+ * Currently a placeholder ; reserved for tenant-level configuration
+ * (vocabulary overrides, modules enabled, branding, integrations…).
+ */
+
+import { TenantAppShell } from "@/components/tenant/TenantAppShell";
+import { SectionPlaceholder } from "@/components/management/SectionPlaceholder";
 
 export default function TenantAdmin({ slug }: { slug: string }) {
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-2xl mx-auto">
-        <div className="flex items-center gap-3 mb-6">
-          <a href={tenantPath(slug, "/")} className="text-primary hover:underline text-sm">← Retour</a>
-          <h1 className="text-xl font-bold capitalize">{slug} — Admin</h1>
-        </div>
-        <div className="bg-card rounded-xl border p-6 text-center text-muted-foreground">
-          <p>Section Admin en cours de développement.</p>
-        </div>
-      </div>
-    </div>
+    <TenantAppShell tenantSlug={slug} title="Paramètres tenant" subtitle="Paramétrage de l'espace">
+      <SectionPlaceholder
+        label="Paramètres tenant"
+        description="Configuration de l'espace : vocabulaire, modules activés, intégrations — disponible prochainement."
+      />
+    </TenantAppShell>
   );
 }
