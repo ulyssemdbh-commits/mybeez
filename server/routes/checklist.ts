@@ -40,7 +40,7 @@ const addCommentSchema = z.object({ author: z.string().min(1).max(50), message: 
 export function registerChecklistRoutes(app: Express): void {
   const r = "/api/checklist/:slug";
 
-  app.get(`${r}/categories`, resolveTenant, async (req: Request, res: Response) => {
+  app.get(`${r}/categories`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const cats = await db.select().from(categories).where(eq(categories.tenantId, tid));
@@ -67,7 +67,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.get(`${r}/dashboard`, resolveTenant, async (req: Request, res: Response) => {
+  app.get(`${r}/dashboard`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const today = getTodayDate();
@@ -210,7 +210,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.get(`${r}/comments`, resolveTenant, async (req: Request, res: Response) => {
+  app.get(`${r}/comments`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const result = await db.select().from(comments)
@@ -240,7 +240,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.get(`${r}/history`, resolveTenant, async (req: Request, res: Response) => {
+  app.get(`${r}/history`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const month = req.query.month as string | undefined;
