@@ -7,6 +7,8 @@
  */
 
 import type { Express, Request, Response } from "express";
+import { resolveTenant } from "../middleware/tenant";
+import { requireTenantAuth } from "../middleware/auth";
 
 interface SSEClient {
   id: string;
@@ -19,8 +21,10 @@ const clients: Map<string, SSEClient> = new Map();
 let clientIdCounter = 0;
 
 export function registerSSERoutes(app: Express): void {
-  app.get("/api/:tenant/events", (req: Request, res: Response) => {
-    const tenantId = req.params.tenant;
+  app.get("/api/:tenant/events", resolveTenant, requireTenantAuth, (req: Request, res: Response) => {
+    // tenantId here is the tenant slug (used as the broadcast key by emitChecklistUpdated).
+    // After resolveTenant, req.tenant is guaranteed populated.
+    const tenantId = req.tenant!.slug;
     const clientId = `sse-${++clientIdCounter}`;
 
     res.writeHead(200, {
