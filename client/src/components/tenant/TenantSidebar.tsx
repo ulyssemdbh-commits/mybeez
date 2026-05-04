@@ -36,13 +36,13 @@ export function TenantSidebar({ tenantSlug, currentPath }: Props) {
       className="w-60 shrink-0 border-r bg-white dark:bg-zinc-900 hidden md:flex flex-col"
       aria-label="Navigation tenant"
     >
-      <div className="px-4 py-4 border-b space-y-1">
+      <div className="px-4 py-5 border-b space-y-2">
         <Link href={tenantPath(tenantSlug, "/")}>
           <a className="block" aria-label="Accueil tenant">
-            <Logo variant="horizontal" className="h-8 w-auto" />
+            <Logo variant="horizontal" className="h-14 w-auto" />
           </a>
         </Link>
-        <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider truncate" data-testid="sidebar-tenant-slug">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate" data-testid="sidebar-tenant-slug">
           {tenantSlug}
         </p>
       </div>
