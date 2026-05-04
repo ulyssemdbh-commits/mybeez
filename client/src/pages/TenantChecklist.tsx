@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { AlfredChat } from "@/components/alfred/AlfredChat";
 import { Logo } from "@/components/Logo";
 import { cn } from "@/lib/utils";
+import { tenantPath } from "@/lib/tenantHost";
 
 interface TenantChecklistProps {
   slug: string;
@@ -182,8 +183,9 @@ export default function TenantChecklist({ slug }: TenantChecklistProps) {
                 {user.clientCode}
               </span>
             )}
-            <a href={`/${slug}/admin`} className="text-xs text-primary hover:underline" data-testid="link-admin">Admin</a>
-            <a href={`/${slug}/history`} className="text-xs text-primary hover:underline" data-testid="link-history">Historique</a>
+            <a href={tenantPath(slug, "/management")} className="text-xs text-primary hover:underline" data-testid="link-management">Gestion</a>
+            <a href={tenantPath(slug, "/admin")} className="text-xs text-primary hover:underline" data-testid="link-admin">Admin</a>
+            <a href={tenantPath(slug, "/history")} className="text-xs text-primary hover:underline" data-testid="link-history">Historique</a>
           </div>
         </div>
         {dashboard && (

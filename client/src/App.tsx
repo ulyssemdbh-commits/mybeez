@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { SkipLink } from "@/components/SkipLink";
 import { Logo } from "@/components/Logo";
+import { getTenantSlugFromHost } from "@/lib/tenantHost";
 
 const TenantChecklist = lazy(() => import("@/pages/TenantChecklist"));
 const TenantAdmin = lazy(() => import("@/pages/TenantAdmin"));
@@ -20,34 +21,6 @@ const AuthVerify = lazy(() => import("@/pages/AuthVerify"));
 const Landing = lazy(() => import("@/pages/Landing"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const AdminTenant = lazy(() => import("@/pages/AdminTenant"));
-
-const RESERVED_SUBDOMAINS = new Set([
-  "www", "api", "admin", "app", "static", "cdn",
-  "mail", "blog", "status", "docs", "support", "help",
-]);
-
-const KNOWN_ROOT_DOMAINS = ["mybeez-ai.com", "localhost"];
-
-/**
- * Returns the tenant slug if we're on a tenant subdomain (`<slug>.mybeez-ai.com`),
- * or null if we're on the apex (`mybeez-ai.com`) or a reserved subdomain
- * (api, admin, www, …).
- */
-function getTenantSlugFromHost(): string | null {
-  if (typeof window === "undefined") return null;
-  const host = window.location.hostname.toLowerCase();
-  for (const root of KNOWN_ROOT_DOMAINS) {
-    if (host === root) return null;
-    if (host.endsWith(`.${root}`)) {
-      const slug = host.slice(0, -root.length - 1);
-      if (RESERVED_SUBDOMAINS.has(slug)) return null;
-      // No nested subdomains for tenants (`foo.bar.mybeez-ai.com` not allowed).
-      if (slug.includes(".")) return null;
-      return slug;
-    }
-  }
-  return null;
-}
 
 function LazyPage({ children }: { children: React.ReactNode }) {
   return (

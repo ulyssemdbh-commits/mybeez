@@ -27,6 +27,7 @@ import {
   getSectionLabel,
 } from "@/components/management/ManagementSidebar";
 import { SectionPlaceholder } from "@/components/management/SectionPlaceholder";
+import { SuppliersSection } from "@/components/management/sections/SuppliersSection";
 
 interface Props {
   slug: string;
@@ -160,20 +161,22 @@ export default function TenantManagement({ slug, section, isSubdomain }: Props) 
         </header>
 
         <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8 max-w-7xl w-full mx-auto">
-          <SectionContent section={activeSection} />
+          <SectionContent section={activeSection} tenantSlug={slug} />
         </main>
       </div>
     </div>
   );
 }
 
-function SectionContent({ section }: { section: string }) {
-  // PR #1: every section is a placeholder. Replaced incrementally in PRs #2-#8.
+function SectionContent({ section, tenantSlug }: { section: string; tenantSlug: string }) {
+  if (section === "suppliers") {
+    return <SuppliersSection tenantSlug={tenantSlug} />;
+  }
+
   const meta = MANAGEMENT_SECTIONS.find((s) => s.slug === section);
   if (!meta) return <SectionPlaceholder label="Section inconnue" />;
 
   const descriptions: Record<string, string> = {
-    suppliers: "Gérez vos fournisseurs : coordonnées, conditions de paiement, IBAN.",
     purchases: "Suivi des factures fournisseurs : montants, échéances, statut de paiement.",
     expenses: "Dépenses générales hors fournisseurs : abonnements, frais récurrents.",
     bank: "Mouvements bancaires : encaissements, prélèvements, rapprochement.",
