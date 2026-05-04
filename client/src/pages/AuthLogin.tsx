@@ -49,7 +49,7 @@ export default function AuthLogin() {
       <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
         <div className="w-full max-w-md space-y-6">
           <a href="/" className="block" aria-label="Retour à l'accueil myBeez">
-            <Logo variant="principal" className="h-28 mx-auto" />
+            <Logo variant="principal" className="h-80 mx-auto" />
           </a>
 
           <div className="bg-white/85 dark:bg-zinc-800/85 backdrop-blur rounded-2xl border p-6 space-y-5">
@@ -138,7 +138,7 @@ export default function AuthLogin() {
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm space-y-6">
         <a href="/" className="block" aria-label="Retour à l'accueil myBeez">
-          <Logo variant="principal" className="h-28 mx-auto" />
+          <Logo variant="principal" className="h-80 mx-auto" />
         </a>
 
         <form

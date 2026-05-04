@@ -39,7 +39,7 @@ export function TenantSidebar({ tenantSlug, currentPath }: Props) {
       <div className="px-4 py-5 border-b space-y-2">
         <Link href={tenantPath(tenantSlug, "/")}>
           <a className="block" aria-label="Accueil tenant">
-            <Logo variant="horizontal" className="h-14 w-auto" />
+            <Logo variant="horizontal" className="h-20 w-auto" />
           </a>
         </Link>
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider truncate" data-testid="sidebar-tenant-slug">

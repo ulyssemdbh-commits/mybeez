@@ -247,7 +247,7 @@ function PinGate({ slug, login }: { slug: string; login: (pin: string, slug: str
   return (
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
       <div className="w-full max-w-xs space-y-6 text-center">
-        <Logo variant="principal" className="h-24 mx-auto" />
+        <Logo variant="principal" className="h-72 mx-auto" />
         <h1 className="text-xl font-bold text-foreground capitalize">{slug}</h1>
         <p className="text-sm text-muted-foreground">Entrez votre code PIN</p>
 

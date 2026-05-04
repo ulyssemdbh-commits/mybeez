@@ -159,7 +159,7 @@ export default function AuthSignup() {
     <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4 py-10">
       <div className="w-full max-w-lg space-y-6">
         <a href="/" className="block" aria-label="Retour à l'accueil myBeez">
-          <Logo variant="principal" className="h-28 mx-auto" />
+          <Logo variant="principal" className="h-80 mx-auto" />
         </a>
 
         <form
