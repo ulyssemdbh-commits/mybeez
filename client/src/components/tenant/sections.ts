@@ -41,18 +41,24 @@ export interface NavGroup {
   links: NavLink[];
 }
 
-export const MANAGEMENT_LINKS: NavLink[] = [
+const GESTION_LINKS: NavLink[] = [
   { path: "/management/suppliers", label: "Fournisseurs", icon: Truck, kind: "management", testId: "suppliers" },
   { path: "/management/purchases", label: "Achats", icon: ShoppingCart, kind: "management", testId: "purchases" },
   { path: "/management/expenses", label: "Dépenses", icon: Receipt, kind: "management", testId: "expenses" },
   { path: "/management/bank", label: "Banque", icon: Landmark, kind: "management", testId: "bank" },
   { path: "/management/cash", label: "Caisse", icon: Wallet, kind: "management", testId: "cash" },
   { path: "/management/files", label: "Fichiers", icon: FolderOpen, kind: "management", testId: "files" },
+  { path: "/management/analytics", label: "Analytics", icon: BarChart3, kind: "management", testId: "analytics" },
+];
+
+const RH_LINKS: NavLink[] = [
   { path: "/management/employees", label: "Employés", icon: Users, kind: "management", testId: "employees" },
   { path: "/management/payroll", label: "Paie", icon: Banknote, kind: "management", testId: "payroll" },
   { path: "/management/absences", label: "Absences", icon: CalendarOff, kind: "management", testId: "absences" },
-  { path: "/management/analytics", label: "Analytics", icon: BarChart3, kind: "management", testId: "analytics" },
 ];
+
+/** All management-section links flattened — used to validate :section URL params. */
+export const MANAGEMENT_LINKS: NavLink[] = [...GESTION_LINKS, ...RH_LINKS];
 
 export const NAV_GROUPS: NavGroup[] = [
   {
@@ -63,7 +69,11 @@ export const NAV_GROUPS: NavGroup[] = [
   },
   {
     label: "Gestion",
-    links: MANAGEMENT_LINKS,
+    links: GESTION_LINKS,
+  },
+  {
+    label: "Gestion RH",
+    links: RH_LINKS,
   },
   {
     label: "Suivi",

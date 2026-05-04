@@ -16,7 +16,6 @@ import { useEffect, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { LogOut, ShieldAlert } from "lucide-react";
 import { useUserSession } from "@/hooks/useUserSession";
-import { Logo } from "@/components/Logo";
 import { TenantSidebar, TenantMobileTabs } from "./TenantSidebar";
 
 interface Props {
@@ -85,21 +84,15 @@ export function TenantAppShell({ tenantSlug, title, subtitle, headerExtra, child
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-white dark:bg-zinc-900 border-b sticky top-0 z-20">
           <div className="px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-3 min-w-0">
-              <Logo variant="picto" className="h-8 w-8 shrink-0" />
-              <div className="min-w-0">
-                <p className="text-xs text-muted-foreground truncate" data-testid="shell-tenant-name">
-                  {membership?.name ?? tenantSlug}
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-semibold truncate" data-testid="shell-section-title">
+                {title}
+              </h1>
+              {subtitle && (
+                <p className="text-xs text-muted-foreground truncate" data-testid="shell-section-subtitle">
+                  {subtitle}
                 </p>
-                <h1 className="text-sm font-semibold truncate" data-testid="shell-section-title">
-                  {title}
-                </h1>
-                {subtitle && (
-                  <p className="text-[11px] text-muted-foreground truncate hidden sm:block">
-                    {subtitle}
-                  </p>
-                )}
-              </div>
+              )}
             </div>
 
             <div className="flex items-center gap-3 shrink-0">
