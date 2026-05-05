@@ -133,6 +133,9 @@ async function registerRoutes() {
   const { registerUserAuthRoutes } = await import("./routes/userAuth");
   registerUserAuthRoutes(app);
 
+  const { registerUserAuthMfaRoutes } = await import("./routes/userAuthMfa");
+  registerUserAuthMfaRoutes(app);
+
   const { registerTenantRoutes } = await import("./routes/tenants");
   registerTenantRoutes(app);
 

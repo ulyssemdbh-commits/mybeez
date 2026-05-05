@@ -18,6 +18,7 @@ const AuthSignup = lazy(() => import("@/pages/AuthSignup"));
 const AuthForgotPassword = lazy(() => import("@/pages/AuthForgotPassword"));
 const AuthResetPassword = lazy(() => import("@/pages/AuthResetPassword"));
 const AuthVerify = lazy(() => import("@/pages/AuthVerify"));
+const AuthSecurity = lazy(() => import("@/pages/AuthSecurity"));
 const Landing = lazy(() => import("@/pages/Landing"));
 const Admin = lazy(() => import("@/pages/Admin"));
 const AdminTenant = lazy(() => import("@/pages/AdminTenant"));
@@ -108,6 +109,9 @@ function App() {
               </Route>
               <Route path="/auth/verify">
                 {() => <LazyPage><AuthVerify /></LazyPage>}
+              </Route>
+              <Route path="/auth/security">
+                {() => <LazyPage><AuthSecurity /></LazyPage>}
               </Route>
 
               {/* Master admin — apex only */}

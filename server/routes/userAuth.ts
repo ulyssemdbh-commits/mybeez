@@ -34,8 +34,9 @@ import { tenants } from "../../shared/schema/tenants";
 import { userService, EmailAlreadyExistsError, normalizeEmail } from "../services/auth/userService";
 import { verifyPassword } from "../services/auth/passwordService";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../services/auth/mailService";
-import { requireUser, getUserSession } from "../middleware/auth";
+import { requireUser, getUserSession, clearMfaPending } from "../middleware/auth";
 import { PASSWORD_LIMITS } from "../services/auth/passwordService";
+import { mfaService, generatePendingId } from "../services/auth/mfaService";
 
 function getPrimaryRootDomain(): string {
   const raw = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
@@ -134,6 +135,10 @@ export function registerUserAuthRoutes(app: Express): void {
   });
 
   // ============================== login ==============================
+  // If the user has confirmed MFA, the password step alone is NOT enough:
+  // we set a half-baked "pending" session and reply { mfaRequired: true }.
+  // The client must call /api/auth/user/mfa/{challenge,recovery} within
+  // MFA_PENDING_TTL_MS to promote the session to a full nominative one.
   app.post("/api/auth/user/login", async (req: Request, res: Response) => {
     try {
       const data = loginSchema.parse(req.body);
@@ -144,8 +149,26 @@ export function registerUserAuthRoutes(app: Express): void {
         // Generic message — avoid leaking which case applies.
         return res.status(401).json({ error: "Email ou mot de passe invalide" });
       }
-      // Set the nominative session; coexists with any pre-existing PIN session.
-      const session = req.session as unknown as { userId?: number };
+
+      const session = req.session as unknown as {
+        userId?: number;
+        mfaPendingUserId?: number;
+        mfaPendingAt?: number;
+        mfaPendingId?: string;
+      };
+
+      const mfaEnabled = await mfaService.isEnabled(user.id);
+      if (mfaEnabled) {
+        // Drop any half-session from an older login and start a fresh one.
+        clearMfaPending(req);
+        delete session.userId;
+        session.mfaPendingUserId = user.id;
+        session.mfaPendingAt = Date.now();
+        session.mfaPendingId = generatePendingId();
+        return res.json({ mfaRequired: true });
+      }
+
+      // No MFA → standard nominative session.
       session.userId = user.id;
       await userService.recordLogin(user.id);
       res.json({ user: publicUserShape(user) });
@@ -165,6 +188,7 @@ export function registerUserAuthRoutes(app: Express): void {
     const session = req.session as unknown as { userId?: number; currentTenantId?: number };
     delete session.userId;
     delete session.currentTenantId;
+    clearMfaPending(req);
     res.json({ success: true });
   });
 

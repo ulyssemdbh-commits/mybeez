@@ -32,6 +32,18 @@ export interface UserSession {
   currentTenantId?: number;
 }
 
+/** Half-baked session created right after password but before MFA. */
+export interface MfaPendingSession {
+  userId: number;
+  /** ms epoch when the pending state was created (for TTL). */
+  at: number;
+  /** Opaque token tying this pending state to the originating login attempt. */
+  id: string;
+}
+
+/** TTL for an MFA-pending session: 5 min. After that, /challenge replies 410. */
+export const MFA_PENDING_TTL_MS = 5 * 60 * 1000;
+
 export function getSessionToken(req: Request): string | null {
   const session = req.session as any;
   return session?.authToken || null;
@@ -189,6 +201,67 @@ declare global {
     interface Request {
       /** Populated by `requireRole` for downstream handlers. */
       userTenantRole?: TenantRole;
+    }
+  }
+}
+
+// ====================== MFA-pending session ======================
+
+interface MfaPendingShape {
+  mfaPendingUserId?: number;
+  mfaPendingAt?: number;
+  mfaPendingId?: string;
+}
+
+/** Reads the half-baked (post-password, pre-MFA) session, if any. */
+export function getMfaPending(req: Request): MfaPendingSession | null {
+  const session = req.session as unknown as MfaPendingShape | undefined;
+  if (!session?.mfaPendingUserId || !session.mfaPendingAt || !session.mfaPendingId) {
+    return null;
+  }
+  return {
+    userId: session.mfaPendingUserId,
+    at: session.mfaPendingAt,
+    id: session.mfaPendingId,
+  };
+}
+
+/** Removes any MFA-pending state from the session. */
+export function clearMfaPending(req: Request): void {
+  const session = req.session as unknown as MfaPendingShape;
+  delete session.mfaPendingUserId;
+  delete session.mfaPendingAt;
+  delete session.mfaPendingId;
+}
+
+/**
+ * `requireMfaPending` — gates a route on a half-baked session created
+ * by the password-only login step. Distinct from `requireUser` which
+ * requires a full nominative session.
+ *
+ * - 401 if no pending session
+ * - 410 (Gone) if the pending state has expired (>MFA_PENDING_TTL_MS)
+ *
+ * Sets `req.mfaPending` for downstream handlers.
+ */
+export function requireMfaPending(req: Request, res: Response, next: NextFunction) {
+  const pending = getMfaPending(req);
+  if (!pending) {
+    return res.status(401).json({ error: "Aucune authentification en attente" });
+  }
+  if (Date.now() - pending.at > MFA_PENDING_TTL_MS) {
+    clearMfaPending(req);
+    return res.status(410).json({ error: "Session expirée, reconnectez-vous" });
+  }
+  req.mfaPending = pending;
+  return next();
+}
+
+declare global {
+  namespace Express {
+    interface Request {
+      /** Populated by `requireMfaPending`. */
+      mfaPending?: MfaPendingSession;
     }
   }
 }
