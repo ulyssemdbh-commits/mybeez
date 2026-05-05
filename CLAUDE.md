@@ -59,6 +59,7 @@ mybeez/
 │   ├── routes/
 │   │   ├── auth.ts                 # /api/auth/{pin-login, logout, me}  (legacy PIN)
 │   │   ├── userAuth.ts             # /api/auth/user/{signup, login, logout, me, verify-email, forgot-password, reset-password}  (nominative)
+│   │   ├── userAuthMfa.ts          # /api/auth/user/mfa/{status, setup, confirm, disable, challenge, recovery, cancel}  (TOTP)
 │   │   ├── tenants.ts              # /api/tenants — gatées par requireSuperadmin (Bearer)
 │   │   ├── templates.ts            # /api/templates (public, read-only catalog vertical-agnostic)
 │   │   ├── checklist.ts            # /api/checklist/:slug/* — toutes scopées par tenant
@@ -73,6 +74,7 @@ mybeez/
 │   │   ├── auth/userService.ts     # CRUD users + lifecycle tokens (issue/consume verify + reset)
 │   │   ├── auth/userTenantService.ts # CRUD user_tenants (M2M user↔tenant + role)
 │   │   ├── auth/mailService.ts     # Resend client + templates verify/reset, fail-soft (logs si pas de RESEND_API_KEY)
+│   │   ├── auth/mfaService.ts      # TOTP RFC 6238 (otplib) + recovery codes (sha-256, single-use), enrol/confirm/verify/disable
 │   │   ├── realtimeSync.ts         # SSE par tenant + emitChecklistUpdated()
 │   │   ├── alfred/alfredService.ts # Chat AI : history en mémoire par tenant slug + provider chain
 │   │   ├── alfred/prompt.ts        # buildSystemPrompt(tenant) — pure, testable, dynamique (vocabulary)
@@ -212,7 +214,8 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
   - ✅ Alfred prompt dégénéricisé : nom du tenant + vocabulary dynamiques, plus de Valentine/Maillane/Sushi hardcodés.
   - ✅ Schéma auth (PR #11) : `users`, `user_tenants` (M2M avec role), `password_reset_tokens`, `email_verification_tokens`, `mfa_secrets`, `audit_log`. Session store basculé vers Postgres (`connect-pg-simple` → table `user_sessions` créée auto).
   - ✅ Auth nominative email/password (PR #12) : argon2id, routes `/api/auth/user/*`, middleware `requireUser` + `requireRole(...)`, mailService Resend (fail-soft dev), page `/auth/login` minimale. PIN auth coexiste pendant la migration.
-  - ⏳ **Reste** : MFA TOTP + audit log writes + rate limit/lockout (PR #13), application de `requireRole` aux routes existantes (à la place de `requireTenantAuth` qui est PIN-only), signup public avec template picker (PR après #13), purge PIN auth, passer `tenant.templateId` en NOT NULL et droper `businessType`.
+  - ✅ MFA TOTP (PR #13a) : `mfaService` (otplib, RFC 6238, drift ±30s), routes `/api/auth/user/mfa/{status,setup,confirm,disable,challenge,recovery,cancel}`, gate sur `/login` (retourne `{mfaRequired:true}`, session `mfaPending*` TTL 5 min), 10 recovery codes XXXX-XXXX-XXXX (sha-256, single-use), page `/auth/security` (QR + recovery codes affichés une fois).
+  - ⏳ **Reste** : audit log writes + rate limit/lockout (PR #13b), application de `requireRole` aux routes existantes (à la place de `requireTenantAuth` qui est PIN-only), signup public avec template picker (PR après #13), purge PIN auth, passer `tenant.templateId` en NOT NULL et droper `businessType`.
 
 ### Sécurité — à corriger
 - ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).

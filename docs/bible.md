@@ -512,8 +512,12 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 
 ### 6.5 MFA
 
-- Schéma `mfa_secrets` présent
-- **Aucun endpoint, aucun middleware** — fonctionnellement absent
+- ✅ Schéma `mfa_secrets` présent
+- ✅ Service `auth/mfaService.ts` : TOTP (RFC 6238, otplib, drift ±30s), recovery codes (sha-256, single-use, format `XXXX-XXXX-XXXX`)
+- ✅ Routes `/api/auth/user/mfa/{status, setup, confirm, disable, challenge, recovery, cancel}`
+- ✅ Login gate : si MFA actif, le password seul retourne `{ mfaRequired: true }` et pose une session `mfaPending*` (TTL 5 min, gatée par `requireMfaPending`) — promotion vers session nominative complète après TOTP/recovery valide
+- ✅ UI : page `/auth/security` (enrolment QR + secret + 10 recovery codes affichés une fois) ; écran challenge intégré au flow `/auth/login`
+- 🟡 Pas encore obligatoire pour Owner/Admin (opt-in côté user)
 
 ### 6.6 Audit log
 
@@ -713,7 +717,7 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 ### 10.2 Auth / sécurité
 
 - **PIN codes en clair** dans `tenants.pinCode/adminCode` (DB-leak = compromission staff).
-- **MFA TOTP** : schéma seul, fonctionnellement absent.
+- ~~**MFA TOTP** : schéma seul, fonctionnellement absent.~~ Implémenté en PR #13a (TOTP + recovery codes + UI). Pas encore obligatoire pour Owner/Admin (opt-in côté user).
 - **Audit log** : schéma seul, aucun write.
 - **Lockout login** : pas de protection brute-force compte.
 - **Pas de check HIBP** sur passwords.
@@ -762,7 +766,7 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 | 1 | 🔴 critique | GET checklist sans auth (categories/dashboard/comments/history) | `server/routes/checklist.ts` | S — ajouter `requireTenantAuth` |
 | 2 | 🔴 critique | SSE `/api/:tenant/events` sans auth | `server/services/realtimeSync.ts` | S |
 | 3 | 🔴 critique | PIN codes stockés en clair | `shared/schema/tenants.ts` (`pinCode`, `adminCode`) | M — hasher + migrer données existantes |
-| 4 | 🔴 critique | MFA absent pour Owner/Admin | (à implémenter) | L — TOTP + recovery codes + UI |
+| 4 | 🟡 moyen | MFA pas obligatoire pour Owner/Admin (opt-in) — implémentée en PR #13a | `server/services/auth/mfaService.ts` | M — gate `requireMfaForRole` à brancher selon politique |
 | 5 | 🟠 haut | FK manquantes (orphelins possibles) | items, checks, purchases, payroll, absences | M — migration + cleanup orphelins |
 | 6 | 🟠 haut | Audit log non écrit (compliance RGPD) | (à implémenter) | M — wrapper + writes sur events critiques |
 | 7 | 🟠 haut | PIN brute-force non rate-limité spécifiquement | `server/routes/auth.ts` | S — rate-limit dédié + délai exponentiel |
