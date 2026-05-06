@@ -12,7 +12,7 @@ interface AlfredMessage {
 }
 
 interface AlfredChatProps {
-  tenantId: string;
+  tenantSlug: string;
   checklistContext?: {
     total: number;
     checked: number;
@@ -22,7 +22,7 @@ interface AlfredChatProps {
   className?: string;
 }
 
-export function AlfredChat({ tenantId, checklistContext, className }: AlfredChatProps) {
+export function AlfredChat({ tenantSlug, checklistContext, className }: AlfredChatProps) {
   const [messages, setMessages] = useState<AlfredMessage[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -50,13 +50,12 @@ export function AlfredChat({ tenantId, checklistContext, className }: AlfredChat
     setIsLoading(true);
 
     try {
-      const res = await fetch("/api/alfred/chat", {
+      const res = await fetch(`/api/alfred/${encodeURIComponent(tenantSlug)}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           message: text,
-          tenantId,
           context: checklistContext ? { checklist: checklistContext } : undefined,
         }),
       });
@@ -86,7 +85,7 @@ export function AlfredChat({ tenantId, checklistContext, className }: AlfredChat
       setIsLoading(false);
       textareaRef.current?.focus();
     }
-  }, [input, isLoading, tenantId, checklistContext]);
+  }, [input, isLoading, tenantSlug, checklistContext]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {

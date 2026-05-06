@@ -173,7 +173,7 @@ function ChecklistContent({ slug }: { slug: string; clientCode: string | null })
         </div>
       ))}
 
-      <AlfredChat tenantId={slug} checklistContext={dashboard || undefined} />
+      <AlfredChat tenantSlug={slug} checklistContext={dashboard || undefined} />
     </div>
   );
 }
