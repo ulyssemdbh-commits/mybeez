@@ -12,7 +12,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { ChevronLeft, Edit3, Check } from "lucide-react";
-import { IconRenderer } from "./IconRenderer";
+import { IconRenderer } from "@/components/templates/IconRenderer";
 import type { ApiTemplate, SignupAccountForm } from "./types";
 
 interface Props {

@@ -1,20 +1,19 @@
 /**
- * TenantAdmin — section "Paramètres" of the tenant app shell.
+ * TenantAdmin — section "Paramètres tenant" du shell.
  *
- * Currently a placeholder ; reserved for tenant-level configuration
- * (vocabulary overrides, modules enabled, branding, integrations…).
+ * Premier bloc concret : "Mon template" (lecture + switch). Plus tard :
+ * vocabulary overrides, modules toggle, branding, intégrations.
  */
 
 import { TenantAppShell } from "@/components/tenant/TenantAppShell";
-import { SectionPlaceholder } from "@/components/management/SectionPlaceholder";
+import { TenantTemplateSection } from "@/components/templates/TenantTemplateSection";
 
 export default function TenantAdmin({ slug }: { slug: string }) {
   return (
     <TenantAppShell tenantSlug={slug} title="Paramètres tenant" subtitle="Paramétrage de l'espace">
-      <SectionPlaceholder
-        label="Paramètres tenant"
-        description="Configuration de l'espace : vocabulaire, modules activés, intégrations — disponible prochainement."
-      />
+      <div className="space-y-8">
+        <TenantTemplateSection tenantSlug={slug} />
+      </div>
     </TenantAppShell>
   );
 }
