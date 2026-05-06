@@ -2,8 +2,8 @@
 
 > Document de référence consolidé du projet myBeez. Synthèse honnête de l'architecture, de l'état réel du code, des forces, des faiblesses, et de la roadmap.
 >
-> **À jour au :** 2026-05-04
-> **Branche :** `main` (commit `7fe6b60`)
+> **À jour au :** 2026-05-07
+> **Branche :** `main` (commit `ce22962`)
 > **Domaine prod :** https://mybeez-ai.com
 > **Repo :** https://github.com/ulyssemdbh-commits/mybeez
 
@@ -45,7 +45,7 @@ myBeez est un SaaS multi-tenant **multi-vertical** : un même socle applicatif s
 |---|---|---|
 | 1 | **Multi-vertical via templates** | Schéma vocabulary-neutral, registre `business_templates`, `tenant_modules` enable/disable, vocabulary overrides per tenant |
 | 2 | **Tenancy par subdomain + custom domain** | `slug.mybeez-ai.com` par défaut (wildcard DNS+TLS), `tenant_domains` table pour custom domains payants. Path-based legacy `mybeez-ai.com/:slug` toléré en transition |
-| 3 | **Auth la plus sécurisée raisonnable** | Phase 1 : email+password (Argon2id) + MFA TOTP pour Owner/Admin + RBAC nominatif. Phase 2 : passkeys/WebAuthn, SSO. PIN tablette = re-unlock device, pas auth principale |
+| 3 | **Auth nominative la plus sécurisée raisonnable** | Phase 1 : email+password (Argon2id) + MFA TOTP + RBAC nominatif 5 rôles. Phase 2 : passkeys/WebAuthn, SSO. Pas de PIN partagé tenant-wide (purgé au sprint 1) — le PIN-on-tablet futur sera un per-staff device-paired token |
 
 ### Modèle commercial implicite
 
@@ -98,66 +98,28 @@ myBeez est un SaaS multi-tenant **multi-vertical** : un même socle applicatif s
 | Langage | TypeScript 5.6 (strict, ESM `"type": "module"`) |
 | Runtime | Node 20+ (Docker), Node 22 dev local |
 | Backend | Express 4, helmet, compression, cookie-parser, express-session, express-rate-limit |
-| ORM/DB | Drizzle ORM 0.45 + drizzle-zod, PostgreSQL 16 (driver `pg`) |
-| Frontend | React 18, Vite 7, wouter (routing), TanStack Query 5 |
+| ORM | Drizzle 0.45 + drizzle-zod, PostgreSQL via `pg` Pool |
+| Frontend | React 18 + Vite 7, wouter, TanStack Query 5 |
 | UI | TailwindCSS 3, Shadcn/UI (Radix), framer-motion, lucide-react, dnd-kit |
-| Validation | Zod 3 (côté serveur sur chaque route) |
-| Build prod | Vite (front → `dist/public`) + esbuild (back → `dist/index.cjs` CJS) |
-| Realtime | SSE custom (pas socket.io) |
-| AI | OpenAI SDK 6, fallback chain Gemini → Grok |
-| Auth | argon2id, connect-pg-simple, Resend (email) |
-| Tests | Vitest 2 |
-| Lint | ESLint 9 (flat config) + Prettier 3 |
-| CI/CD | GitHub Actions |
-| Container | Docker multi-stage (alpine) + docker compose |
-| Reverse proxy | nginx (host-installed, Cloudflare Origin Cert) |
-| Storage | Cloudflare R2 (S3-compatible, backups offsite) |
+| Build prod | Vite (front → `dist/public/`) + esbuild (back → `dist/index.cjs` CJS) |
+| Realtime | SSE (custom, pas socket.io) |
+| AI | OpenAI SDK 6 + fallback Gemini → Grok (`server/services/core/openaiClient.ts`) |
+| Auth crypto | argon2id (passwords + recovery codes), otplib (TOTP RFC 6238) |
+| Validation | Zod 3 |
+| Tests | Vitest |
 
-### Layers
+### Mono-repo
 
 ```
-                    ┌─────────────────────────────┐
-                    │   client/src/  (React SPA)  │
-                    │   pages/ components/ hooks/ │
-                    └──────────────┬──────────────┘
-                                   │ HTTP /api/*  + SSE
-                    ┌──────────────▼──────────────┐
-                    │   server/  (Express)        │
-                    │   ┌───────────────────────┐ │
-                    │   │ middleware/           │ │  resolveTenant, requireUser,
-                    │   │                       │ │  requireRole, requireSuperadmin
-                    │   ├───────────────────────┤ │
-                    │   │ routes/               │ │  9 modules (auth, userAuth,
-                    │   │                       │ │  tenants, admin, templates,
-                    │   │                       │ │  alfred, checklist, onboarding,
-                    │   │                       │ │  management/suppliers)
-                    │   ├───────────────────────┤ │
-                    │   │ services/             │ │  tenantService, domainService,
-                    │   │                       │ │  templateService, realtimeSync,
-                    │   │                       │ │  alfred/, auth/{user,password,
-                    │   │                       │ │  token,mail,userTenant}Service
-                    │   ├───────────────────────┤ │
-                    │   │ db.ts (drizzle pool)  │ │
-                    │   └───────────────────────┘ │
-                    └──────────────┬──────────────┘
-                                   │
-                    ┌──────────────▼──────────────┐
-                    │   shared/schema/  (Drizzle) │  Source de vérité DB,
-                    │   tenants users domains     │  re-exporté côté front
-                    │   templates checklist       │  pour types partagés.
-                    └─────────────────────────────┘
+mybeez/
+├── client/         # React (Vite root = ./client)
+├── server/         # Express
+├── shared/         # Schémas + types partagés
+├── scripts/        # Ops (backups, seeds, migrations one-off)
+└── docs/           # Cette bible + autres docs
 ```
 
-### Multi-tenant strategy
-
-- **Single DB, single schema, colonne `tenant_id`** sur toutes les tables business.
-- **Aucune Row-Level Security PostgreSQL.** L'isolation est garantie *uniquement* par les `where(eq(table.tenantId, tid))` côté Drizzle. Toute requête manquant ce filtre = fuite trans-tenant.
-- **Résolution** : middleware `resolveTenant` lit `req.hostname` :
-  - subdomain `<slug>.<root>` (`ROOT_DOMAINS` env, default `mybeez-ai.com,localhost`)
-  - custom domain via `tenant_domains.verifiedAt IS NOT NULL`
-  - fallback legacy : `req.params.slug`
-- **400** si `:slug` URL ne matche pas le tenant résolu par host.
-- **Dev local** : `*.localhost` est résolu par les navigateurs vers `127.0.0.1` (RFC 6761), pas besoin de toucher `/etc/hosts`.
+Aliases : `@/*` → `client/src/*`, `@shared/*` → `shared/*`.
 
 ---
 
@@ -165,68 +127,63 @@ myBeez est un SaaS multi-tenant **multi-vertical** : un même socle applicatif s
 
 ### 3.1 Bootstrap — `server/index.ts`
 
-**Ordre de mounting :**
+Ordre d'initialisation :
 
-1. `trust proxy` (Cloudflare)
-2. `helmet` — CSP et COEP désactivés (compromis Vite)
-3. `compression` (level 6, threshold 1KB)
-4. `cookie-parser`
-5. `express.json` / `urlencoded` (limit 10MB)
-6. **Session store Postgres** via `connect-pg-simple` — table `user_sessions` auto-provisionnée
-7. **Rate-limiter global** : 120 req/min sur `/api/*`
-8. **Rate-limiter Alfred** : 20 req/min sur `/api/alfred/*`
-9. Lazy import + register routes (cf. inventaire ci-dessous)
-10. `/api/health` (uptime, SSE stats, AI provider flags)
-11. SPA fallback en prod (sert `dist/public/index.html`)
+1. Garde-fous env (`SESSION_SECRET`, `APP_BASE_URL` requis en prod, exit 1 sinon).
+2. Logs warn `SUPERADMIN_TOKEN` (≥16 chars) et `RESEND_API_KEY` si absents.
+3. `helmet` (CSP désactivé), `compression`, `cookie-parser`, `express.json` (10mb).
+4. Session Postgres-backed via `connect-pg-simple` (`createTableIfMissing: true`, table `user_sessions`, prune toutes les 15 min).
+5. Cookie scope `domain: .mybeez-ai.com` en prod (cross-subdomain).
+6. Rate limiters : global `/api/` (120 req/min), `/api/alfred/` (20 req/min).
+7. `registerRoutes()` : import dynamiques (`SSE → userAuth → userAuthMfa → tenants → admin → onboarding → templates → alfred → checklist → management/suppliers`).
+8. Endpoint `/api/health` (uptime + SSE stats + AI flags).
+9. `serveStatic()` en prod : `dist/public/` (assets 1y, fallback SPA).
+10. Listen sur `PORT` (default 3000).
 
-**Validations fatales au boot (prod) :**
+**Hooks process** : `uncaughtException`, `unhandledRejection` loggués stderr.
 
-- `SESSION_SECRET` requis → exit 1 sinon
-- `APP_BASE_URL` requis → exit 1 sinon (prévient host-header injection sur les liens email verify/reset)
+### 3.2 Routes — `server/routes/`
 
-**Validations warning :**
+Conventions : exporte `register<Module>Routes(app)`, importé en lazy depuis `index.ts`. Chaque route déclare son schéma Zod en haut. Erreurs FR + 500 générique. Tenant-scoped via `resolveTenant` middleware.
 
-- `DATABASE_URL` (warn, pas exit)
-- `SUPERADMIN_TOKEN` < 16 chars → routes admin répondent 503 (fail-closed)
-
-**Cookie de session :**
-
-- `secure: true` en prod
-- `httpOnly: true`, `sameSite: "lax"`
-- `domain: .<primary-root-domain>` en prod (cross-subdomain), undefined en dev
-- `maxAge: 24h`, `rolling: true` (rolling expiry)
-
-### 3.2 Inventaire des routes
-
-#### `server/routes/auth.ts` — PIN legacy
+#### `server/routes/userAuth.ts` — auth nominative
 
 | Méthode | Path | Auth | Notes |
 |---|---|---|---|
-| POST | `/api/auth/pin-login` | ❌ | Compare PIN clair contre `tenants.pinCode`/`adminCode` |
-| POST | `/api/auth/logout` | session | Détruit la session |
-| GET | `/api/auth/me` | session optionnelle | Retourne 200 même non-authentifié |
+| POST | `/api/auth/user/signup` | ❌ | Argon2id + email verify token + Resend |
+| POST | `/api/auth/user/login` | ❌ | Anti-enum, retourne `{mfaRequired:true}` si MFA actif |
+| POST | `/api/auth/user/logout` | ❌ | Clear session.userId |
+| GET | `/api/auth/user/me` | requireUser | Renvoie user + memberships |
+| POST | `/api/auth/user/verify-email` | ❌ | Consomme token |
+| POST | `/api/auth/user/forgot-password` | ❌ | Toujours 202 (anti-enum) |
+| POST | `/api/auth/user/reset-password` | ❌ | Consomme token + set nouveau password |
 
-#### `server/routes/userAuth.ts` — auth nominative (PR #12)
+#### `server/routes/userAuthMfa.ts` — MFA TOTP
 
 | Méthode | Path | Auth | Notes |
 |---|---|---|---|
-| POST | `/api/auth/user/signup` | ❌ | Email enum évité (erreur générique) |
-| POST | `/api/auth/user/login` | ❌ | Argon2id verify, Zod strict |
-| POST | `/api/auth/user/logout` | requireUser | Supprime juste `userId` |
-| GET | `/api/auth/user/me` | requireUser | User + tenants/memberships |
-| POST | `/api/auth/user/verify-email` | ❌ (token) | TTL 24h, token single-use |
-| POST | `/api/auth/user/forgot-password` | ❌ | **202 toujours** (anti-enumeration) ✓ |
-| POST | `/api/auth/user/reset-password` | ❌ (token) | TTL 1h |
+| GET | `/api/auth/user/mfa/status` | requireUser | État (enrolled / confirmed) |
+| POST | `/api/auth/user/mfa/setup` | requireUser | Génère secret + QR + 10 recovery codes |
+| POST | `/api/auth/user/mfa/confirm` | requireUser | Valide TOTP, marque `confirmedAt` |
+| POST | `/api/auth/user/mfa/disable` | requireUser | Re-auth + delete row |
+| POST | `/api/auth/user/mfa/challenge` | requireMfaPending | TOTP code → promote pending → full session |
+| POST | `/api/auth/user/mfa/recovery` | requireMfaPending | Recovery code single-use |
+| POST | `/api/auth/user/mfa/cancel` | ❌ | Clear session mfaPending* keys |
 
-#### `server/routes/tenants.ts` — admin Bearer (à retirer)
+#### `server/routes/tenants.ts` — admin legacy (Bearer)
 
-Toutes gates par `requireSuperadmin` (Bearer `SUPERADMIN_TOKEN` constant-time compare). Mécanisme **temporaire** remplacé par `/api/admin/*` (nominatif).
+| Méthode | Path | Auth | Notes |
+|---|---|---|---|
+| POST | `/api/tenants` | requireSuperadmin (Bearer) | Création tenant |
+| GET | `/api/tenants` | idem | Liste |
+| PATCH | `/api/tenants/:id` | idem | Update Zod strict (sans pin/admin code depuis #55) |
 
-#### `server/routes/admin.ts` — admin nominatif
+Mécanisme transitoire — sera retiré au profit des routes `/api/admin/*` (RBAC nominatif).
+
+#### `server/routes/admin.ts` — back-office superadmin
 
 | Méthode | Path | Notes |
 |---|---|---|
-| GET | `/api/admin/me` | superadmin nominatif |
 | GET | `/api/admin/stats` | comptes users + tenants |
 | GET/POST/PATCH/DELETE | `/api/admin/users[/...]` | CRUD users + last-superadmin protection |
 | POST | `/api/admin/users/:id/send-reset` | émet token reset + email |
@@ -245,35 +202,39 @@ Toutes gatées par `requireSuperadminUser` (session nominative + `users.isSupera
 
 #### `server/routes/checklist.ts` — checklist quotidienne
 
-| Méthode | Path | Auth | Notes |
-|---|---|---|---|
-| GET | `/api/checklist/:slug/categories` | ⚠️ resolveTenant **only** | **Lisible sans auth** |
-| GET | `/api/checklist/:slug/dashboard` | ⚠️ resolveTenant only | **Lisible sans auth** |
-| GET | `/api/checklist/:slug/comments` | ⚠️ resolveTenant only | **Lisible sans auth** |
-| GET | `/api/checklist/:slug/history` | ⚠️ resolveTenant only | **Lisible sans auth** |
-| POST | `/api/checklist/:slug/toggle` | requireTenantAuth | Mutation OK |
-| POST | `/api/checklist/:slug/reset` | requireTenantAuth | |
-| POST/PATCH/DELETE | `/api/checklist/:slug/items[/:id]` | requireTenantAuth | Soft-delete via `isActive` |
-| POST | `/api/checklist/:slug/categories` | requireTenantAuth | |
-| POST | `/api/checklist/:slug/comments` | requireTenantAuth | |
+Toutes les routes derrière `resolveTenant + requireUser + requireRole(...)` avec matrice rôles (PR #53). `requireTenantAuth` n'existe plus.
 
-#### `server/routes/alfred.ts` — IA conversationnelle
-
-| Méthode | Path | Auth | Notes |
+| Méthode | Path | Rôles | Notes |
 |---|---|---|---|
-| POST | `/api/alfred/chat` | ❌ | Slug en body — devrait passer par `:slug/*` |
-| POST | `/api/alfred/analyze` | ❌ | Idem |
-| POST | `/api/alfred/clear` | ❌ | Idem |
+| GET | `/api/checklist/:slug/categories` | tous (READ) | |
+| GET | `/api/checklist/:slug/dashboard` | tous (READ) | |
+| GET | `/api/checklist/:slug/comments` | tous (READ) | |
+| GET | `/api/checklist/:slug/history` | tous (READ) | |
+| POST | `/api/checklist/:slug/toggle` | owner/admin/manager/staff (STAFF) | Mutation quotidienne |
+| POST | `/api/checklist/:slug/comments` | STAFF | |
+| POST | `/api/checklist/:slug/reset` | owner/admin/manager (MANAGE) | Reset journée |
+| POST/PATCH/DELETE | `/api/checklist/:slug/items[/:id]` | MANAGE | Soft-delete via `isActive` |
+| POST | `/api/checklist/:slug/categories` | MANAGE | |
+
+#### `server/routes/alfred.ts` — IA conversationnelle (PR #54)
+
+URL imbriquée par tenant `:slug`, slug retiré du body, gates auth requireRole.
+
+| Méthode | Path | Rôles | Notes |
+|---|---|---|---|
+| POST | `/api/alfred/:slug/chat` | tous rôles tenant | Prompt + checklist context optionnel |
+| POST | `/api/alfred/:slug/analyze` | idem | Analyse de la checklist du jour |
+| POST | `/api/alfred/:slug/clear` | idem | Vide l'historique conversation |
 
 #### `server/routes/management/suppliers.ts` — module Gestion (PR #2)
 
-Pattern de référence pour les futurs modules CRUD.
+Pattern de référence pour les futurs modules CRUD. Toutes routes derrière `resolveTenant + requireUser + requireRole(...)`.
 
-| Méthode | Path | Auth | Notes |
+| Méthode | Path | Rôles | Notes |
 |---|---|---|---|
-| GET | `/api/management/:slug/suppliers[?includeInactive=true]` | requireUser + requireRole | tous rôles |
-| GET | `/api/management/:slug/suppliers/:id` | idem | |
-| POST | `/api/management/:slug/suppliers` | requireRole(owner/admin/manager) | Zod strict |
+| GET | `/api/management/:slug/suppliers[?includeInactive=true]` | READ (tous) | tri par nom asc |
+| GET | `/api/management/:slug/suppliers/:id` | READ | |
+| POST | `/api/management/:slug/suppliers` | owner/admin/manager | Zod strict |
 | PATCH | `/api/management/:slug/suppliers/:id` | idem | |
 | DELETE | `/api/management/:slug/suppliers/:id` | idem | Soft delete `isActive=false` |
 
@@ -281,20 +242,22 @@ Pattern de référence pour les futurs modules CRUD.
 
 | Méthode | Path | Auth | Notes |
 |---|---|---|---|
-| GET | `/api/onboarding/check-slug` | ❌ | Validation slug |
-| POST | `/api/onboarding/signup-with-tenant` | ❌ | Crée user + tenant + auto-login |
+| GET | `/api/onboarding/check-slug` | ❌ | Validation format + collision + suggestion |
+| POST | `/api/onboarding/signup-with-tenant` | ❌ | Crée user + tenant + lien Owner + auto-login |
 
 ### 3.3 Middleware — `server/middleware/`
 
 | Fichier | Exports | Rôle |
 |---|---|---|
 | `tenant.ts` | `resolveTenant` | Attache `req.tenantId` (hostname-first, fallback `:slug`) |
-| `auth.ts` | `requireAuth`, `requireAdmin` | PIN session legacy |
-| `auth.ts` | `requireSuperadmin` | Bearer token timing-safe |
 | `auth.ts` | `requireUser` | Session nominative présente |
-| `auth.ts` | `requireSuperadminUser` | Nominatif + `isSuperadmin=true` |
-| `auth.ts` | `requireRole(...allowed)` | Lookup `user_tenants.role`, superadmin bypass |
-| `auth.ts` | `requireTenantAuth` | PIN OR nominatif membre du tenant courant |
+| `auth.ts` | `requireRole(...allowed)` | Lookup `user_tenants.role`, validate vs allowed list |
+| `auth.ts` | `requireSuperadminUser` | Nominatif + `users.isSuperadmin = true` |
+| `auth.ts` | `requireMfaPending` | Session half-baked post-password (TTL 5 min) |
+| `auth.ts` | `requireSuperadmin` | Bearer token timing-safe (legacy `/api/tenants/*`) |
+| `auth.ts` | `getUserSession`, `getMfaPending`, `clearMfaPending` | Helpers session |
+
+Toute la voie PIN (`requireAuth`, `requireAdmin`, `requireTenantAuth`, `getAuthSession`, `getSessionToken`, `AuthSession`) a été supprimée en PR #55.
 
 ### 3.4 Services — `server/services/`
 
@@ -303,26 +266,25 @@ Pattern de référence pour les futurs modules CRUD.
 | `tenantService` | CRUD tenants + génération clientCode 8 chiffres | `Map<slug, Tenant>` + `Map<clientCode, Tenant>`, invalidation manuelle | ❌ Process-local |
 | `domainService` | Résolution tenant par hostname | `Map<hostname, …>` TTL 60s pour custom domains | ❌ Process-local |
 | `templateService` | Catalog `business_templates` | `TemplatesIndex` (bySlug, byId) — invalidation manuelle | ❌ Process-local |
-| `realtimeSync` | SSE par tenant | `Map<clientId, SSEClient>` | ❌ Process-local |
+| `realtimeSync` | SSE par tenant + `emitChecklistUpdated` | `Map<clientId, SSEClient>` | ❌ Process-local |
 | `alfred/alfredService` | Chat IA, history par tenant slug | History 20 messages en mémoire | ❌ Process-local + memory leak potentiel |
 | `alfred/prompt` | `buildSystemPrompt(tenant)` pure function | — | ✓ Pure |
-| `core/openaiClient` | Factory provider AI | — | ✓ |
-| `auth/userService` | CRUD users + tokens | — | ✓ |
-| `auth/passwordService` | Argon2id hash/verify | — | ✓ |
-| `auth/tokenService` | SHA-256 hash + TTL | — | ✓ |
+| `core/openaiClient` | Factory provider AI (OpenAI > Gemini > Grok) | — | ✓ |
+| `auth/userService` | CRUD users + lifecycle tokens (verify + reset) | — | ✓ |
 | `auth/userTenantService` | M2M user↔tenant + role | — | ✓ |
-| `auth/mailService` | Resend client + templates fail-soft | — | ✓ |
-| `auth.ts` (orphelin) | Wrapper vide délégant à tenantService | — | À retirer |
+| `auth/passwordService` | Argon2id hash/verify + bornes longueur | — | ✓ |
+| `auth/tokenService` | SHA-256 hash + TTL constants | — | ✓ |
+| `auth/mfaService` | TOTP enrol/confirm/verify/disable + recovery codes (sha-256, single-use) | — | ✓ |
+| `auth/mailService` | Resend client + templates verify/reset, fail-soft | — | ✓ |
 
 ### 3.5 Realtime / SSE
 
-- **Endpoint** : `GET /api/:tenant/events` → upgrade `text/event-stream`
+- **Endpoint** : `GET /api/:tenant/events` → upgrade `text/event-stream`, gaté par `resolveTenant + requireUser + requireRole(tous rôles tenant)` depuis PR #53
 - **Headers** : `X-Accel-Buffering: no` pour Cloudflare
 - **Keepalive** : 30s
 - **Émetteurs** : routes `checklist.ts` après mutations (toggle/reset/items/categories/comments)
 - **Payload** : `{ type: "checklist_updated", timestamp }`
 - **Client** : `client/src/hooks/useRealtimeSync.ts` → invalidate query keys checklist
-- ⚠️ **Pas d'auth sur la connexion SSE** — n'importe qui connaissant le slug peut écouter les notifications.
 
 ### 3.6 AI — Alfred
 
@@ -331,6 +293,7 @@ Pattern de référence pour les futurs modules CRUD.
 - **System prompt** : `buildSystemPrompt(tenant)` dynamique, **vocabulary-neutral** (lit `tenant.vocabulary` keys `item`/`checklist`/`customer`)
 - **Contexte runtime** : checklist du jour (total/checked/uncheckedItems)
 - **History** : 20 derniers messages par tenant slug en mémoire (perdu au redéploiement)
+- **Auth** : depuis #54 toutes les routes Alfred sont sous `/api/alfred/:slug/*` derrière `requireUser + requireRole`
 
 ---
 
@@ -353,18 +316,19 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 
 | Page | État | Endpoints consommés |
 |---|---|---|
-| `TenantChecklist` | ✅ implémenté (3 modes : nominatif shell, PIN tablette, PIN gate) | `/api/checklist/:slug/*` + SSE |
+| `TenantChecklist` | ✅ implémenté (mode nominatif uniquement depuis #55 ; écran "Connexion requise" sinon) | `/api/checklist/:slug/*` + SSE |
 | `TenantManagement` | ✅ shell + dispatch sections (suppliers seul implémenté) | `/api/management/:slug/suppliers` |
 | `TenantHistory` | 🟡 stub | aucun |
 | `TenantAdmin` | 🟡 stub | aucun |
 | `Landing` | ✅ implémenté (hero, features, mockups, FAQ, pricing) | `/api/templates` |
 | `Admin` (`/123admin`) | ✅ implémenté (users, tenants, templates, dialogs) | `/api/admin/*` |
 | `AdminTenant` | 🟡 stub | aucun |
-| `AuthLogin` | ✅ | `/api/auth/user/{login,me,logout}` |
-| `AuthSignup` | ✅ | `/api/auth/user/signup`, `/api/templates` |
+| `AuthLogin` | ✅ (avec écran MFA challenge intégré) | `/api/auth/user/{login,me,logout,mfa/*}` |
+| `AuthSignup` | ✅ | `/api/auth/user/signup`, `/api/templates`, `/api/onboarding/*` |
 | `AuthForgotPassword` | ✅ | `/api/auth/user/forgot-password` |
 | `AuthResetPassword` | ✅ | `/api/auth/user/reset-password` |
 | `AuthVerify` | ✅ | `/api/auth/user/verify-email` |
+| `AuthSecurity` | ✅ MFA enrolment (QR + recovery codes affichés une fois) | `/api/auth/user/mfa/{status,setup,confirm,disable}` |
 
 ### 4.3 Composants — `client/src/components/`
 
@@ -373,17 +337,18 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 | `ui/` (Shadcn) | badge, button, card, checkbox, dialog, input, scroll-area, select, tabs, textarea, toast, toaster, tooltip |
 | `tenant/` | `TenantAppShell` (layout unifié), `TenantSidebar` (nav groupée + mobile tabs), `sections.ts` (registre nav) |
 | `management/` | `SectionPlaceholder`, `sections/SuppliersSection` |
-| `alfred/` | `AlfredChat` (toggle, messages, contexte checklist) |
-| Standalone | `ErrorBoundary`, `SkipLink`, `Logo` (5 variants), `theme-provider` |
+| `alfred/` | `AlfredChat` (toggle, messages, contexte checklist, prop `tenantSlug`) |
+| Standalone | `ErrorBoundary`, `SkipLink`, `Logo` (variants), `theme-provider` |
 
 ### 4.4 Hooks — `client/src/hooks/`
 
 | Hook | Rôle |
 |---|---|
-| `use-auth.ts` | Legacy PIN — `useAuth()` retourne `{user, authenticated, login(pin, slug), logout()}` |
-| `useUserSession.ts` | Nominative — `useQuery /api/auth/user/me` + login/logout mutations |
+| `useUserSession.ts` | Session nominative — `useQuery /api/auth/user/me` + login/logout/MFA mutations |
 | `useRealtimeSync.ts` | EventSource `/api/:slug/events`, callback `onChecklistUpdated` |
 | `use-toast.ts` | Toast Shadcn (limit 1, reducer + listeners) |
+
+Le hook `use-auth.ts` (PIN legacy) a été supprimé en PR #55.
 
 ### 4.5 Lib — `client/src/lib/`
 
@@ -396,7 +361,7 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 - `queryKey` = path API en array : `["/api/checklist", slug, "dashboard"]`
 - `credentials: "include"` partout (cookies session)
 - Mutations invalidate par `queryClient.invalidateQueries({ queryKey: [base, slug] })`
-- ⚠️ Sur la checklist, **3 mécanismes redondants** : `refetchOnWindowFocus` + `refetchInterval: 30s` + SSE
+- ⚠️ Sur la checklist, **3 mécanismes redondants** : `refetchOnWindowFocus` + `refetchInterval: 30s` + SSE (à rationaliser)
 
 ### 4.7 Design system
 
@@ -418,16 +383,17 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 | `users` | id serial | `email` UNIQUE, `isSuperadmin`, `isActive`. Cross-tenant. |
 | `user_tenants` | (userId, tenantId) | M2M role. FK cascade vers users + tenants. Index `tenantId`. |
 | `password_reset_tokens` / `email_verification_tokens` | id serial | Hash SHA-256, TTL |
-| `mfa_secrets` | id serial | TOTP + recovery codes hash. **Schéma seul, code absent.** |
-| `audit_log` | id serial | event, metadata jsonb, IP, UA. **Schéma seul, aucun write.** |
-| `business_templates` | id serial | Catalogue verticals, self-FK `parentId` (2 niveaux). 14 entrées. |
+| `mfa_secrets` | id serial | TOTP base32 + recovery codes hash sha-256 |
+| `audit_log` | id serial | event, metadata jsonb, IP, UA. **Schéma seul, aucun write** |
+| `business_templates` | id serial | Catalogue verticals, self-FK `parentId` (2 niveaux). 14 entrées |
 | `tenant_domains` | id serial | `hostname` UNIQUE, FK cascade tenants, idx (hostname, tenantId) |
+| `user_sessions` | sid varchar | Géré par connect-pg-simple |
 
 #### Tenant-scoped (toutes ont `tenantId integer`)
 
 | Table | Soft delete | Particularités | FK manquantes ⚠️ |
 |---|---|---|---|
-| `tenants` | `isActive` | `clientCode` UNIQUE, `slug` UNIQUE, FK `templateId` | — |
+| `tenants` | `isActive` | `clientCode` UNIQUE, `slug` UNIQUE, FK `templateId`. `pinCode`/`adminCode` **nullable depuis #55** (purge code, drop SQL différé) | — |
 | `categories` | — | sheet, zone, sortOrder | — |
 | `items` | `isActive` | categoryId | **categoryId non FK** |
 | `checks` | — | itemId, checkDate texte | **itemId non FK** |
@@ -452,13 +418,14 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 | RLS Postgres | ❌ Désactivé | Repose 100% sur le code applicatif |
 | Résolution | `resolveTenant` middleware (host > slug) | ✓ Correct |
 | Propagation | `req.tenantId: number` injecté | ✓ Correct |
-| Coexistence PIN ↔ nominatif | `requireTenantAuth` accepte les deux | ✓ Correct, avec garde-fou `userTenants.getRole()` |
+| Auth + scope tenant | `session.userId` + `requireRole(...)` lookup `userTenants.role(userId, tenantId)` | ✓ Correct (depuis #53/#54/#55, plus de session.tenantId legacy) |
 
 ### 5.3 Migrations
 
-- **Mode** : `drizzle-kit push` (sync direct du schéma à la DB)
+- **Mode** : `drizzle-kit push` (sync direct du schéma à la DB) appelé par `deploy.sh`
 - ⚠️ **Pas de migrations versionnées** dans `migrations/` — pas d'historique
 - Risque en prod : `--force` peut dropper colonnes/tables silencieusement
+- Convention : changes additifs et relaxations de contrainte (NULL/DEFAULT) passent en non-interactif. Un DROP demande confirmation et casserait `deploy.sh` → script SQL séparé pour ces cas (cf. drop pin_code/admin_code différé)
 - Mitigation : backup `pg_dump` avant deploy (cf. §7)
 
 ### 5.4 Seeds
@@ -479,14 +446,18 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 
 ## 6. Authentification et sécurité
 
-### 6.1 Modèles d'auth coexistants
+### 6.1 Modèle d'auth (depuis PR #55)
 
 | Modèle | État | Usage cible |
 |---|---|---|
-| **PIN** (legacy, `tenants.pinCode/adminCode` clair) | ⚠️ Toujours en place | Tablette partagée staff (re-unlock device) |
-| **Nominatif** (email + Argon2id) | ✅ Implémenté (PR #12) | Owner / Admin / Manager / Staff / Viewer |
-| **Bearer SUPERADMIN_TOKEN** | ✅ En place, à retirer | Routes `/api/tenants/*` (legacy) |
+| **Nominatif** (email + Argon2id) | ✅ Implémenté (PR #12) | Tous les rôles tenant : Owner / Admin / Manager / Staff / Viewer |
+| **MFA TOTP** | ✅ Implémenté (PR #13a / #52) | Opt-in côté user, recommandé Owner/Admin |
+| **Bearer SUPERADMIN_TOKEN** | ✅ En place, à retirer | Routes `/api/tenants/*` (legacy transitionnel) |
 | **Superadmin nominatif** | ✅ Implémenté | Routes `/api/admin/*` |
+
+L'auth PIN partagée tenant-wide (legacy `tenants.pinCode`/`adminCode`) a été **purgée en PR #55**. Plus aucun chemin d'authentification PIN dans le code applicatif. Les colonnes restent en DB en nullable jusqu'au DROP SQL définitif (différé pour ne pas casser `deploy.sh`).
+
+Le tablet-PIN flow Phase-2 sera reconstruit **différemment** : per-staff device-paired token (le device s'authentifie d'abord nominativement, obtient un long-lived tenant-scoped token, puis chaque staff débloque une session courte avec un PIN court — pas un PIN partagé).
 
 ### 6.2 Sessions
 
@@ -506,13 +477,18 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 ### 6.4 RBAC
 
 - Rôles : `owner > admin > manager > staff > viewer`
-- `requireRole(...allowed)` valide à load-time, lookup `user_tenants.role`
-- Superadmin nominatif **bypass** la vérification de rôle tenant
-- Couverture : routes `/api/admin/*` ✓, `/api/management/:slug/suppliers/*` ✓ ; reste à appliquer aux routes checklist (encore en `requireTenantAuth` PIN-friendly)
+- `requireRole(...allowed)` valide à load-time, lookup `user_tenants.role(userId, tenantId)`
+- Superadmin nominatif **bypass** la vérification de rôle tenant (toujours autorisé)
+- **Couverture actuelle** :
+  - ✅ `/api/admin/*` (requireSuperadminUser)
+  - ✅ `/api/management/:slug/suppliers/*`
+  - ✅ `/api/checklist/:slug/*` (matrice rôles : READ tous / STAFF ops / MANAGE structurel)
+  - ✅ SSE `/api/:slug/events` (READ tous rôles)
+  - ✅ `/api/alfred/:slug/{chat,analyze,clear}` (tous rôles)
 
 ### 6.5 MFA
 
-- ✅ Schéma `mfa_secrets` présent
+- ✅ Schéma `mfa_secrets`
 - ✅ Service `auth/mfaService.ts` : TOTP (RFC 6238, otplib, drift ±30s), recovery codes (sha-256, single-use, format `XXXX-XXXX-XXXX`)
 - ✅ Routes `/api/auth/user/mfa/{status, setup, confirm, disable, challenge, recovery, cancel}`
 - ✅ Login gate : si MFA actif, le password seul retourne `{ mfaRequired: true }` et pose une session `mfaPending*` (TTL 5 min, gatée par `requireMfaPending`) — promotion vers session nominative complète après TOTP/recovery valide
@@ -522,14 +498,14 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 ### 6.6 Audit log
 
 - Schéma `audit_log` présent (event, metadata jsonb, userId, tenantId, IP, UA, timestamp)
-- **Aucun `INSERT` dans le code** — fonctionnellement absent
+- **Aucun `INSERT` dans le code** — fonctionnellement absent (PR #13b prévue dans le sprint plan)
 
 ### 6.7 Rate limiting / lockout
 
 - Global API : 120 req/min ✓
 - Alfred : 20 req/min ✓
-- **Login lockout** : ❌
-- **PIN brute-force** : ❌ (4 chiffres + global limit = trivial à brute-forcer)
+- **Login lockout** : ❌ (PR #13b prévue)
+- **Rate-limit dédié `/api/auth/*`** : ❌ (PR #13b prévue)
 
 ### 6.8 Email transactionnel
 
@@ -595,18 +571,18 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 
 ### 7.5 Tests — Vitest
 
-13 fichiers de test :
+13 fichiers de test, 124 tests :
 
 - `scripts/__tests__/backup.test.ts` — pipeline backup (key, retention, sort)
 - `server/__tests__/smoke.test.ts`
-- `server/middleware/__tests__/{auth,requireTenantAuth,requireUserAndRole}.test.ts`
+- `server/middleware/__tests__/{auth,mfaPending,requireUserAndRole}.test.ts`
 - `server/services/__tests__/domainService.test.ts`
-- `server/services/auth/__tests__/{passwordService,tokenService,mailService}.test.ts`
+- `server/services/auth/__tests__/{passwordService,tokenService,mailService,mfaService}.test.ts`
 - `server/services/alfred/__tests__/alfredService.test.ts`
 - `server/seed/__tests__/templates.test.ts`
 - `shared/schema/__tests__/users.test.ts`
 
-**Couverts** : modules purs (helpers backup, password, token, mail, RBAC middleware).
+**Couverts** : modules purs (helpers backup, password, token, mail, mfa, RBAC middleware).
 **Non couverts** : routes API integration, frontend (0 tests), tenant isolation cross-table, SSE.
 
 ### 7.6 Lint / Format
@@ -625,15 +601,15 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 - Restore : `npm run restore` liste les 20 derniers ; **dry-run par défaut** ; `RESTORE_CONFIRM=I_KNOW_WHAT_IM_DOING` pour exécuter
 - Logs : passwords masqués
 - ❌ **Pas de chiffrement R2** (côté serveur ou client)
-- ❌ **Cron systemd timer pas encore câblé en prod** — script prêt, à wirer
+- ❌ **Cron systemd timer pas encore câblé en prod** — script prêt, à wirer (Sprint 4 sécu/ops)
 
 ### 7.8 Observabilité
 
 | Aspect | État |
 |---|---|
 | `/api/health` (uptime, SSE stats, AI provider flags) | ✅ |
-| Logger structuré (pino, winston, …) | ❌ `console.log` only, préfixes `[Module]` |
-| Metrics (Prometheus, OpenTelemetry) | ❌ |
+| Logger structuré (pino, winston, …) | ❌ `console.log` only, préfixes `[Module]` (Sprint 5 sécu/ops) |
+| Metrics (Prometheus, OpenTelemetry) | ❌ (Sprint 7 sécu/ops) |
 | Alerting | ❌ |
 | `process.on("uncaughtException"/"unhandledRejection")` | ✅ logs stderr |
 | Persistence logs (ELK, Datadog, Loki…) | ❌ |
@@ -648,7 +624,7 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 |---|---|---|
 | Multi-vertical via templates | Catalog seedé (14), `tenants.templateId`, vocabulary par tenant ✓. Alfred lit `tenant.vocabulary` ✓. | 🟢 80% |
 | Subdomain + custom domain | Subdomain résolution ✓, table `tenant_domains` ✓, custom domain provisioning automatisé ❌ | 🟡 60% |
-| Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓. **MFA absent**, **audit log absent**, **lockout absent**, **PIN clair toujours actif** | 🟠 40% |
+| Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓, MFA TOTP ✓, PIN purgé ✓. **Audit log absent**, **lockout absent** | 🟢 70% |
 
 ### 8.2 Modules métier
 
@@ -656,15 +632,15 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 |---|---|---|---|---|
 | Checklist quotidienne | ✅ | ✅ | ✅ | **Production-ready** |
 | Suppliers | ✅ | ✅ | ✅ | **Production-ready** (PR #2) |
-| Purchases | ✅ | ❌ | ❌ | Schémé, planifié PR #3 |
-| General expenses | ✅ | ❌ | ❌ | Schémé, planifié PR #4 |
-| Bank entries | ✅ | ❌ | ❌ | Schémé, planifié PR #4 |
-| Cash entries | ✅ | ❌ | ❌ | Schémé, planifié PR #4 |
-| Files | ✅ | ❌ | ❌ | Schémé, planifié PR #7 (R2 upload) |
-| Employees | ✅ | ❌ | ❌ | Schémé, planifié PR #5 |
-| Payroll | ✅ | ❌ | ❌ | Schémé, planifié PR #6 |
-| Absences | ✅ | ❌ | ❌ | Schémé, planifié PR #6 |
-| Analytics | ✅ | ❌ | ❌ | Schémé, planifié PR #8 |
+| Purchases | ✅ | ❌ | ❌ | Schémé, planifié Sprint 1 module |
+| General expenses | ✅ | ❌ | ❌ | Schémé, planifié Sprint 2 |
+| Bank entries | ✅ | ❌ | ❌ | Schémé, planifié Sprint 2 |
+| Cash entries | ✅ | ❌ | ❌ | Schémé, planifié Sprint 2 |
+| Files | ✅ | ❌ | ❌ | Schémé, planifié Sprint 5 (R2 upload) |
+| Employees | ✅ | ❌ | ❌ | Schémé, planifié Sprint 3 |
+| Payroll | ✅ | ❌ | ❌ | Schémé, planifié Sprint 4 |
+| Absences | ✅ | ❌ | ❌ | Schémé, planifié Sprint 4 |
+| Analytics | ✅ | ❌ | ❌ | Schémé, planifié Sprint 6 |
 
 ### 8.3 Cycle de vie SaaS
 
@@ -674,7 +650,8 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 | Email verify | ✅ |
 | Forgot/reset password | ✅ |
 | Onboarding wizard (template picker au signup) | ✅ |
-| Billing / abonnement | ❌ Stripe non intégré |
+| MFA opt-in | ✅ (page `/auth/security`) |
+| Billing / abonnement | ❌ Stripe non intégré (phase 2) |
 | Trial / quota / plan limits | ❌ |
 | Cancellation / data export | ❌ |
 | RGPD : right to be forgotten | ❌ (cascade FK incomplet) |
@@ -682,9 +659,9 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 
 ### 8.4 Verdict global
 
-> **myBeez est un MVP solide (~50%) sur une architecture saine, prêt à scaler verticalement (modules) mais pas encore prêt à ouvrir au public payant.**
+> **myBeez est un MVP solide (~55%) sur une architecture saine, en cours de durcissement sécu et en attente des modules métier.**
 >
-> Les fondations (multi-tenant, auth nominative, templates, deploy, CI) sont là. Ce qui manque pour être *bankable* : modules métier (8 sur 11 à livrer), MFA + audit log, billing, monitoring.
+> Les fondations (multi-tenant, auth nominative + MFA + RBAC, templates, deploy, CI) sont là. Le sprint 1 a soldé la moitié de la dette auth historique (matrice rôles checklist + Alfred gaté + purge PIN). Ce qui manque pour être *bankable* : modules métier (8 sur 11 à livrer via le sprint plan 7 sprints), audit log + rate-limit/lockout, billing, monitoring.
 
 ---
 
@@ -692,16 +669,17 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 
 1. **Architecture multi-tenant cohérente** — décisions structurelles écrites (subdomain + templates + auth nominative) et respectées dans le code.
 2. **Stack moderne et maintenue** — TS strict, ESM, Drizzle, Vite 7, TanStack Query, Tailwind. Pas de framework legacy.
-3. **Auth nominative bien construite** — Argon2id, sessions Postgres, RBAC `requireRole`, anti-enumeration sur forgot-password, host-header injection guard.
-4. **CI/CD opérationnelle** — GitHub Actions exécute typecheck + lint + test + build sur chaque PR. Bloque les merges régressifs.
-5. **Tests sur les fondations critiques** — Vitest sur password hashing, token crypto, RBAC middleware, backup pipeline, domain resolution.
-6. **Backup pipeline production-grade** — pg_dump streamé vers R2, retention automatique, restore en dry-run par défaut.
-7. **Realtime SSE proprement implémenté** — keepalive, header `X-Accel-Buffering`, scope par tenant, broadcast après mutations.
-8. **Alfred AI vocabulary-neutral** — system prompt construit dynamiquement à partir de `tenant.vocabulary`, fallback chain provider robuste (OpenAI → Gemini → Grok).
-9. **Linter + formatter en place** — ESLint flat config, Prettier, exécutés en CI.
-10. **Déploiement reproductible** — Docker compose + script `deploy.sh` idempotent + nginx vhost versionné.
-11. **Documentation interne** — CLAUDE.md à jour décrit stack, architecture, conventions, dette connue.
-12. **Pattern UI cohérent** — Shadcn/UI, sidebar tenant unifiée, composant `TenantAppShell` partagé, registre `sections.ts`.
+3. **Auth nominative bien construite** — Argon2id, sessions Postgres, RBAC `requireRole(...)`, anti-enumeration sur forgot-password, host-header injection guard, MFA TOTP avec recovery codes.
+4. **Auth PIN purgée** — un seul modèle d'auth dans le code applicatif, plus de coexistence dette.
+5. **CI/CD opérationnelle** — GitHub Actions exécute typecheck + lint + test + build sur chaque PR. Bloque les merges régressifs.
+6. **Tests sur les fondations critiques** — Vitest sur password hashing, token crypto, MFA, RBAC middleware, backup pipeline, domain resolution.
+7. **Backup pipeline production-grade** — pg_dump streamé vers R2, retention automatique, restore en dry-run par défaut.
+8. **Realtime SSE proprement gaté** — keepalive, header `X-Accel-Buffering`, scope par tenant + `requireRole`, broadcast après mutations.
+9. **Alfred AI vocabulary-neutral et sécurisé** — system prompt construit dynamiquement à partir de `tenant.vocabulary`, fallback chain provider robuste, routes slug-scoped + `requireRole` (depuis #54).
+10. **Linter + formatter en place** — ESLint flat config, Prettier, exécutés en CI.
+11. **Déploiement reproductible** — Docker compose + script `deploy.sh` idempotent + nginx vhost versionné.
+12. **Documentation interne** — CLAUDE.md à jour décrit stack, architecture, conventions, dette connue. Cette bible aussi.
+13. **Pattern UI cohérent** — Shadcn/UI, sidebar tenant unifiée, composant `TenantAppShell` partagé, registre `sections.ts`.
 
 ---
 
@@ -716,109 +694,96 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 
 ### 10.2 Auth / sécurité
 
-- **PIN codes en clair** dans `tenants.pinCode/adminCode` (DB-leak = compromission staff).
-- ~~**MFA TOTP** : schéma seul, fonctionnellement absent.~~ Implémenté en PR #13a (TOTP + recovery codes + UI). Pas encore obligatoire pour Owner/Admin (opt-in côté user).
-- **Audit log** : schéma seul, aucun write.
-- **Lockout login** : pas de protection brute-force compte.
+- ~~PIN codes en clair~~ ✅ Hashés en #51 puis purge complète #55. Colonnes nullable, drop SQL définitif différé.
+- ~~MFA TOTP~~ ✅ Implémenté en #52.
+- **Audit log** : schéma seul, aucun write (PR #13b prévue Sprint 2).
+- **Lockout login** : pas de protection brute-force compte (PR #13b Sprint 3).
 - **Pas de check HIBP** sur passwords.
-- **CSP désactivé** dans helmet (compromis Vite dev).
-- **Pas de HSTS** côté nginx.
+- **CSP désactivé** dans helmet (compromis Vite dev — Sprint 6).
+- **Pas de HSTS** côté nginx (Sprint 6).
+- **MFA opt-in seulement** — pas encore obligatoire pour Owner/Admin.
 
 ### 10.3 Backend
 
-- **Routes GET checklist sans auth** — `/categories`, `/dashboard`, `/comments`, `/history` lisibles par tout connaisseur du slug.
-- **SSE `/api/:tenant/events` sans auth** — fuite des notifications de mutation.
-- **Routes Alfred prennent le slug en body** — incohérent avec le pattern `/api/.../:slug/...` du reste.
-- **`server/services/auth.ts`** : wrapper vide à supprimer.
-- **Type incohérent `AuthSession.tenantId: string` vs session value `number`**.
+- ~~GET checklist sans auth~~ ✅ Gaté PR #50 puis matrice rôles #53.
+- ~~SSE sans auth~~ ✅ Gaté PR #50 puis #53.
+- ~~Routes Alfred prennent slug en body~~ ✅ Refactoré PR #54.
+- ~~`server/services/auth.ts` wrapper vide~~ ✅ Supprimé PR #55.
+- ~~Type incohérent `AuthSession.tenantId`~~ ✅ Type supprimé avec PIN #55.
+- **Persistence Alfred history** : en mémoire process-local, perdu au redéploiement (Sprint future).
 
 ### 10.4 Frontend
 
 - **3 mécanismes de refresh redondants sur la checklist** : `refetchOnWindowFocus` + `refetchInterval: 30s` + SSE.
-- **`useAuth` (PIN) coexiste avec `useUserSession`** — code dupliqué, migration non finalisée.
-- **9 sections `/management/...` en placeholder** — UI à livrer (cf. roadmap PR #3-#9).
+- ~~`useAuth` (PIN) coexiste avec `useUserSession`~~ ✅ `use-auth.ts` supprimé PR #55.
+- **9 sections `/management/...` en placeholder** — UI à livrer (cf. sprint plan).
 - **`AdminTenant` page stub** — route `/123admin/tenants/:id` ne charge rien.
 - **Aucun test frontend** — 0 fichier `.test.tsx`.
 - **Landing page monolithique** (~890 lignes).
 
 ### 10.5 Ops
 
-- **Pas de `HEALTHCHECK` sur le service Docker `app`** — pas de restart auto si freeze silencieux.
-- **Pas de logger structuré** (juste `console.log`), pas de persistence (logs perdus au redémarrage container).
-- **Aucune metrics applicative** (latence, error rate, DB pool).
+- **Pas de `HEALTHCHECK` sur le service Docker `app`** — pas de restart auto si freeze silencieux (Sprint 4 sécu/ops).
+- **Pas de logger structuré** (juste `console.log`), pas de persistence (Sprint 5 sécu/ops).
+- **Aucune metrics applicative** (latence, error rate, DB pool) — Sprint 7.
 - **Aucun alerting**.
-- **Cron backups** pas encore câblé en prod.
+- **Cron backups** pas encore câblé en prod (Sprint 4 sécu/ops).
 - **Pas de chiffrement** des dumps R2.
 - **Pas de pre-commit hooks** (Husky/lint-staged).
 
 ### 10.6 Code mort / orphelins
 
-- `server/services/auth.ts` (wrapper vide).
-- `client/src/pages/AdminTenant.tsx` (stub non chargé).
-- Coexistence PIN ↔ nominatif (à purger après migration complète).
+- ~~`server/services/auth.ts`~~ ✅ Supprimé #55.
+- ~~Coexistence PIN ↔ nominatif~~ ✅ Purgée #55.
+- `client/src/pages/AdminTenant.tsx` (stub non chargé) — laisser ou supprimer ?
 
 ---
 
 ## 11. Risques de sécurité priorisés
 
-| # | Sévérité | Risque | Localisation | Effort fix |
-|---|---|---|---|---|
-| 1 | 🔴 critique | GET checklist sans auth (categories/dashboard/comments/history) | `server/routes/checklist.ts` | S — ajouter `requireTenantAuth` |
-| 2 | 🔴 critique | SSE `/api/:tenant/events` sans auth | `server/services/realtimeSync.ts` | S |
-| 3 | 🔴 critique | PIN codes stockés en clair | `shared/schema/tenants.ts` (`pinCode`, `adminCode`) | M — hasher + migrer données existantes |
-| 4 | 🟡 moyen | MFA pas obligatoire pour Owner/Admin (opt-in) — implémentée en PR #13a | `server/services/auth/mfaService.ts` | M — gate `requireMfaForRole` à brancher selon politique |
-| 5 | 🟠 haut | FK manquantes (orphelins possibles) | items, checks, purchases, payroll, absences | M — migration + cleanup orphelins |
-| 6 | 🟠 haut | Audit log non écrit (compliance RGPD) | (à implémenter) | M — wrapper + writes sur events critiques |
-| 7 | 🟠 haut | PIN brute-force non rate-limité spécifiquement | `server/routes/auth.ts` | S — rate-limit dédié + délai exponentiel |
-| 8 | 🟡 moyen | CSP désactivé dans helmet | `server/index.ts` L63 | M — config CSP avec nonce Vite |
-| 9 | 🟡 moyen | Pas de HSTS côté nginx | `deploy/nginx/mybeez-ai.com.conf` | XS — ajouter `Strict-Transport-Security` |
-| 10 | 🟡 moyen | Cache `tenantService` process-local | `server/services/tenantService.ts` | M — Redis ou pub/sub |
-| 11 | 🟡 moyen | Pas de check HIBP | `auth/passwordService.ts` | S — appel à HIBP API au signup/reset |
-| 12 | 🟡 moyen | `db:push` sans migrations versionnées | `drizzle.config.ts` | M — workflow generate/migrate + backup avant prod push |
-| 13 | 🟡 moyen | Pas de healthcheck Docker `app` | `Dockerfile`, `docker-compose.yml` | XS |
-| 14 | 🟡 moyen | Pas de logs structurés / persistence | `server/index.ts` | M — pino + Loki/Datadog |
-| 15 | 🟢 faible | Routes Alfred slug en body | `server/routes/alfred.ts` | S — refactor `/api/alfred/:slug/...` |
-| 16 | 🟢 faible | Code mort `services/auth.ts` | — | XS — supprimer |
+| # | Sévérité | Risque | Localisation | Effort fix | Statut |
+|---|---|---|---|---|---|
+| 1 | ~~🔴 critique~~ | GET checklist sans auth | `server/routes/checklist.ts` | S | ✅ #50 + #53 |
+| 2 | ~~🔴 critique~~ | SSE `/api/:tenant/events` sans auth | `server/services/realtimeSync.ts` | S | ✅ #50 + #53 |
+| 3 | ~~🔴 critique~~ | PIN codes stockés en clair | `tenants.pinCode/adminCode` | M | ✅ #51 hash, #55 purge complète |
+| 4 | 🟡 moyen | MFA pas obligatoire pour Owner/Admin (opt-in) | politique de gate | M | partiel — implémenté #52, gating à brancher |
+| 5 | 🟠 haut | FK manquantes (orphelins possibles) | items, checks, purchases, payroll, absences | M | à planifier |
+| 6 | 🟠 haut | Audit log non écrit (compliance RGPD) | (à implémenter) | M | Sprint 2 sécu/ops (PR #13b) |
+| 7 | 🟠 haut | Lockout login + rate-limit dédié `/api/auth/*` | rate-limiter | S | Sprint 3 sécu/ops |
+| 8 | 🟡 moyen | CSP désactivé dans helmet | `server/index.ts` | M | Sprint 6 sécu/ops |
+| 9 | 🟡 moyen | Pas de HSTS côté nginx | `deploy/nginx/mybeez-ai.com.conf` | XS | Sprint 6 sécu/ops |
+| 10 | 🟡 moyen | Cache `tenantService` process-local | `services/tenantService.ts` | M | scale-out future |
+| 11 | 🟡 moyen | Pas de check HIBP | `auth/passwordService.ts` | S | Sprint 6 sécu/ops |
+| 12 | 🟡 moyen | `db:push` sans migrations versionnées | `drizzle.config.ts` | M | scale-out future |
+| 13 | 🟡 moyen | Pas de healthcheck Docker `app` | `Dockerfile`, `docker-compose.yml` | XS | Sprint 4 sécu/ops |
+| 14 | 🟡 moyen | Pas de logs structurés / persistence | `server/index.ts` | M | Sprint 5 sécu/ops |
+| 15 | ~~🟢 faible~~ | Routes Alfred slug en body | `server/routes/alfred.ts` | S | ✅ #54 |
+| 16 | ~~🟢 faible~~ | Code mort `services/auth.ts` | — | XS | ✅ #55 |
+| 17 | 🟢 faible | Drop SQL définitif `tenants.pin_code/admin_code` | migration script | XS | différé (deploy.sh non interactif) |
 
 ---
 
 ## 12. Roadmap et intégrations futures
 
-### 12.1 Roadmap immédiate (déjà cadrée)
+### 12.1 Sprint plan validé (option C, 2026-05-05)
 
-| PR | Branche | Périmètre |
-|---|---|---|
-| #3 | `feat/purchases` | CRUD achats + UI (lien fournisseur optionnel) |
-| #4 | `feat/cashflow` | bank + cash + general expenses |
-| #5 | `feat/employees` | Employees + UI |
-| #6 | `feat/payroll-absences` | Paie + absences |
-| #7 | `feat/files` | Stockage R2 + UI uploader |
-| #8 | `feat/analytics` | Dashboard read-only (KPIs, top fournisseurs) |
-| #9 | `feat/history-cross` | Recherche + export CSV cross-modules |
+7 sprints, 1 module métier + 1 chantier sécu/ops par sprint.
 
-### 12.2 Sécurité Phase 1 (avant ouverture publique)
+| Sprint | Module métier | Sécu / Ops | Statut |
+|---|---|---|---|
+| 1 | feat/purchases | MFA TOTP | sécu ✅ #52 + bonus #53/#54/#55 ; module ⏳ à venir |
+| 2 | feat/cashflow (bank + cash + general expenses) | Audit log writes | à venir |
+| 3 | feat/employees | Lockout login + rate-limit dédié `/api/auth/*` | à venir |
+| 4 | feat/payroll-absences | Healthcheck Docker app + cron systemd backup R2 | à venir |
+| 5 | feat/files | Logger structuré pino (stdout JSON) | à venir |
+| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | à venir |
+| 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | à venir |
 
-1. Gater toutes les routes GET checklist + SSE (issue #1, #2 du tableau).
-2. Hasher les PIN codes (issue #3).
-3. Implémenter MFA TOTP pour Owner/Admin (issue #4).
-4. Activer audit log sur les events critiques : login success/fail, password reset, role changes, tenant creation/deletion (issue #6).
-5. Lockout login après 5 tentatives échouées (issue #7).
+Règles : les 2 PRs d'un sprint touchent des zones disjointes. Quality gates (`npm run check` + lint + test + CI) verts avant merge. Squash-merge sur main.
 
-### 12.3 Sécurité Phase 2
+**Stratégie d'implémentation des modules métier** : adaptation depuis macommande.shop (qui a déjà du tissu prod restaurant) plutôt que from-scratch. 3 garde-fous lors du port : vertical-agnostic (purger restaurant-isme), auth nominative + RBAC (ne PAS porter le PIN partagé), multi-tenancy host-based.
 
-- HIBP check au signup/reset
-- CSP config-aware (nonce Vite)
-- HSTS nginx
-- Migrations versionnées (`drizzle-kit generate` + `migrate`)
-
-### 12.4 Scale-out (avant 100+ tenants)
-
-- Redis pour `tenantService` + `templateService` + sessions partagées
-- Cluster mode Node (`pm2` ou Kubernetes)
-- Read replica Postgres
-- CDN Cloudflare devant les assets statiques (déjà en place via CF proxy)
-
-### 12.5 Produit
+### 12.2 Hors-200% (phase 2)
 
 - **Stripe** : abonnements, plan limits (nombre d'employees / tenants / users), trial 14 jours
 - **Custom domain provisioning automatisé** : Let's Encrypt DNS-01 ou Cloudflare on-demand TLS
@@ -827,21 +792,22 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 - **Mobile** : PWA d'abord (manifest + service worker), app native plus tard
 - **Intégrations comptables** : export FEC (France), liaison Pennylane / QuickBooks
 - **Marketplace de templates** : verticals contribués par la communauté
+- **MFA obligatoire pour Owner/Admin** (gating selon politique)
+- **RLS Postgres** comme défense en profondeur
 
-### 12.6 IA / Alfred
+### 12.3 Scale-out (avant 100+ tenants)
+
+- Redis pour `tenantService` + `templateService` + sessions partagées
+- Cluster mode Node (`pm2` ou Kubernetes)
+- Read replica Postgres
+- CDN Cloudflare devant les assets statiques (déjà en place via CF proxy)
+- Migrations versionnées (`drizzle-kit generate` + `migrate`) pour remplacer `db:push`
+
+### 12.4 IA / Alfred
 
 - Persistence chat history en DB (actuellement en mémoire, perdu au déploiement)
 - Embeddings + RAG sur la doc de gestion du tenant
-- Multimodal : OCR sur factures uploadées (Files module)
-
-### 12.7 Observabilité
-
-- Logger structuré pino → Loki / Datadog
-- Metrics Prometheus (req/s, latence p95, DB pool, AI provider hit rate)
-- Sentry pour erreurs frontend
-- Healthcheck Docker `app` + auto-restart compose
-- Cron backup systemd timer
-- Chiffrement R2 (server-side ou client-side)
+- Multimodal : OCR sur factures uploadées (Files module Sprint 5)
 
 ---
 
@@ -907,14 +873,16 @@ ssh root@65.21.209.102 "cd /opt/mybeez && docker compose exec -T app npm run bac
 ### Routes API les plus utilisées (récap)
 
 ```
-POST   /api/auth/user/login            connexion email + password
-GET    /api/auth/user/me               session courante + tenants
-POST   /api/onboarding/signup-with-tenant   self-serve signup
-GET    /api/templates                  catalog verticals (public)
-GET    /api/management/:slug/suppliers liste fournisseurs (RBAC)
-POST   /api/checklist/:slug/toggle     coche un item
-GET    /api/:slug/events               SSE realtime (à gater !)
-GET    /api/health                     uptime + status
+POST   /api/auth/user/login                  connexion email + password (+ MFA si activé)
+POST   /api/auth/user/mfa/challenge          finit le login si MFA actif
+GET    /api/auth/user/me                     session courante + tenants
+POST   /api/onboarding/signup-with-tenant    self-serve signup user + tenant
+GET    /api/templates                        catalog verticals (public)
+GET    /api/management/:slug/suppliers       liste fournisseurs (RBAC)
+POST   /api/checklist/:slug/toggle           coche un item (rôle STAFF+)
+GET    /api/:slug/events                     SSE realtime (rôle tenant)
+POST   /api/alfred/:slug/chat                Alfred chat (rôle tenant)
+GET    /api/health                           uptime + status
 ```
 
 ### Glossaire métier
@@ -927,11 +895,12 @@ GET    /api/health                     uptime + status
 | **User** | Personne réelle (compte nominatif). Cross-tenant : peut être Owner d'un tenant et Manager d'un autre. |
 | **Role tenant** | `owner > admin > manager > staff > viewer`, stocké dans `user_tenants.role`. |
 | **Superadmin** | `users.isSuperadmin = true` — équipe interne myBeez, distinct de `SUPERADMIN_TOKEN` (Bearer legacy). |
+| **MFA pending** | Session half-baked entre password et TOTP/recovery, TTL 5 min, gatée par `requireMfaPending`. |
 | **Slug** | Nom URL-friendly du tenant (`valentine`, `meyer`). UNIQUE. |
 | **Client code** | Code 8 chiffres généré au signup, montré à l'utilisateur (pas un secret). |
-| **PIN code** | Code staff 4-8 chiffres (legacy) — accès checklist quotidienne sur tablette. |
+| **~~PIN code~~** | ⚠ Retiré PR #55. Colonnes `tenants.pin_code/admin_code` laissées nullable, plus aucune écriture. Le PIN-on-tablet Phase-2 sera reconstruit comme un per-staff device-paired token. |
 | **Checklist** | Liste d'items à cocher chaque jour, par catégorie/zone. Source du POC. |
-| **Alfred** | Assistant IA conversationnel contextualisé sur la checklist. |
+| **Alfred** | Assistant IA conversationnel contextualisé sur la checklist. URL `/api/alfred/:slug/*`. |
 | **SSE** | Server-Sent Events, canal `/api/:slug/events` pour la sync temps réel. |
 
 ---
