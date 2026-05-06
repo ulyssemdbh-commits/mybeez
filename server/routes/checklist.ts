@@ -9,12 +9,20 @@
 
 import type { Express, Request, Response } from "express";
 import { resolveTenant } from "../middleware/tenant";
-import { requireTenantAuth } from "../middleware/auth";
+import { requireUser, requireRole } from "../middleware/auth";
 import { db } from "../db";
 import { categories, items, checks, futureItems, emailLogs, comments } from "../../shared/schema/checklist";
 import { eq, and, desc, gte } from "drizzle-orm";
 import { emitChecklistUpdated } from "../services/realtimeSync";
 import { z } from "zod";
+
+// Permission matrix for tenant-scoped checklist actions.
+// READ: anyone with a tenant binding (incl. viewer / accountant).
+// STAFF: daily ops (cocher, commenter) — anyone but viewer.
+// MANAGE: structural changes (items, categories, reset day) — managers and above.
+const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
+const STAFF_ROLES = ["owner", "admin", "manager", "staff"] as const;
+const MANAGE_ROLES = ["owner", "admin", "manager"] as const;
 
 function parseId(param: string): number | null {
   const id = parseInt(param, 10);
@@ -40,7 +48,7 @@ const addCommentSchema = z.object({ author: z.string().min(1).max(50), message: 
 export function registerChecklistRoutes(app: Express): void {
   const r = "/api/checklist/:slug";
 
-  app.get(`${r}/categories`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.get(`${r}/categories`, resolveTenant, requireUser, requireRole(...READ_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const cats = await db.select().from(categories).where(eq(categories.tenantId, tid));
@@ -67,7 +75,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.get(`${r}/dashboard`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.get(`${r}/dashboard`, resolveTenant, requireUser, requireRole(...READ_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const today = getTodayDate();
@@ -86,7 +94,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.post(`${r}/toggle`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.post(`${r}/toggle`, resolveTenant, requireUser, requireRole(...STAFF_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const data = toggleSchema.parse(req.body);
@@ -117,7 +125,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.post(`${r}/reset`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.post(`${r}/reset`, resolveTenant, requireUser, requireRole(...MANAGE_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const today = getTodayDate();
@@ -132,7 +140,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.post(`${r}/items`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.post(`${r}/items`, resolveTenant, requireUser, requireRole(...MANAGE_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const data = createItemSchema.parse(req.body);
@@ -154,7 +162,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.patch(`${r}/items/:id`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.patch(`${r}/items/:id`, resolveTenant, requireUser, requireRole(...MANAGE_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const itemId = parseId(req.params.id);
@@ -174,7 +182,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.delete(`${r}/items/:id`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.delete(`${r}/items/:id`, resolveTenant, requireUser, requireRole(...MANAGE_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const itemId = parseId(req.params.id);
@@ -191,7 +199,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.post(`${r}/categories`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.post(`${r}/categories`, resolveTenant, requireUser, requireRole(...MANAGE_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const data = createCategorySchema.parse(req.body);
@@ -210,7 +218,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.get(`${r}/comments`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.get(`${r}/comments`, resolveTenant, requireUser, requireRole(...READ_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const result = await db.select().from(comments)
@@ -224,7 +232,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.post(`${r}/comments`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.post(`${r}/comments`, resolveTenant, requireUser, requireRole(...STAFF_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const data = addCommentSchema.parse(req.body);
@@ -240,7 +248,7 @@ export function registerChecklistRoutes(app: Express): void {
     }
   });
 
-  app.get(`${r}/history`, resolveTenant, requireTenantAuth, async (req: Request, res: Response) => {
+  app.get(`${r}/history`, resolveTenant, requireUser, requireRole(...READ_ROLES), async (req: Request, res: Response) => {
     try {
       const tid = req.tenantId!;
       const month = req.query.month as string | undefined;

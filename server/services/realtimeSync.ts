@@ -8,7 +8,10 @@
 
 import type { Express, Request, Response } from "express";
 import { resolveTenant } from "../middleware/tenant";
-import { requireTenantAuth } from "../middleware/auth";
+import { requireUser, requireRole } from "../middleware/auth";
+
+// SSE = read-only feed; any tenant role (incl. viewer) may listen.
+const SSE_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 
 interface SSEClient {
   id: string;
@@ -21,7 +24,7 @@ const clients: Map<string, SSEClient> = new Map();
 let clientIdCounter = 0;
 
 export function registerSSERoutes(app: Express): void {
-  app.get("/api/:tenant/events", resolveTenant, requireTenantAuth, (req: Request, res: Response) => {
+  app.get("/api/:tenant/events", resolveTenant, requireUser, requireRole(...SSE_ROLES), (req: Request, res: Response) => {
     // tenantId here is the tenant slug (used as the broadcast key by emitChecklistUpdated).
     // After resolveTenant, req.tenant is guaranteed populated.
     const tenantId = req.tenant!.slug;
