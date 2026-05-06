@@ -40,11 +40,6 @@ function tenantUrlFor(slug: string): string {
   return `${proto}://${slug}.${root}`;
 }
 
-/** Random 6-digit numeric code. */
-function generateNumericCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
-}
-
 /** Strict slug rules: 3-30 chars, lowercase, digits, hyphens. */
 const slugRegex = /^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])?$/;
 
@@ -147,15 +142,13 @@ export function registerOnboardingRoutes(app: Express): void {
         throw e;
       }
 
-      // 2. Create tenant. pin_code / admin_code stay NOT NULL in the schema
-      // (legacy PIN auth) — generate placeholders. Nominative auth supersedes.
+      // 2. Create tenant. PIN auth purgée — pas de pinCode/adminCode à fournir
+      // (les colonnes restent dans le schema en nullable, écrites à NULL).
       const tenant = await tenantService.create({
         name: data.tenantName,
         slug: data.tenantSlug,
         templateId: data.templateId,
         businessType: template.slug,
-        pinCode: generateNumericCode(),
-        adminCode: generateNumericCode(),
       });
 
       // 3. Link user as Owner.

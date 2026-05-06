@@ -33,8 +33,14 @@ export const tenants = pgTable("tenants", {
    * defaults per tenant.
    */
   modulesEnabled: jsonb("modules_enabled").$type<string[]>().notNull().default([]),
-  pinCode: text("pin_code").notNull(),
-  adminCode: text("admin_code").notNull(),
+  /**
+   * @deprecated PIN auth retirée — colonnes laissées nullable pour ne pas
+   * casser les rows existantes. Aucune écriture ne s'y fait plus côté code.
+   * Suppression définitive prévue par script SQL séparé.
+   */
+  pinCode: text("pin_code"),
+  /** @deprecated voir `pinCode`. */
+  adminCode: text("admin_code"),
   email: text("email"),
   phone: text("phone"),
   address: text("address"),

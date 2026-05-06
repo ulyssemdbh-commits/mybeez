@@ -28,8 +28,6 @@ const updateTenantSchema = z
     businessType: z.string().max(50).optional(),
     vocabulary: z.record(z.string(), z.string()).optional(),
     modulesEnabled: z.array(z.string()).optional(),
-    pinCode: z.string().min(4).max(8).optional(),
-    adminCode: z.string().min(4).max(8).optional(),
     email: z.string().email().nullable().optional(),
     phone: z.string().max(30).nullable().optional(),
     address: z.string().max(255).nullable().optional(),

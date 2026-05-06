@@ -16,7 +16,6 @@ import { db } from "../db";
 import { tenants, type Tenant, type InsertTenant } from "../../shared/schema/tenants";
 import { eq } from "drizzle-orm";
 import { templateService } from "./templateService";
-import { hashPin, isPinHashed, verifyPin } from "./auth/pinService";
 
 class TenantService {
   private cache: Map<string, Tenant> = new Map();
@@ -73,19 +72,11 @@ class TenantService {
     const slug = data.slug || this.slugify(data.name);
     const templatePatch = await this.hydrateFromTemplate(data.templateId, data);
 
-    // Hash PIN/admin codes before persisting. hashPin is idempotent, so a
-    // caller that already passes a hash (eg. data restoration) won't be
-    // hashed twice.
-    const pinCodeHashed = data.pinCode ? await hashPin(data.pinCode) : data.pinCode;
-    const adminCodeHashed = data.adminCode ? await hashPin(data.adminCode) : data.adminCode;
-
     const [tenant] = await db
       .insert(tenants)
       .values({
         ...data,
         ...templatePatch,
-        pinCode: pinCodeHashed,
-        adminCode: adminCodeHashed,
         clientCode,
         slug,
       })
@@ -132,13 +123,9 @@ class TenantService {
   }
 
   async update(id: number, data: Partial<InsertTenant>): Promise<Tenant | null> {
-    const patch: Partial<InsertTenant> = { ...data };
-    if (patch.pinCode) patch.pinCode = await hashPin(patch.pinCode);
-    if (patch.adminCode) patch.adminCode = await hashPin(patch.adminCode);
-
     const [tenant] = await db
       .update(tenants)
-      .set({ ...patch, updatedAt: new Date() })
+      .set({ ...data, updatedAt: new Date() })
       .where(eq(tenants.id, id))
       .returning();
 
@@ -147,55 +134,6 @@ class TenantService {
       this.cache.set(tenant.clientCode, tenant);
     }
     return tenant || null;
-  }
-
-  async loginWithPin(
-    pin: string,
-    slug?: string,
-  ): Promise<{ success: boolean; tenant?: Tenant; role?: string; error?: string }> {
-    const allTenants = slug
-      ? ([await this.getBySlug(slug)].filter(Boolean) as Tenant[])
-      : await this.listAll();
-
-    for (const tenant of allTenants) {
-      if (await verifyPin(pin, tenant.pinCode)) {
-        return { success: true, tenant, role: "staff" };
-      }
-      if (await verifyPin(pin, tenant.adminCode)) {
-        return { success: true, tenant, role: "admin" };
-      }
-    }
-
-    return { success: false, error: "Code incorrect" };
-  }
-
-  /**
-   * One-shot migration: hashes any tenant PIN/admin code still stored in
-   * cleartext. Idempotent — safe to call at every boot. Detection is
-   * based on the PHC prefix `$argon2`, so already-hashed values are
-   * left untouched.
-   *
-   * Runs sequentially (small N expected; argon2 is CPU-bound). Returns
-   * the count of rows updated for logging.
-   */
-  async migrateLegacyPins(): Promise<{ updated: number }> {
-    const all = await db.select().from(tenants);
-    let updated = 0;
-    for (const t of all) {
-      const pinNeeds = t.pinCode && !isPinHashed(t.pinCode);
-      const adminNeeds = t.adminCode && !isPinHashed(t.adminCode);
-      if (!pinNeeds && !adminNeeds) continue;
-
-      const patch: { pinCode?: string; adminCode?: string } = {};
-      if (pinNeeds && t.pinCode) patch.pinCode = await hashPin(t.pinCode);
-      if (adminNeeds && t.adminCode) patch.adminCode = await hashPin(t.adminCode);
-
-      await db.update(tenants).set(patch).where(eq(tenants.id, t.id));
-      this.cache.delete(t.slug);
-      this.cache.delete(t.clientCode);
-      updated++;
-    }
-    return { updated };
   }
 
   clearCache(): void {

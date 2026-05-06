@@ -1,21 +1,19 @@
 /**
  * TenantChecklist — daily checklist for a tenant.
  *
- * Three rendering modes :
- *   1. Logged-in nominative member → full TenantAppShell with sidebar
- *      (the user has access to Management/History/Admin via the sidebar).
- *   2. PIN-authenticated session (tablet shared by staff) → standalone
- *      full-screen tablet view, no sidebar, no header links.
- *   3. No auth → PIN gate. Once submitted successfully, the session is
- *      a PIN session → mode 2.
+ * Auth model :
+ *   - Nominative member (user has a `user_tenants` row for this slug, or is
+ *     superadmin) → full `TenantAppShell` with sidebar.
+ *   - Anyone else → "Connexion requise" screen with a link to /auth/login.
+ *
+ * The legacy PIN gate (shared device-paired tablet flow) was removed
+ * with chore/purge-pin-auth ; it will be re-introduced later as a
+ * per-staff device-paired token (cf. project_mybeez_decisions Phase 2).
  */
 
-import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/hooks/use-auth";
 import { useUserSession } from "@/hooks/useUserSession";
 import { AlfredChat } from "@/components/alfred/AlfredChat";
-import { Logo } from "@/components/Logo";
 import { TenantAppShell } from "@/components/tenant/TenantAppShell";
 import { cn } from "@/lib/utils";
 
@@ -41,10 +39,9 @@ interface Dashboard {
 }
 
 export default function TenantChecklist({ slug }: { slug: string }) {
-  const { user: pinUser, isAuthenticated: pinAuth, isLoading: pinLoading, login } = useAuth();
   const { user: nomUser, tenants: nomTenants, isLoading: nomLoading } = useUserSession();
 
-  if (nomLoading || pinLoading) {
+  if (nomLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="animate-pulse text-muted-foreground">Chargement...</div>
@@ -54,7 +51,6 @@ export default function TenantChecklist({ slug }: { slug: string }) {
 
   const isNominativeMember = !!nomUser && (nomUser.isSuperadmin || nomTenants.some((t) => t.slug === slug));
 
-  // Mode 1: nominative member — render inside the unified app shell.
   if (isNominativeMember) {
     return (
       <TenantAppShell
@@ -63,18 +59,33 @@ export default function TenantChecklist({ slug }: { slug: string }) {
         subtitle="Checklist du jour"
         headerExtra={<ChecklistProgress slug={slug} />}
       >
-        <ChecklistContent slug={slug} clientCode={null} />
+        <ChecklistContent slug={slug} />
       </TenantAppShell>
     );
   }
 
-  // Mode 2: PIN-authenticated — standalone tablet view (no sidebar).
-  if (pinAuth) {
-    return <ChecklistTabletView slug={slug} clientCode={pinUser?.clientCode ?? null} />;
-  }
+  return <AuthRequired slug={slug} />;
+}
 
-  // Mode 3: no auth — PIN gate.
-  return <PinGate slug={slug} login={login} />;
+function AuthRequired({ slug }: { slug: string }) {
+  const target = `/auth/login?redirect=${encodeURIComponent(`/${slug}`)}`;
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="max-w-sm w-full text-center space-y-4">
+        <h1 className="text-xl font-bold capitalize">{slug}</h1>
+        <p className="text-sm text-muted-foreground">
+          Vous devez être connecté à votre compte myBeez pour accéder à la checklist.
+        </p>
+        <a
+          href={target}
+          className="inline-block px-4 py-2 rounded-md bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium"
+          data-testid="login-link"
+        >
+          Se connecter
+        </a>
+      </div>
+    </div>
+  );
 }
 
 // ============================================================
@@ -104,7 +115,7 @@ function ChecklistProgress({ slug }: { slug: string }) {
   );
 }
 
-function ChecklistContent({ slug }: { slug: string; clientCode: string | null }) {
+function ChecklistContent({ slug }: { slug: string }) {
   const queryClient = useQueryClient();
 
   const { data: categories, isLoading: catsLoading } = useQuery<Category[]>({
@@ -174,132 +185,6 @@ function ChecklistContent({ slug }: { slug: string; clientCode: string | null })
       ))}
 
       <AlfredChat tenantSlug={slug} checklistContext={dashboard || undefined} />
-    </div>
-  );
-}
-
-function ChecklistTabletView({ slug, clientCode }: { slug: string; clientCode: string | null }) {
-  const { data: dashboard } = useQuery<Dashboard>({
-    queryKey: ["/api/checklist", slug, "dashboard"],
-    queryFn: () => fetch(`/api/checklist/${slug}/dashboard`, { credentials: "include" }).then((r) => r.json()),
-    refetchInterval: 30000,
-  });
-
-  const pct = dashboard && dashboard.total > 0 ? Math.round((dashboard.checked / dashboard.total) * 100) : 0;
-
-  return (
-    <div className="min-h-screen bg-background pb-20">
-      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur border-b px-4 py-3">
-        <div className="flex items-center justify-between max-w-2xl mx-auto">
-          <div>
-            <h1 className="font-bold text-lg capitalize">{slug}</h1>
-            {dashboard && (
-              <p className="text-xs text-muted-foreground">
-                {dashboard.checked}/{dashboard.total} ({pct}%) — {dashboard.date}
-              </p>
-            )}
-          </div>
-          {clientCode && (
-            <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded" data-testid="client-code">
-              {clientCode}
-            </span>
-          )}
-        </div>
-        {dashboard && (
-          <div className="max-w-2xl mx-auto mt-2">
-            <div className="h-2 bg-muted rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-amber-500 to-green-500 transition-all duration-500"
-                style={{ width: `${pct}%` }}
-              />
-            </div>
-          </div>
-        )}
-      </header>
-
-      <div className="max-w-2xl mx-auto p-4">
-        <ChecklistContent slug={slug} clientCode={clientCode} />
-      </div>
-    </div>
-  );
-}
-
-function PinGate({ slug, login }: { slug: string; login: (pin: string, slug: string) => Promise<{ success: boolean; error?: string }> }) {
-  const [pin, setPin] = useState("");
-  const [pinError, setPinError] = useState("");
-
-  const handlePinDigit = (digit: string) => {
-    const newPin = pin + digit;
-    setPinError("");
-    setPin(newPin);
-    if (newPin.length === 4) {
-      setTimeout(() => {
-        login(newPin, slug).then((result) => {
-          if (!result.success) {
-            setPinError(result.error || "Code incorrect");
-            setPin("");
-          }
-        });
-      }, 200);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 via-orange-50 to-yellow-50 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 flex items-center justify-center p-4">
-      <div className="w-full max-w-xs space-y-6 text-center">
-        <Logo variant="principal" className="h-72 mx-auto" />
-        <h1 className="text-xl font-bold text-foreground capitalize">{slug}</h1>
-        <p className="text-sm text-muted-foreground">Entrez votre code PIN</p>
-
-        <div className="flex justify-center gap-2 my-4" data-testid="pin-dots">
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className={cn(
-                "w-4 h-4 rounded-full border-2 transition-all",
-                i < pin.length ? "bg-amber-500 border-amber-500 scale-110" : "border-muted-foreground/30",
-                pinError && "border-red-500",
-              )}
-            />
-          ))}
-        </div>
-
-        {pinError && <p className="text-sm text-red-500" data-testid="pin-error">{pinError}</p>}
-
-        <div className="grid grid-cols-3 gap-3 max-w-[220px] mx-auto">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, null, 0, "del"].map((digit, i) => {
-            if (digit === null) return <div key={i} />;
-            if (digit === "del") {
-              return (
-                <button
-                  key="del"
-                  onClick={() => setPin((p) => p.slice(0, -1))}
-                  className="h-14 rounded-xl text-sm text-muted-foreground hover:bg-muted/50 transition"
-                  data-testid="pin-delete"
-                >
-                  ←
-                </button>
-              );
-            }
-            return (
-              <button
-                key={digit}
-                onClick={() => handlePinDigit(String(digit))}
-                className="h-14 rounded-xl text-lg font-medium hover:bg-amber-500/10 active:bg-amber-500/20 transition"
-                data-testid={`pin-digit-${digit}`}
-              >
-                {digit}
-              </button>
-            );
-          })}
-        </div>
-
-        <p className="text-xs text-muted-foreground">
-          <a href="/auth/login" className="text-primary hover:underline">Connexion par email</a>
-          <span className="mx-2">·</span>
-          <span>Compte nominatif (équipe)</span>
-        </p>
-      </div>
     </div>
   );
 }

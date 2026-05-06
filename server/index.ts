@@ -127,9 +127,6 @@ async function registerRoutes() {
   const { registerSSERoutes, getSseStats } = await import("./services/realtimeSync");
   registerSSERoutes(app);
 
-  const { registerAuthRoutes } = await import("./routes/auth");
-  registerAuthRoutes(app);
-
   const { registerUserAuthRoutes } = await import("./routes/userAuth");
   registerUserAuthRoutes(app);
 
@@ -199,21 +196,6 @@ const PORT = parseInt(process.env.PORT || "3000", 10);
 
 registerRoutes()
   .then(async () => {
-    // One-shot migration of any cleartext PIN/admin codes still in the DB.
-    // Idempotent — only rewrites rows where the value isn't already an
-    // argon2 hash. Failure here must NOT block boot (e.g. fresh DB with
-    // empty tenants table works fine, or migration runs concurrently on
-    // multi-pod deployments).
-    try {
-      const { tenantService } = await import("./services/tenantService");
-      const { updated } = await tenantService.migrateLegacyPins();
-      if (updated > 0) {
-        console.log(`[myBeez] Migrated ${updated} cleartext PIN/admin code(s) → argon2id`);
-      }
-    } catch (err) {
-      console.error("[myBeez] PIN migration failed (non-fatal):", err);
-    }
-
     if (process.env.NODE_ENV === "production") serveStatic();
     const server = createServer(app);
     server.listen(PORT, "0.0.0.0", () => {

@@ -1,16 +1,20 @@
 /**
  * Auth Middleware — myBeez
  *
- * Two auth models coexist during the migration window (PR #12):
- *   - PIN session (legacy):    { authenticated, tenantId, role: "staff"|"admin" }
- *   - User session (new):      { userId, currentTenantId? }
+ * Nominative auth model (PR #11+) :
+ *   - `requireUser` : full nominative session (`session.userId`)
+ *   - `requireRole(...)` : nominative session + a tenant role from the
+ *     allowed list (must run after `resolveTenant`)
+ *   - `requireSuperadminUser` : nominative session + `users.isSuperadmin`
+ *   - `requireMfaPending` : half-baked session between password and TOTP
+ *   - `requireSuperadmin` : Bearer-token gate for the temporary `/api/tenants`
+ *     admin routes (deprecated, will go away with the admin UI rewrite)
  *
- * Both keys can be present at the same time on a single session — they
- * don't conflict. PIN auth will be removed in a cleanup PR once all
- * tenants have nominative Owners.
+ * Sessions are stored server-side via express-session (Postgres-backed).
  *
- * Sessions are stored server-side via express-session (Postgres-backed
- * since PR #11).
+ * The legacy PIN auth (`requireAuth`, `requireAdmin`, `requireTenantAuth`)
+ * was removed alongside the route, service and front-end hook in the PIN
+ * purge (chore/purge-pin-auth).
  */
 
 import type { Request, Response, NextFunction } from "express";
@@ -19,14 +23,7 @@ import { userTenantService } from "../services/auth/userTenantService";
 import { userService } from "../services/auth/userService";
 import { TENANT_ROLES, type TenantRole } from "../../shared/schema/users";
 
-export interface AuthSession {
-  authenticated: boolean;
-  tenantId: string;
-  role: "staff" | "admin";
-  authenticatedAt: number;
-}
-
-/** Shape of the new nominative session payload. */
+/** Shape of the nominative session payload. */
 export interface UserSession {
   userId: number;
   currentTenantId?: number;
@@ -44,44 +41,13 @@ export interface MfaPendingSession {
 /** TTL for an MFA-pending session: 5 min. After that, /challenge replies 410. */
 export const MFA_PENDING_TTL_MS = 5 * 60 * 1000;
 
-export function getSessionToken(req: Request): string | null {
-  const session = req.session as any;
-  return session?.authToken || null;
-}
-
-export function getAuthSession(req: Request): AuthSession | null {
-  const session = req.session as any;
-  if (!session?.authenticated) return null;
-  return {
-    authenticated: session.authenticated,
-    tenantId: session.tenantId || "val",
-    role: session.role || "staff",
-    authenticatedAt: session.authenticatedAt || 0,
-  };
-}
-
-export function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const session = req.session as any;
-  if (session?.authenticated) {
-    return next();
-  }
-  return res.status(401).json({ error: "Authentification requise" });
-}
-
-export function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  const session = req.session as any;
-  if (session?.authenticated && session?.role === "admin") {
-    return next();
-  }
-  return res.status(403).json({ error: "Accès administrateur requis" });
-}
-
 /**
  * requireSuperadmin — temporary admin gate for /api/tenants CRUD.
  *
  * Reads `Authorization: Bearer <token>` and constant-time compares it
  * against `process.env.SUPERADMIN_TOKEN`. Will be replaced by full
- * nominative auth + RBAC in PR #8-10.
+ * nominative auth + RBAC once the admin UI is rewritten on top of
+ * `requireSuperadminUser`.
  *
  * - 503 if SUPERADMIN_TOKEN is not configured (fail-closed)
  * - 401 if no Bearer header
@@ -109,50 +75,7 @@ export function requireSuperadmin(req: Request, res: Response, next: NextFunctio
   return next();
 }
 
-/**
- * requireTenantAuth — gate mutating tenant-scoped routes.
- *
- * Requires:
- *   1. an authenticated session (`session.authenticated === true`)
- *   2. that the session's `tenantId` matches the resolved `req.tenantId`
- *      set by `resolveTenant`, unless the session role is `superadmin`.
- *
- * Must run AFTER `resolveTenant` so `req.tenantId` is populated.
- *
- * - 401 if not authenticated
- * - 403 if authenticated for a different tenant
- */
-interface TenantSessionLike {
-  authenticated?: boolean;
-  tenantId?: number;
-  role?: string;
-}
-
-export async function requireTenantAuth(req: Request, res: Response, next: NextFunction) {
-  // Nominative bypass: a logged-in user with a user_tenants row for the
-  // resolved tenant is considered authenticated. This lets owners / admins
-  // / managers hit the checklist directly via subdomain after a regular
-  // email-password login, without typing the legacy PIN.
-  //
-  // The PIN path below stays for the device-paired tablet scenario where
-  // staff don't have nominative accounts.
-  const u = getUserSession(req);
-  if (u && typeof req.tenantId === "number") {
-    const role = await userTenantService.getRole(u.userId, req.tenantId);
-    if (role) return next();
-  }
-
-  const session = req.session as unknown as TenantSessionLike | undefined;
-  if (!session?.authenticated) {
-    return res.status(401).json({ error: "Authentification requise" });
-  }
-  if (req.tenantId && session.tenantId !== req.tenantId && session.role !== "superadmin") {
-    return res.status(403).json({ error: "Accès interdit à ce restaurant" });
-  }
-  return next();
-}
-
-// ====================== Nominative auth (PR #12) ======================
+// ====================== Nominative auth ======================
 
 /** Reads the nominative session payload, if any. */
 export function getUserSession(req: Request): UserSession | null {
@@ -163,8 +86,7 @@ export function getUserSession(req: Request): UserSession | null {
 
 /**
  * `requireUser` — gates a route on a logged-in nominative user.
- * Distinct from `requireAuth` (PIN session). Returns 401 with a stable
- * message if no nominative session is present.
+ * Returns 401 with a stable message if no nominative session is present.
  */
 export function requireUser(req: Request, res: Response, next: NextFunction) {
   const u = getUserSession(req);
@@ -279,10 +201,6 @@ declare global {
  *   - 403 if the user has no role on this tenant, or has a role not in
  *     the allowed list
  *   - calls next() and sets `req.userTenantRole` on success
- *
- * `superadmin` users (cross-tenant) bypass the role check (but still
- * require a session — they MUST log in nominatively, the SUPERADMIN_TOKEN
- * Bearer is a separate, deprecated mechanism).
  */
 export function requireRole(...allowed: TenantRole[]) {
   // Validate allowed list at module load (catch typos early).
