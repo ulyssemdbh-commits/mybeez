@@ -65,8 +65,27 @@ export const businessTemplates = pgTable(
      */
     vocabulary: jsonb("vocabulary").$type<Record<string, string>>().notNull().default({}),
     /**
-     * Tax / VAT defaults. Flexible shape per locale.
-     * e.g. { defaultVat: 20, reducedVat: 10, food: 5.5 }
+     * Tax / VAT defaults attached to the template.
+     *
+     * Stored as a flat key→number map so the shape can vary per locale
+     * without requiring a migration. The application layer interprets
+     * keys with the contract below — adding a new key = updating the
+     * UI label table in `client/src/lib/taxRulesLabels.ts`.
+     *
+     * Standard French keys (used by the seed):
+     *   - `defaultVat` : taux normalement appliqué sur la facturation
+     *     courante (ex. 20% services, 10% restauration sur place).
+     *   - `reducedVat` : taux réduit pour certaines lignes (ex. 5,5% à
+     *     emporter, 10% sur services à la personne agréés).
+     *   - `alcohol` : taux spécifique alcool en restauration (toujours
+     *     20% en France).
+     *   - `exempt` : 1 si le métier est exonéré de TVA (ex. professions
+     *     médicales libérales, art. 261-4-1° CGI), 0 sinon. La valeur
+     *     est numérique pour rester dans le contrat
+     *     `Record<string, number>`.
+     *
+     * Toute autre clé est tolérée mais ignorée par l'UI tant qu'un
+     * label n'est pas ajouté.
      */
     taxRules: jsonb("tax_rules")
       .$type<Record<string, number>>()

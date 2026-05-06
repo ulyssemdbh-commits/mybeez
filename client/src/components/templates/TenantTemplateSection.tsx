@@ -18,6 +18,7 @@ import { IconRenderer } from "./IconRenderer";
 import { TemplateCard } from "@/components/signup/TemplateCard";
 import type { ApiTemplate } from "@/components/signup/types";
 import { cn } from "@/lib/utils";
+import { TAX_RULES_LABELS, formatTaxRuleValue } from "@/lib/taxRulesLabels";
 
 interface CurrentResponse {
   current: ApiTemplate | null;
@@ -125,6 +126,32 @@ export function TenantTemplateSection({ tenantSlug }: Props) {
                 </ul>
               </div>
             )}
+
+            {Object.keys(current.taxRules).length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-2">
+                  TVA suggérée
+                </p>
+                <div className="flex flex-wrap gap-2" data-testid="template-tax-rules">
+                  {Object.entries(current.taxRules)
+                    .filter(([k]) => TAX_RULES_LABELS[k])
+                    .map(([k, v]) => {
+                      const lbl = TAX_RULES_LABELS[k];
+                      return (
+                        <span
+                          key={k}
+                          className="inline-flex items-center gap-1.5 rounded-md border bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1 text-xs"
+                          title={lbl.label}
+                        >
+                          <span className="text-muted-foreground">{lbl.short}</span>
+                          <span className="font-mono font-semibold">{formatTaxRuleValue(k, v)}</span>
+                        </span>
+                      );
+                    })}
+                </div>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-3 pt-3 border-t">
               <button
                 type="button"
