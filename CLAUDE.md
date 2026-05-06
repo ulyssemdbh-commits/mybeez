@@ -216,7 +216,8 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
   - ✅ Auth nominative email/password (PR #12) : argon2id, routes `/api/auth/user/*`, middleware `requireUser` + `requireRole(...)`, mailService Resend (fail-soft dev), page `/auth/login` minimale. PIN auth coexiste pendant la migration.
   - ✅ MFA TOTP (PR #13a) : `mfaService` (otplib, RFC 6238, drift ±30s), routes `/api/auth/user/mfa/{status,setup,confirm,disable,challenge,recovery,cancel}`, gate sur `/login` (retourne `{mfaRequired:true}`, session `mfaPending*` TTL 5 min), 10 recovery codes XXXX-XXXX-XXXX (sha-256, single-use), page `/auth/security` (QR + recovery codes affichés une fois).
   - ✅ Routes **checklist** + **SSE** migrées vers `requireUser` + `requireRole(...)` strict avec matrice rôles (lecture = tous rôles, ops quotidiennes = staff+, gestion structurelle = manager+). `requireTenantAuth` n'a plus de caller en runtime — purge prévue avec PIN auth.
-  - ⏳ **Reste** : audit log writes + rate limit/lockout (PR #13b), routes Alfred sans gate auth (sortir `tenantId` du body, passer en `/api/alfred/:slug/*` + `requireRole`), purge PIN auth, passer `tenant.templateId` en NOT NULL et droper `businessType`.
+  - ✅ Routes **Alfred** : `/api/alfred/:slug/{chat,analyze,clear}` derrière `resolveTenant` + `requireUser` + `requireRole(...)` (any tenant role). `tenantId` retiré du body, slug pris dans l'URL. Front (`AlfredChat`) renomme la prop en `tenantSlug` et appelle l'URL slug-scopée.
+  - ⏳ **Reste** : audit log writes + rate limit/lockout (PR #13b), purge PIN auth (route `auth.ts`, `requireAuth`/`requireAdmin`/`requireTenantAuth`, `services/auth.ts`, hook front `use-auth.ts`, colonnes `tenants.pinCode`/`adminCode`), passer `tenant.templateId` en NOT NULL et droper `businessType`.
 
 ### Sécurité — à corriger
 - ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).
@@ -228,7 +229,7 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 ### Dette technique
 - **`AuthSession.tenantId: string`** (middleware/auth.ts) vs `session.tenantId = result.tenant.id` (number, route auth.ts) — type incohérent. Voir aussi la comparaison `session.tenantId !== req.tenantId` dans checklist.ts.
-- **Routes Alfred** : reçoivent `tenantId` dans le body (qui est en réalité un slug, legacy nom). À refactorer pour utiliser `resolveTenant` middleware comme le reste du code (= URL `/api/alfred/:slug/*`). Actuellement le default `"val"` a été retiré ; envoie d'un slug obligatoire, lookup interne.
+- ✅ ~~**Routes Alfred** : reçoivent `tenantId` dans le body~~ Refactorées pour passer par `/api/alfred/:slug/*` + `resolveTenant` + `requireUser` + `requireRole(...)`. Le service `alfredService` continue de prendre un slug en argument interne (analyze appelle chat).
 - ✅ ~~`requireTenantAuth` dupliqué inline dans `checklist.ts`~~ — déplacé dans `server/middleware/auth.ts`, importé là où nécessaire, couvert par `requireTenantAuth.test.ts` (6 tests).
 - **Route `GET /history`** : `byDate[date].total = allItems.length` calcule le total avec les items actifs **aujourd'hui**, pas à la date X — biaise les pourcentages historiques si la liste d'items évolue.
 - **Aucun test, aucune CI** — toute régression doit être détectée à la main.

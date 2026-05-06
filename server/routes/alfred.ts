@@ -1,25 +1,26 @@
 /**
  * Alfred AI Routes — myBeez
  *
- * POST /api/alfred/chat        — Chat with Alfred
- * POST /api/alfred/analyze     — Analyze today's checklist
- * POST /api/alfred/clear       — Clear conversation history
+ * POST /api/alfred/:slug/chat     — Chat with Alfred
+ * POST /api/alfred/:slug/analyze  — Analyze today's checklist
+ * POST /api/alfred/:slug/clear    — Clear conversation history
+ *
+ * Tenant resolved by :slug (or host) via `resolveTenant`. Auth gates :
+ *   - `requireUser` : nominative session
+ *   - `requireRole` : any tenant role (read-side feature ; even a viewer
+ *     can talk to Alfred about their own data)
  */
 
 import type { Express, Request, Response } from "express";
-import { alfredService } from "../services/alfred/alfredService";
 import { z } from "zod";
+import { alfredService } from "../services/alfred/alfredService";
+import { resolveTenant } from "../middleware/tenant";
+import { requireUser, requireRole } from "../middleware/auth";
 
-/**
- * `tenantId` is preserved as the field name in the API for now to avoid
- * breaking the frontend mid-PR — but it always represents the tenant
- * SLUG (e.g. "valentine"), not a numeric id. The legacy default of
- * "val" was a Valentine-ism and has been removed: callers MUST send a
- * valid slug, the unknown-tenant case returns 404.
- */
+const ALFRED_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
+
 const chatSchema = z.object({
   message: z.string().min(1).max(2000),
-  tenantId: z.string().min(1),
   context: z
     .object({
       checklist: z.any().optional(),
@@ -29,7 +30,6 @@ const chatSchema = z.object({
 });
 
 const analyzeSchema = z.object({
-  tenantId: z.string().min(1),
   categories: z.array(z.any()),
   summary: z.object({
     total: z.number(),
@@ -39,17 +39,18 @@ const analyzeSchema = z.object({
   }),
 });
 
-const clearSchema = z.object({ tenantId: z.string().min(1) });
-
 function isUnknownTenantError(err: unknown): boolean {
   return err instanceof Error && err.message.startsWith("Alfred: unknown tenant slug");
 }
 
 export function registerAlfredRoutes(app: Express): void {
-  app.post("/api/alfred/chat", async (req: Request, res: Response) => {
+  const r = "/api/alfred/:slug";
+
+  app.post(`${r}/chat`, resolveTenant, requireUser, requireRole(...ALFRED_ROLES), async (req: Request, res: Response) => {
     try {
       const data = chatSchema.parse(req.body);
-      const response = await alfredService.chat(data.tenantId, data.message, data.context);
+      const slug = req.tenant!.slug;
+      const response = await alfredService.chat(slug, data.message, data.context);
       res.json(response);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -63,14 +64,11 @@ export function registerAlfredRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/alfred/analyze", async (req: Request, res: Response) => {
+  app.post(`${r}/analyze`, resolveTenant, requireUser, requireRole(...ALFRED_ROLES), async (req: Request, res: Response) => {
     try {
       const data = analyzeSchema.parse(req.body);
-      const response = await alfredService.analyzeChecklist(
-        data.tenantId,
-        data.categories,
-        data.summary,
-      );
+      const slug = req.tenant!.slug;
+      const response = await alfredService.analyzeChecklist(slug, data.categories, data.summary);
       res.json(response);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -84,15 +82,11 @@ export function registerAlfredRoutes(app: Express): void {
     }
   });
 
-  app.post("/api/alfred/clear", (req: Request, res: Response) => {
+  app.post(`${r}/clear`, resolveTenant, requireUser, requireRole(...ALFRED_ROLES), (req: Request, res: Response) => {
     try {
-      const data = clearSchema.parse(req.body);
-      alfredService.clearHistory(data.tenantId);
+      alfredService.clearHistory(req.tenant!.slug);
       res.json({ success: true });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid request", details: error.errors });
-      }
       console.error("[Alfred] Clear error:", error);
       res.status(500).json({ error: "Erreur" });
     }
