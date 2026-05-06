@@ -7,7 +7,7 @@
 
 import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { IconRenderer } from "./IconRenderer";
+import { IconRenderer } from "@/components/templates/IconRenderer";
 import type { ApiTemplate } from "./types";
 
 interface Props {

@@ -1,5 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Logo } from "@/components/Logo";
+import { IconRenderer } from "@/components/templates/IconRenderer";
 import {
   ArrowRight,
   Check,
@@ -13,7 +14,6 @@ import {
   Users,
   Sparkles,
   Building2,
-  Store,
   Briefcase,
   ListChecks,
   Wallet,
@@ -23,6 +23,17 @@ import {
   Clock,
   TrendingUp,
 } from "lucide-react";
+
+interface LandingTemplate {
+  id: number;
+  slug: string;
+  name: string;
+  parentId: number | null;
+  icon: string | null;
+  tagline: string | null;
+  coverGradient: string | null;
+  children?: LandingTemplate[];
+}
 
 // ============================== Mock browser shell ==============================
 
@@ -254,7 +265,7 @@ function MockTablet() {
 
 const FEATURES_CHECKS = {
   multivertical: [
-    "14 templates prêts à l'emploi (restauration, services, retail…)",
+    "25 métiers prêts à l'emploi (restauration, services, retail, santé)",
     "Modules activés et vocabulaire adaptés à votre métier",
     "Sous-domaine dédié : votre-entreprise.mybeez-ai.com",
     "Domaine personnalisé en option",
@@ -606,7 +617,7 @@ function StatsBar() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 text-center">
           {[
             { value: "5 min", label: "Mise en route" },
-            { value: "14", label: "Verticales prêtes" },
+            { value: "25+", label: "Métiers prêts" },
             { value: "5 rôles", label: "Permissions fines" },
             { value: "24/7", label: "Alfred disponible" },
             { value: "99 €", label: "HT / mois, tout inclus" },
@@ -623,26 +634,29 @@ function StatsBar() {
 }
 
 function Verticales() {
-  const groups = [
-    {
-      icon: Store,
-      title: "Commerce de bouche",
-      items: ["Restaurant", "Café-bar", "Boulangerie-pâtisserie", "Traiteur", "Foodtruck"],
-      color: "from-amber-500 to-orange-500",
-    },
-    {
-      icon: Briefcase,
-      title: "Entreprise de services",
-      items: ["Salon de coiffure", "Garage automobile", "Cabinet conseil", "Services à domicile"],
-      color: "from-blue-500 to-cyan-500",
-    },
-    {
-      icon: Building2,
-      title: "Retail B2C",
-      items: ["Boutique de quartier", "Épicerie fine", "Concept store", "Magasin spécialisé"],
-      color: "from-purple-500 to-pink-500",
-    },
-  ];
+  const [verticals, setVerticals] = useState<LandingTemplate[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/templates");
+        if (!res.ok) return;
+        const data = (await res.json()) as { templates: LandingTemplate[] };
+        if (cancelled) return;
+        setVerticals(data.templates);
+      } catch {
+        /* silent fail; section just hides total count */
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <section id="verticales" className="bg-zinc-50 dark:bg-zinc-900/40 border-y border-zinc-200 dark:border-zinc-800">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 md:py-24">
@@ -652,24 +666,54 @@ function Verticales() {
             myBeez s'adapte à votre activité grâce à des templates prêts à l'emploi. La plateforme reste la même, votre vocabulaire suit.
           </p>
         </div>
-        <div className="grid md:grid-cols-3 gap-6">
-          {groups.map((g) => (
-            <div key={g.title} className="bg-white dark:bg-zinc-900 border rounded-2xl p-6 space-y-4">
-              <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${g.color} flex items-center justify-center shadow-sm`}>
-                <g.icon className="w-5 h-5 text-white" />
-              </div>
-              <h3 className="text-lg font-semibold">{g.title}</h3>
-              <ul className="space-y-1.5 text-sm text-zinc-600 dark:text-zinc-300">
-                {g.items.map((i) => (
-                  <li key={i} className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-emerald-500" />
-                    {i}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
+
+        {!loaded ? (
+          <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="bg-white/60 dark:bg-zinc-900/60 border rounded-2xl p-6 h-48 animate-pulse" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {verticals.map((v) => {
+              const childCount = v.children?.length ?? 0;
+              return (
+                <div
+                  key={v.id}
+                  className="bg-white dark:bg-zinc-900 border rounded-2xl overflow-hidden flex flex-col"
+                  data-testid={`landing-vertical-${v.slug}`}
+                >
+                  <div
+                    className={`h-20 bg-gradient-to-br flex items-center justify-between px-5 ${v.coverGradient ?? "from-zinc-500 to-zinc-700"}`}
+                  >
+                    <IconRenderer name={v.icon} className="w-7 h-7 text-white" />
+                    <span className="text-xs font-bold text-white/90 bg-black/10 px-2 py-0.5 rounded-full">
+                      {childCount} métier{childCount > 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="p-5 space-y-3 flex-1">
+                    <div>
+                      <h3 className="text-lg font-semibold leading-tight">{v.name}</h3>
+                      {v.tagline && <p className="text-sm text-zinc-600 dark:text-zinc-300 mt-1">{v.tagline}</p>}
+                    </div>
+                    <ul className="space-y-1 text-sm text-zinc-600 dark:text-zinc-300">
+                      {(v.children ?? []).slice(0, 5).map((c) => (
+                        <li key={c.id} className="flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                          <span className="truncate">{c.name}</span>
+                        </li>
+                      ))}
+                      {childCount > 5 && (
+                        <li className="text-xs text-muted-foreground italic pl-5">+ {childCount - 5} autre{childCount - 5 > 1 ? "s" : ""}</li>
+                      )}
+                    </ul>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
         <p className="text-center text-sm text-zinc-500 dark:text-zinc-400 mt-8">
           Votre activité n'est pas listée ? <a href="mailto:contact@mybeez-ai.com" className="text-primary hover:underline">Écrivez-nous</a> — on ajoute votre vertical en 24h.
         </p>
@@ -755,7 +799,7 @@ function FAQ() {
     {
       id: "vertical",
       q: "Mon activité n'est pas listée. Vous m'aidez quand même ?",
-      a: "Oui. Si votre métier ne figure pas dans nos 14 templates initiaux, écrivez-nous : on ajoute votre vertical en 24 à 48h. Pas de surcoût.",
+      a: "Oui. Si votre métier ne figure pas dans nos 25+ templates initiaux, écrivez-nous : on ajoute votre vertical en 24 à 48h. Pas de surcoût.",
     },
     {
       id: "engagement",
