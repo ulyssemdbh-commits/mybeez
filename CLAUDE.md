@@ -47,7 +47,7 @@ mybeez/
 │       │   ├── ui/                 # Shadcn générés (button, card, input, dialog, …)
 │       │   ├── alfred/AlfredChat.tsx
 │       │   ├── ErrorBoundary.tsx, SkipLink.tsx, theme-provider.tsx
-│       ├── hooks/                  # use-auth, use-toast, useRealtimeSync
+│       ├── hooks/                  # useUserSession, use-toast, useRealtimeSync
 │       ├── lib/                    # queryClient.ts (apiRequest + getQueryFn), utils.ts (cn helper)
 │       └── index.css
 ├── server/           # Express
@@ -55,9 +55,8 @@ mybeez/
 │   ├── db.ts                       # Pool pg + drizzle(pool, { schema })
 │   ├── middleware/
 │   │   ├── tenant.ts               # resolveTenant: hostname-first (subdomain ou custom domain), fallback :slug
-│   │   └── auth.ts                 # PIN: requireAuth/requireAdmin/requireTenantAuth ; nominative: requireUser/requireRole(...) ; legacy: requireSuperadmin (Bearer token)
+│   │   └── auth.ts                 # nominative: requireUser/requireRole(...)/requireSuperadminUser ; MFA: requireMfaPending ; legacy bearer: requireSuperadmin
 │   ├── routes/
-│   │   ├── auth.ts                 # /api/auth/{pin-login, logout, me}  (legacy PIN)
 │   │   ├── userAuth.ts             # /api/auth/user/{signup, login, logout, me, verify-email, forgot-password, reset-password}  (nominative)
 │   │   ├── userAuthMfa.ts          # /api/auth/user/mfa/{status, setup, confirm, disable, challenge, recovery, cancel}  (TOTP)
 │   │   ├── tenants.ts              # /api/tenants — gatées par requireSuperadmin (Bearer)
@@ -68,7 +67,6 @@ mybeez/
 │   │   ├── tenantService.ts        # CRUD tenants + cache mémoire + génération clientCode 8 chiffres
 │   │   ├── domainService.ts        # resolveTenantByHost (subdomain + custom domain) + cache 60s
 │   │   ├── templateService.ts      # catalog business_templates en cache mémoire (small set)
-│   │   ├── auth.ts                 # délègue à tenantService.loginWithPin (legacy PIN)
 │   │   ├── auth/passwordService.ts # argon2id hash/verify + bornes longueur (OWASP 2024)
 │   │   ├── auth/tokenService.ts    # tokens reset/verify : random 32B base64url, sha256 hash, TTL constants
 │   │   ├── auth/userService.ts     # CRUD users + lifecycle tokens (issue/consume verify + reset)
@@ -118,7 +116,7 @@ mybeez/
   - **fallback legacy** sur `req.params.slug` si la résolution par host échoue (transition douce, à retirer)
   - 400 si `:slug` URL ne matche pas le tenant résolu par host
 - **Dev local** : `*.localhost` est reconnu (RFC 6761 résout vers 127.0.0.1). `valentine.localhost:3000` ⇒ tenant `valentine`. Pas besoin de toucher `/etc/hosts`.
-- **Auth de session** vs **scope tenant** : la session contient `session.tenantId` (numérique). Pour les routes mutantes, comparer `session.tenantId === req.tenantId` (voir `requireTenantAuth` dans `routes/checklist.ts`).
+- **Auth + scope tenant** : `session.userId` (nominatif) + `req.tenantId` (résolu par `resolveTenant`) → le binding rôle est vérifié par `requireRole(...)` via `userTenantService.getRole(userId, tenantId)`. Aucune route applicative ne dépend plus de `session.tenantId` (legacy PIN — supprimé).
 
 ---
 
@@ -217,7 +215,8 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
   - ✅ MFA TOTP (PR #13a) : `mfaService` (otplib, RFC 6238, drift ±30s), routes `/api/auth/user/mfa/{status,setup,confirm,disable,challenge,recovery,cancel}`, gate sur `/login` (retourne `{mfaRequired:true}`, session `mfaPending*` TTL 5 min), 10 recovery codes XXXX-XXXX-XXXX (sha-256, single-use), page `/auth/security` (QR + recovery codes affichés une fois).
   - ✅ Routes **checklist** + **SSE** migrées vers `requireUser` + `requireRole(...)` strict avec matrice rôles (lecture = tous rôles, ops quotidiennes = staff+, gestion structurelle = manager+). `requireTenantAuth` n'a plus de caller en runtime — purge prévue avec PIN auth.
   - ✅ Routes **Alfred** : `/api/alfred/:slug/{chat,analyze,clear}` derrière `resolveTenant` + `requireUser` + `requireRole(...)` (any tenant role). `tenantId` retiré du body, slug pris dans l'URL. Front (`AlfredChat`) renomme la prop en `tenantSlug` et appelle l'URL slug-scopée.
-  - ⏳ **Reste** : audit log writes + rate limit/lockout (PR #13b), purge PIN auth (route `auth.ts`, `requireAuth`/`requireAdmin`/`requireTenantAuth`, `services/auth.ts`, hook front `use-auth.ts`, colonnes `tenants.pinCode`/`adminCode`), passer `tenant.templateId` en NOT NULL et droper `businessType`.
+  - ✅ **Purge PIN auth** : suppression de `routes/auth.ts`, `services/auth.ts`, `services/auth/pinService.ts`, des middlewares `requireAuth`/`requireAdmin`/`requireTenantAuth`/`getAuthSession`/`getSessionToken`, de `tenantService.loginWithPin`/`migrateLegacyPins`, du hook front `use-auth.ts`, de `PinGate`+`ChecklistTabletView` dans `TenantChecklist`. `tenants.pinCode`/`adminCode` passées en **nullable** (drop SQL définitif différé). Le tablet-PIN flow Phase-2 (per-staff device-paired token) sera reconstruit différemment selon `project_mybeez_decisions`.
+  - ⏳ **Reste** : audit log writes + rate limit/lockout (PR #13b), passer `tenant.templateId` en NOT NULL et droper `businessType`, drop SQL définitif `tenants.pinCode`/`adminCode`.
 
 ### Sécurité — à corriger
 - ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).
@@ -254,8 +253,7 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 | **Superadmin** | Membre interne myBeez (`users.isSuperadmin = true`), distinct de tout role tenant. À ne pas confondre avec `SUPERADMIN_TOKEN` qui est un Bearer pour les routes admin temporaires. |
 | **Slug** | Nom URL-friendly du tenant (ex: `valentine`, `maillane`). Unique. |
 | **Client code** | Code à 8 chiffres généré à la création, montré à l'utilisateur. |
-| **PIN code** | Code staff (4–8 chiffres) — accès checklist quotidienne. |
-| **Admin code** | Code admin (4–8 chiffres) — accès reset, gestion items, etc. |
+| **~~PIN code~~** | ⚠ Retiré (chore/purge-pin-auth). Colonnes `tenants.pin_code`/`admin_code` laissées nullable, plus aucune écriture. Le PIN-on-tablet Phase-2 sera reconstruit comme un per-staff device-paired token. |
 | **Checklist** | Liste d'items à cocher chaque jour (par catégorie, par zone). |
 | **Item** | Élément individuel d'une checklist (ex: « tomates », « riz basmati »). |
 | **Check** | Une coche d'un item à une date donnée. Une row par (tenant, item, date). |

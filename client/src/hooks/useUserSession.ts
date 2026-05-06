@@ -1,9 +1,7 @@
 /**
  * useUserSession — wraps `GET /api/auth/user/me` for the nominative
- * auth flow (PR #12). Returns the current user, a loading flag, and
- * helpers to login / logout via the matching POST endpoints.
- *
- * Distinct from `use-auth` (legacy PIN-based, lives in /hooks).
+ * auth flow. Returns the current user, a loading flag, and helpers to
+ * login / logout via the matching POST endpoints.
  *
  * MFA (PR #13): `login` may resolve to `{ kind: "mfa" }`, in which
  * case the caller must collect a TOTP code and call `submitMfaChallenge`
