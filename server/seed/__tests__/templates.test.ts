@@ -1,13 +1,21 @@
 import { describe, it, expect } from "vitest";
 import { SEED_TEMPLATES } from "../templates";
 
+const TOP_LEVEL_SLUGS = [
+  "commerce_de_bouche",
+  "entreprise_services",
+  "retail_b2c",
+  "sante_bien_etre",
+];
+
 describe("SEED_TEMPLATES — structural invariants", () => {
-  it("contains at least the 3 expected top-level templates", () => {
+  it("contains the expected top-level templates", () => {
     const topLevel = SEED_TEMPLATES.filter((t) => t.parentSlug === null);
     const slugs = topLevel.map((t) => t.slug);
-    expect(slugs).toContain("commerce_de_bouche");
-    expect(slugs).toContain("entreprise_services");
-    expect(slugs).toContain("retail_b2c");
+    for (const expected of TOP_LEVEL_SLUGS) {
+      expect(slugs, `top-level missing: ${expected}`).toContain(expected);
+    }
+    expect(topLevel.length).toBe(TOP_LEVEL_SLUGS.length);
   });
 
   it("has all unique slugs", () => {
@@ -32,8 +40,6 @@ describe("SEED_TEMPLATES — structural invariants", () => {
   });
 
   it("no template references itself transitively (taxonomy is exactly 2 levels)", () => {
-    // Sub-templates must have a top-level parent (parentSlug === null
-    // for that parent). No 3-level chain allowed.
     const bySlug = new Map(SEED_TEMPLATES.map((t) => [t.slug, t]));
     const subs = SEED_TEMPLATES.filter((t) => t.parentSlug !== null);
     for (const t of subs) {
@@ -66,7 +72,6 @@ describe("SEED_TEMPLATES — structural invariants", () => {
       "suppliers",
       "purchases",
       "employees",
-      "appointments",
       "stock",
     ]);
     for (const t of SEED_TEMPLATES) {
@@ -85,6 +90,89 @@ describe("SEED_TEMPLATES — structural invariants", () => {
       expect(set.has(t.sortOrder), `duplicate sortOrder ${t.sortOrder} in group ${g}`).toBe(false);
       set.add(t.sortOrder);
       orders.set(g, set);
+    }
+  });
+});
+
+describe("SEED_TEMPLATES — presentation invariants (sub-templates)", () => {
+  const subs = SEED_TEMPLATES.filter((t) => t.parentSlug !== null);
+
+  it("every sub-template has an icon (Lucide name)", () => {
+    const lucideRe = /^[A-Z][A-Za-z0-9]+$/;
+    for (const t of subs) {
+      expect(t.icon, `${t.slug}: icon required`).toBeTruthy();
+      expect(lucideRe.test(t.icon!), `${t.slug}: icon "${t.icon}" not PascalCase`).toBe(true);
+    }
+  });
+
+  it("every sub-template has a tagline ≤80 chars", () => {
+    for (const t of subs) {
+      expect(t.tagline, `${t.slug}: tagline required`).toBeTruthy();
+      expect(t.tagline!.length, `${t.slug}: tagline too long`).toBeLessThanOrEqual(80);
+    }
+  });
+
+  it("every sub-template has idealFor ≤200 chars", () => {
+    for (const t of subs) {
+      expect(t.idealFor, `${t.slug}: idealFor required`).toBeTruthy();
+      expect(t.idealFor!.length, `${t.slug}: idealFor too long`).toBeLessThanOrEqual(200);
+    }
+  });
+
+  it("every sub-template has a coverGradient (Tailwind classes)", () => {
+    const gradientRe = /^from-[a-z]+-\d+ to-[a-z]+-\d+$/;
+    for (const t of subs) {
+      expect(t.coverGradient, `${t.slug}: coverGradient required`).toBeTruthy();
+      expect(gradientRe.test(t.coverGradient!), `${t.slug}: gradient "${t.coverGradient}" not Tailwind`).toBe(true);
+    }
+  });
+
+  it("every sub-template has 3-5 featuresHighlight bullets", () => {
+    for (const t of subs) {
+      expect(t.featuresHighlight.length, `${t.slug}: needs 3-5 highlights`).toBeGreaterThanOrEqual(3);
+      expect(t.featuresHighlight.length, `${t.slug}: needs 3-5 highlights`).toBeLessThanOrEqual(5);
+      for (const f of t.featuresHighlight) {
+        expect(f.length, `${t.slug}: empty feature`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("every sub-template has notIncluded as an array (may be empty)", () => {
+    for (const t of subs) {
+      expect(Array.isArray(t.notIncluded), `${t.slug}: notIncluded must be array`).toBe(true);
+      for (const n of t.notIncluded) {
+        expect(n.length, `${t.slug}: empty notIncluded entry`).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
+describe("SEED_TEMPLATES — catalog richness", () => {
+  it("has at least 20 sub-templates (catalog richness)", () => {
+    const subs = SEED_TEMPLATES.filter((t) => t.parentSlug !== null);
+    expect(subs.length).toBeGreaterThanOrEqual(20);
+  });
+
+  it("includes templates announced on the public landing page", () => {
+    const slugs = new Set(SEED_TEMPLATES.map((t) => t.slug));
+    // Landing /pour-qui mentions these — they MUST exist in the seed.
+    const announced = [
+      "restaurant",
+      "cafe",
+      "boulangerie",
+      "traiteur",
+      "foodtruck",
+      "coiffure",
+      "garage",
+      "conseil",
+      "services_domicile",
+      "boutique",
+      "epicerie_fine",
+      "concept_store",
+      "magasin_specialise",
+    ];
+    for (const a of announced) {
+      expect(slugs.has(a), `landing announces "${a}" but seed missing`).toBe(true);
     }
   });
 });

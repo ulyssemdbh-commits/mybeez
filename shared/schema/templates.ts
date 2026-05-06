@@ -72,6 +72,44 @@ export const businessTemplates = pgTable(
       .$type<Record<string, number>>()
       .notNull()
       .default({}),
+    /**
+     * Lucide icon name (eg. "Utensils", "Scissors"). Used by the picker.
+     * Nullable during migration window — sub-templates require one going
+     * forward (validated at the seed level).
+     */
+    icon: text("icon"),
+    /**
+     * Short marketing line (≤80 chars) shown under the template name.
+     * Example: "Production fraîche, vente sur place et à emporter".
+     */
+    tagline: text("tagline"),
+    /**
+     * Audience hint (≤200 chars) shown in the picker card.
+     * Example: "TPE 1-10 personnes, vente comptoir + emporter".
+     */
+    idealFor: text("ideal_for"),
+    /**
+     * Tailwind gradient classes for the picker card cover, eg.
+     * "from-amber-500 to-orange-500". Lets the catalog drive UX without
+     * hardcoding brand decisions in the components.
+     */
+    coverGradient: text("cover_gradient"),
+    /**
+     * 3-5 selling points shown as bullets in the picker card. Concrete:
+     * "Checklist Cuisine + Salle préseedée", "TVA 10% par défaut", etc.
+     */
+    featuresHighlight: jsonb("features_highlight")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    /**
+     * Honest "not included" list. Sets expectations and avoids the
+     * surprise factor on signup. Eg. "Pas de gestion stock détaillée".
+     */
+    notIncluded: jsonb("not_included")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     isActive: boolean("is_active").notNull().default(true),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
