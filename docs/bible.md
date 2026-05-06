@@ -2,8 +2,8 @@
 
 > Document de référence consolidé du projet myBeez. Synthèse honnête de l'architecture, de l'état réel du code, des forces, des faiblesses, et de la roadmap.
 >
-> **À jour au :** 2026-05-07
-> **Branche :** `main` (commit `ce22962`)
+> **À jour au :** 2026-05-07 (post chantier verticales 15/10)
+> **Branche :** `main` (PRs #57 → #60 mergées)
 > **Domaine prod :** https://mybeez-ai.com
 > **Repo :** https://github.com/ulyssemdbh-commits/mybeez
 
@@ -43,7 +43,7 @@ myBeez est un SaaS multi-tenant **multi-vertical** : un même socle applicatif s
 
 | # | Décision | Implications techniques |
 |---|---|---|
-| 1 | **Multi-vertical via templates** | Schéma vocabulary-neutral, registre `business_templates`, `tenant_modules` enable/disable, vocabulary overrides per tenant |
+| 1 | **Multi-vertical via templates** | Schéma vocabulary-neutral, registre `business_templates` (4 verticals × 25 sub-templates avec présentation enrichie : icon, tagline, idealFor, coverGradient, featuresHighlight, notIncluded), `tenant_modules` enable/disable, vocabulary overrides per tenant |
 | 2 | **Tenancy par subdomain + custom domain** | `slug.mybeez-ai.com` par défaut (wildcard DNS+TLS), `tenant_domains` table pour custom domains payants. Path-based legacy `mybeez-ai.com/:slug` toléré en transition |
 | 3 | **Auth nominative la plus sécurisée raisonnable** | Phase 1 : email+password (Argon2id) + MFA TOTP + RBAC nominatif 5 rôles. Phase 2 : passkeys/WebAuthn, SSO. Pas de PIN partagé tenant-wide (purgé au sprint 1) — le PIN-on-tablet futur sera un per-staff device-paired token |
 
@@ -226,6 +226,15 @@ URL imbriquée par tenant `:slug`, slug retiré du body, gates auth requireRole.
 | POST | `/api/alfred/:slug/analyze` | idem | Analyse de la checklist du jour |
 | POST | `/api/alfred/:slug/clear` | idem | Vide l'historique conversation |
 
+#### `server/routes/management/template.ts` — switch de template tenant
+
+Lecture du template courant + changement (gardé séparé du module suppliers pour l'isolation des concerns).
+
+| Méthode | Path | Rôles | Notes |
+|---|---|---|---|
+| GET | `/api/management/:slug/template` | tous rôles tenant | `{current, parent}` du template courant |
+| PATCH | `/api/management/:slug/template` | owner / admin | Body `{templateId}`, refuse les top-level. Préserve vocabulary + modulesEnabled custom. |
+
 #### `server/routes/management/suppliers.ts` — module Gestion (PR #2)
 
 Pattern de référence pour les futurs modules CRUD. Toutes routes derrière `resolveTenant + requireUser + requireRole(...)`.
@@ -319,7 +328,7 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 | `TenantChecklist` | ✅ implémenté (mode nominatif uniquement depuis #55 ; écran "Connexion requise" sinon) | `/api/checklist/:slug/*` + SSE |
 | `TenantManagement` | ✅ shell + dispatch sections (suppliers seul implémenté) | `/api/management/:slug/suppliers` |
 | `TenantHistory` | 🟡 stub | aucun |
-| `TenantAdmin` | 🟡 stub | aucun |
+| `TenantAdmin` | ✅ section "Mon template" implémentée (lecture + switch + TVA suggérée) — autres blocs (vocabulary, modules toggle, branding) à venir | `/api/management/:slug/template` |
 | `Landing` | ✅ implémenté (hero, features, mockups, FAQ, pricing) | `/api/templates` |
 | `Admin` (`/123admin`) | ✅ implémenté (users, tenants, templates, dialogs) | `/api/admin/*` |
 | `AdminTenant` | 🟡 stub | aucun |
@@ -337,6 +346,8 @@ Routing **wouter** (léger, pas react-router). Pages **lazy-loadées** (`React.l
 | `ui/` (Shadcn) | badge, button, card, checkbox, dialog, input, scroll-area, select, tabs, textarea, toast, toaster, tooltip |
 | `tenant/` | `TenantAppShell` (layout unifié), `TenantSidebar` (nav groupée + mobile tabs), `sections.ts` (registre nav) |
 | `management/` | `SectionPlaceholder`, `sections/SuppliersSection` |
+| `templates/` | `IconRenderer` (whitelist Lucide tree-shakable), `TenantTemplateSection` (carte + picker modal + confirmation switch) |
+| `signup/` | `SignupProgress`, `SignupStep1Vertical`, `SignupStep2Template`, `SignupStep3Account`, `TemplateCard` (wizard 3 étapes) |
 | `alfred/` | `AlfredChat` (toggle, messages, contexte checklist, prop `tenantSlug`) |
 | Standalone | `ErrorBoundary`, `SkipLink`, `Logo` (variants), `theme-provider` |
 
@@ -571,7 +582,7 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 
 ### 7.5 Tests — Vitest
 
-13 fichiers de test, 124 tests :
+15 fichiers de test, 142 tests :
 
 - `scripts/__tests__/backup.test.ts` — pipeline backup (key, retention, sort)
 - `server/__tests__/smoke.test.ts`
@@ -579,7 +590,9 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 - `server/services/__tests__/domainService.test.ts`
 - `server/services/auth/__tests__/{passwordService,tokenService,mailService,mfaService}.test.ts`
 - `server/services/alfred/__tests__/alfredService.test.ts`
-- `server/seed/__tests__/templates.test.ts`
+- `server/seed/__tests__/templates.test.ts` (catalog richness + presentation invariants)
+- `client/src/components/templates/__tests__/IconRenderer.test.tsx`
+- `client/src/lib/__tests__/taxRulesLabels.test.ts`
 - `shared/schema/__tests__/users.test.ts`
 
 **Couverts** : modules purs (helpers backup, password, token, mail, mfa, RBAC middleware).
@@ -622,7 +635,7 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 
 | Décision | État réel | Note |
 |---|---|---|
-| Multi-vertical via templates | Catalog seedé (14), `tenants.templateId`, vocabulary par tenant ✓. Alfred lit `tenant.vocabulary` ✓. | 🟢 80% |
+| Multi-vertical via templates | Catalog seedé (4 verticals × 25 sub-templates), `tenants.templateId`, vocabulary par tenant ✓. Alfred lit `tenant.vocabulary` ✓. Wizard signup multi-step ✓. Switch template tenant ✓. Reste : `templateId` NOT NULL + drop `businessType`. | 🟢 90% |
 | Subdomain + custom domain | Subdomain résolution ✓, table `tenant_domains` ✓, custom domain provisioning automatisé ❌ | 🟡 60% |
 | Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓, MFA TOTP ✓, PIN purgé ✓. **Audit log absent**, **lockout absent** | 🟢 70% |
 
@@ -659,9 +672,9 @@ Déclenchée sur push `main` + PR vers `main`. Bloque le merge si une étape éc
 
 ### 8.4 Verdict global
 
-> **myBeez est un MVP solide (~55%) sur une architecture saine, en cours de durcissement sécu et en attente des modules métier.**
+> **myBeez est un MVP solide (~60%) sur une architecture saine, en cours de durcissement sécu et en attente des modules métier.**
 >
-> Les fondations (multi-tenant, auth nominative + MFA + RBAC, templates, deploy, CI) sont là. Le sprint 1 a soldé la moitié de la dette auth historique (matrice rôles checklist + Alfred gaté + purge PIN). Ce qui manque pour être *bankable* : modules métier (8 sur 11 à livrer via le sprint plan 7 sprints), audit log + rate-limit/lockout, billing, monitoring.
+> Les fondations (multi-tenant, auth nominative + MFA + RBAC, templates pro, deploy, CI) sont là. Le sprint 1 a soldé la moitié de la dette auth historique (matrice rôles checklist + Alfred gaté + purge PIN). Le chantier "verticales 15/10" (PRs #57-#60) a transformé le catalogue templates en argument produit (signup wizard, landing dynamique, switch tenant). Ce qui manque pour être *bankable* : modules métier (8 sur 11 à livrer via le sprint plan 7 sprints), audit log + rate-limit/lockout, billing, monitoring.
 
 ---
 

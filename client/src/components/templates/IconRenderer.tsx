@@ -39,7 +39,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-const ICONS: Record<string, LucideIcon> = {
+/**
+ * Whitelist exposée pour les tests : permet de vérifier que toute icône
+ * référencée par `SEED_TEMPLATES` est bien embarquée. Ne pas importer
+ * en runtime applicatif — utiliser `IconRenderer` à la place.
+ */
+export const ICON_WHITELIST: Record<string, LucideIcon> = {
   Activity,
   BookOpen,
   Briefcase,
@@ -75,8 +80,8 @@ interface Props {
 }
 
 export function IconRenderer({ name, className, fallback = Briefcase }: Props) {
-  const Icon = (name && ICONS[name]) || fallback;
-  if (name && !ICONS[name] && typeof window !== "undefined") {
+  const Icon = (name && ICON_WHITELIST[name]) || fallback;
+  if (name && !ICON_WHITELIST[name] && typeof window !== "undefined") {
     console.warn(`[IconRenderer] Lucide icon "${name}" not whitelisted, falling back.`);
   }
   return <Icon className={className} aria-hidden="true" />;
