@@ -48,6 +48,12 @@ async function upsertOne(parentId: number | null, t: (typeof SEED_TEMPLATES)[num
     defaultCategories: t.defaultCategories,
     vocabulary: t.vocabulary,
     taxRules: t.taxRules,
+    icon: t.icon,
+    tagline: t.tagline,
+    idealFor: t.idealFor,
+    coverGradient: t.coverGradient,
+    featuresHighlight: t.featuresHighlight,
+    notIncluded: t.notIncluded,
     sortOrder: t.sortOrder,
   };
 
