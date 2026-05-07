@@ -10,12 +10,17 @@ import { Link } from "wouter";
 import { cn } from "@/lib/utils";
 import { tenantPath } from "@/lib/tenantHost";
 import { Logo } from "@/components/Logo";
-import { NAV_GROUPS, type NavLink } from "./sections";
+import { NAV_GROUPS, filterNavGroupsByModules, type NavLink } from "./sections";
 
 interface Props {
   tenantSlug: string;
   /** Current pathname (e.g. "/management/suppliers"). */
   currentPath: string;
+  /**
+   * Modules activés pour le tenant courant (cf. `tenants.modulesEnabled`).
+   * `null` = pas encore chargés → on affiche tout pour éviter le flash.
+   */
+  enabledModules: Set<string> | null;
 }
 
 function isLinkActive(link: NavLink, currentPath: string): boolean {
@@ -30,7 +35,8 @@ function isLinkActive(link: NavLink, currentPath: string): boolean {
   return currentPath === link.path;
 }
 
-export function TenantSidebar({ tenantSlug, currentPath }: Props) {
+export function TenantSidebar({ tenantSlug, currentPath, enabledModules }: Props) {
+  const groups = filterNavGroupsByModules(NAV_GROUPS, enabledModules);
   return (
     <aside
       className="w-60 shrink-0 border-r bg-white dark:bg-zinc-900 hidden md:flex flex-col"
@@ -48,7 +54,7 @@ export function TenantSidebar({ tenantSlug, currentPath }: Props) {
       </div>
 
       <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
-        {NAV_GROUPS.map((group) => (
+        {groups.map((group) => (
           <div key={group.label} className="space-y-0.5">
             <p className="px-3 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
               {group.label}
@@ -82,9 +88,8 @@ export function TenantSidebar({ tenantSlug, currentPath }: Props) {
 }
 
 /** Horizontal scrollable tabs shown below the header on mobile. */
-export function TenantMobileTabs({ tenantSlug, currentPath }: Props) {
-  // Flatten all links for the mobile bar.
-  const allLinks = NAV_GROUPS.flatMap((g) => g.links);
+export function TenantMobileTabs({ tenantSlug, currentPath, enabledModules }: Props) {
+  const allLinks = filterNavGroupsByModules(NAV_GROUPS, enabledModules).flatMap((g) => g.links);
 
   return (
     <div className="md:hidden border-b bg-white dark:bg-zinc-900 overflow-x-auto">
