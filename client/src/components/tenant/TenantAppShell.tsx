@@ -12,11 +12,17 @@
  * everything else.
  */
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { LogOut, ShieldAlert } from "lucide-react";
 import { useUserSession } from "@/hooks/useUserSession";
 import { TenantSidebar, TenantMobileTabs } from "./TenantSidebar";
+
+interface SettingsResponse {
+  vocabulary: Record<string, string>;
+  modulesEnabled: string[];
+}
 
 interface Props {
   tenantSlug: string;
@@ -32,6 +38,26 @@ interface Props {
 export function TenantAppShell({ tenantSlug, title, subtitle, headerExtra, children }: Props) {
   const [currentPath, setLocation] = useLocation();
   const { user, tenants, isLoading, logout } = useUserSession();
+
+  // Settings du tenant (vocabulary + modulesEnabled). Charge en parallèle
+  // de la session ; tant qu'on a pas la réponse, la sidebar affiche tous
+  // les liens (pas de flash).
+  const settingsQuery = useQuery<SettingsResponse>({
+    queryKey: ["/api/management", tenantSlug, "settings"],
+    queryFn: async () => {
+      const res = await fetch(`/api/management/${tenantSlug}/settings`, { credentials: "include" });
+      if (!res.ok) throw new Error("settings load failed");
+      return res.json();
+    },
+    enabled: !!user && !isLoading,
+    staleTime: 60_000,
+    retry: false,
+  });
+
+  const enabledModules = useMemo<Set<string> | null>(() => {
+    if (!settingsQuery.data) return null;
+    return new Set(settingsQuery.data.modulesEnabled);
+  }, [settingsQuery.data]);
 
   useEffect(() => {
     if (!isLoading && !user) {
@@ -79,7 +105,7 @@ export function TenantAppShell({ tenantSlug, title, subtitle, headerExtra, child
 
   return (
     <div className="min-h-screen flex bg-zinc-50 dark:bg-zinc-950">
-      <TenantSidebar tenantSlug={tenantSlug} currentPath={currentPath} />
+      <TenantSidebar tenantSlug={tenantSlug} currentPath={currentPath} enabledModules={enabledModules} />
 
       <div className="flex-1 flex flex-col min-w-0">
         <header className="bg-white dark:bg-zinc-900 border-b sticky top-0 z-20">
@@ -111,7 +137,7 @@ export function TenantAppShell({ tenantSlug, title, subtitle, headerExtra, child
               </button>
             </div>
           </div>
-          <TenantMobileTabs tenantSlug={tenantSlug} currentPath={currentPath} />
+          <TenantMobileTabs tenantSlug={tenantSlug} currentPath={currentPath} enabledModules={enabledModules} />
         </header>
 
         <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8 max-w-7xl w-full mx-auto">
