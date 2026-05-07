@@ -157,6 +157,9 @@ async function registerRoutes() {
   const { registerManagementTemplateRoutes } = await import("./routes/management/template");
   registerManagementTemplateRoutes(app);
 
+  const { registerManagementSettingsRoutes } = await import("./routes/management/settings");
+  registerManagementSettingsRoutes(app);
+
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
