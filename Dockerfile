@@ -28,4 +28,11 @@ COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/server/seed ./server/seed
 
 EXPOSE 3000
+
+# Healthcheck pings /api/health via the embedded Node runtime (no curl/wget
+# in the alpine image). 200 = healthy, anything else = unhealthy.
+# `start-period` covers cold boot (DB pool warmup, route registration).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "require('http').get('http://127.0.0.1:3000/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
 CMD ["node", "dist/index.cjs"]

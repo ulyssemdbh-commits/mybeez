@@ -288,12 +288,13 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 **Artefacts** (tous dans le repo) :
 - `Dockerfile` — multi-stage Node 20 alpine, expose 3000.
 - `docker-compose.yml` — 2 services :
-  - `app` → build local, port `127.0.0.1:3000:3000`, `env_file: .env.production`.
+  - `app` → build local, port `127.0.0.1:3000:3000`, `env_file: .env.production`, healthcheck Node→`/api/health` (PR #13d).
   - `db` → `postgres:16-alpine`, port `127.0.0.1:5434:5432` (5433 occupé par macommande), volume `pgdata`, healthcheck `pg_isready`.
   - Network bridge `mybeez-net`. Postgres mybeez **isolé** du Postgres host (5432) et de macommande.
 - `.env.production.example` — template ; copier en `.env.production` sur le host (jamais committé, ajouté au `.gitignore`).
 - `deploy/nginx/mybeez-ai.com.conf` — vhost (apex + wildcard, redirect 80→443, Cloudflare Origin Cert à `/etc/ssl/cloudflare/mybeez-ai.com.{pem,key}`, WebSocket/SSE).
 - `deploy/deploy.sh` — `git pull` → `docker compose up -d --build` → `npm run db:push` → `nginx reload`.
+- `deploy/systemd/mybeez-backup.{service,timer}` + `README.md` — daily backup `/opt/mybeez` → R2 (PR #13d). Install : `sudo cp` les deux dans `/etc/systemd/system/` puis `systemctl enable --now mybeez-backup.timer`.
 
 **Path host** : `/opt/mybeez/` (convention macommande).
 
@@ -306,7 +307,7 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 **Re-déploiements** : `cd /opt/mybeez && bash deploy/deploy.sh` (pull + rebuild + push schema + reload nginx).
 
-**Backups** : `npm run backup` (déjà codé) à wirer en cron systemd timer une fois la prod stable. Bucket R2 `r2mybeez` préfixe `mybeezdb/`.
+**Backups** : `npm run backup` (déjà codé), wired en systemd timer (`deploy/systemd/`, PR #13d). Bucket R2 `r2mybeez` préfixe `mybeezdb/`. Schedule : daily 03:15-03:45 host-local (`OnCalendar=*-*-* 03:15:00` + `RandomizedDelaySec=1800`), `Persistent=true` pour catch-up. `BACKUP_RETENTION_DAYS=30` par défaut.
 
 **À ne PAS oublier** :
 - `APP_BASE_URL` REQUIRED en prod (sinon le serveur refuse de booter — Host-header injection guard).
@@ -320,6 +321,6 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 - Quand tu édites `.env.production` avec `nano`, **prends garde** de ne pas inclure la commande shell elle-même dans le buffer ; docker compose plante avec `unexpected character in variable name`.
 
 **Reste à faire post-déploiement initial** :
-- Cron systemd timer pour `npm run backup` (backups Postgres → R2).
+- ✅ ~~Cron systemd timer pour `npm run backup`~~ Wiré en PR #13d (`deploy/systemd/`, à installer sur le host : `cp` + `systemctl enable --now`).
 - Compléter `RESEND_API_KEY` quand l'inscription d'un user réel doit recevoir l'email verify.
 - Surveiller les logs au premier signup : `docker compose logs -f app`.

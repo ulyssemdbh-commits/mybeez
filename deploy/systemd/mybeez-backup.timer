@@ -1,0 +1,15 @@
+[Unit]
+Description=Schedule for myBeez Postgres backup to R2
+
+[Timer]
+# Daily at 03:15 host-local time. Randomised window of 30 min smooths
+# load on R2 / pg_dump if multiple apps share the same host (mybeez +
+# macommande + ulysseclaude all live on this machine).
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=1800
+# Catch up if the host was offline at the scheduled time.
+Persistent=true
+Unit=mybeez-backup.service
+
+[Install]
+WantedBy=timers.target
