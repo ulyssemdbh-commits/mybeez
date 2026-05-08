@@ -22,7 +22,8 @@
  *     account exists; otherwise nothing happens server-side.
  *   - Rate limiting will be tightened in PR #13. The global /api/
  *     limiter already applies (120 req/min).
- *   - Audit log writes will be added in PR #13.
+ *   - Audit log writes (PR #13b) en place sur signup / login / logout /
+ *     verify-email / forgot-password / reset-password.
  */
 
 import type { Express, Request, Response } from "express";
@@ -37,6 +38,7 @@ import { sendVerificationEmail, sendPasswordResetEmail } from "../services/auth/
 import { requireUser, getUserSession, clearMfaPending } from "../middleware/auth";
 import { PASSWORD_LIMITS } from "../services/auth/passwordService";
 import { mfaService, generatePendingId } from "../services/auth/mfaService";
+import { recordAudit } from "../services/auth/auditService";
 
 function getPrimaryRootDomain(): string {
   const raw = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
@@ -121,12 +123,18 @@ export function registerUserAuthRoutes(app: Express): void {
         // user can request a re-send later.
       }
 
+      void recordAudit({ req, event: "auth.signup.success", userId: user.id });
       res.status(201).json({ user: publicUserShape(user) });
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
       if (error instanceof EmailAlreadyExistsError) {
+        void recordAudit({
+          req,
+          event: "auth.signup.failure",
+          metadata: { reason: "email_already_exists" },
+        });
         return res.status(409).json({ error: "Cet email est déjà utilisé" });
       }
       console.error("[auth] signup error:", error);
@@ -146,7 +154,20 @@ export function registerUserAuthRoutes(app: Express): void {
       const user = await userService.findByEmail(email);
       const ok = user && user.isActive ? await verifyPassword(data.password, user.passwordHash) : false;
       if (!user || !ok) {
-        // Generic message — avoid leaking which case applies.
+        // Generic message — avoid leaking which case applies. L'audit
+        // capture le `reason` interne (utile pour le SIEM) sans le renvoyer
+        // au client.
+        const reason = !user
+          ? "unknown_email"
+          : !user.isActive
+            ? "user_disabled"
+            : "wrong_password";
+        void recordAudit({
+          req,
+          event: "auth.login.failure",
+          userId: user?.id ?? null,
+          metadata: { reason, email: email.slice(0, 100) },
+        });
         return res.status(401).json({ error: "Email ou mot de passe invalide" });
       }
 
@@ -165,12 +186,18 @@ export function registerUserAuthRoutes(app: Express): void {
         session.mfaPendingUserId = user.id;
         session.mfaPendingAt = Date.now();
         session.mfaPendingId = generatePendingId();
+        void recordAudit({
+          req,
+          event: "auth.login.mfa_pending",
+          userId: user.id,
+        });
         return res.json({ mfaRequired: true });
       }
 
       // No MFA → standard nominative session.
       session.userId = user.id;
       await userService.recordLogin(user.id);
+      void recordAudit({ req, event: "auth.login.success", userId: user.id });
       res.json({ user: publicUserShape(user) });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -186,9 +213,13 @@ export function registerUserAuthRoutes(app: Express): void {
     // Clear ONLY the nominative session keys; keep PIN session intact
     // so a checklist tablet doesn't get logged out by an admin's logout.
     const session = req.session as unknown as { userId?: number; currentTenantId?: number };
+    const userId = session.userId ?? null;
     delete session.userId;
     delete session.currentTenantId;
     clearMfaPending(req);
+    if (userId !== null) {
+      void recordAudit({ req, event: "auth.logout", userId });
+    }
     res.json({ success: true });
   });
 
@@ -239,8 +270,14 @@ export function registerUserAuthRoutes(app: Express): void {
       const data = verifyEmailSchema.parse(req.body);
       const userId = await userService.consumeEmailVerificationToken(data.token);
       if (!userId) {
+        void recordAudit({
+          req,
+          event: "auth.email_verify.failure",
+          metadata: { reason: "invalid_or_expired" },
+        });
         return res.status(400).json({ error: "Lien invalide ou expiré" });
       }
+      void recordAudit({ req, event: "auth.email_verify.success", userId });
       res.json({ success: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -263,9 +300,20 @@ export function registerUserAuthRoutes(app: Express): void {
           const token = await userService.issuePasswordResetToken(user.id);
           const resetUrl = `${getAppBaseUrl(req)}/auth/reset?token=${encodeURIComponent(token)}`;
           await sendPasswordResetEmail({ email: user.email, fullName: user.fullName }, resetUrl);
+          void recordAudit({
+            req,
+            event: "auth.password_reset.requested",
+            userId: user.id,
+          });
         } catch (mailErr) {
           console.error("[auth] password reset email failed:", mailErr);
         }
+      } else {
+        void recordAudit({
+          req,
+          event: "auth.password_reset.requested.unknown_email",
+          metadata: { email: data.email.slice(0, 100) },
+        });
       }
       res.status(202).json({ success: true });
     } catch (error) {
@@ -283,8 +331,14 @@ export function registerUserAuthRoutes(app: Express): void {
       const data = resetPasswordSchema.parse(req.body);
       const userId = await userService.consumePasswordResetToken(data.token, data.password);
       if (!userId) {
+        void recordAudit({
+          req,
+          event: "auth.password_reset.failure",
+          metadata: { reason: "invalid_or_expired" },
+        });
         return res.status(400).json({ error: "Lien invalide ou expiré" });
       }
+      void recordAudit({ req, event: "auth.password_reset.success", userId });
       res.json({ success: true });
     } catch (error) {
       if (error instanceof z.ZodError) {

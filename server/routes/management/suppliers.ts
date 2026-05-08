@@ -20,6 +20,7 @@ import { db } from "../../db";
 import { suppliers } from "../../../shared/schema/checklist";
 import { and, eq, asc } from "drizzle-orm";
 import { z } from "zod";
+import { recordAudit } from "../../services/auth/auditService";
 
 function parseId(param: string): number | null {
   const id = Number.parseInt(param, 10);
@@ -118,6 +119,11 @@ export function registerManagementSupplierRoutes(app: Express): void {
         .values({ ...data, tenantId: tid })
         .returning();
 
+      void recordAudit({
+        req,
+        event: "suppliers.created",
+        metadata: { supplierId: row.id, name: row.name },
+      });
       res.status(201).json({ supplier: row });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -143,6 +149,11 @@ export function registerManagementSupplierRoutes(app: Express): void {
         .returning();
 
       if (!row) return res.status(404).json({ error: "Fournisseur introuvable" });
+      void recordAudit({
+        req,
+        event: "suppliers.updated",
+        metadata: { supplierId: row.id, fields: Object.keys(data) },
+      });
       res.json({ supplier: row });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -166,6 +177,11 @@ export function registerManagementSupplierRoutes(app: Express): void {
         .returning();
 
       if (!row) return res.status(404).json({ error: "Fournisseur introuvable" });
+      void recordAudit({
+        req,
+        event: "suppliers.archived",
+        metadata: { supplierId: row.id, name: row.name },
+      });
       res.json({ success: true });
     } catch (error) {
       console.error("[Suppliers] Delete error:", error);

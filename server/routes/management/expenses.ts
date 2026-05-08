@@ -28,6 +28,7 @@ import { db } from "../../db";
 import { generalExpenses, suppliers } from "../../../shared/schema/checklist";
 import { and, eq, gte, lte, desc, sum, count } from "drizzle-orm";
 import { z } from "zod";
+import { recordAudit } from "../../services/auth/auditService";
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -246,6 +247,15 @@ export function registerManagementExpensesRoutes(app: Express): void {
           })
           .returning();
 
+        void recordAudit({
+          req,
+          event: "expenses.created",
+          metadata: {
+            expenseId: row.id,
+            amount: row.amount,
+            isRecurring: row.isRecurring,
+          },
+        });
         res.status(201).json({ expense: row });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -278,6 +288,11 @@ export function registerManagementExpensesRoutes(app: Express): void {
           .returning();
 
         if (!row) return res.status(404).json({ error: "Dépense introuvable" });
+        void recordAudit({
+          req,
+          event: "expenses.updated",
+          metadata: { expenseId: row.id, fields: Object.keys(data) },
+        });
         res.json({ expense: row });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -308,6 +323,11 @@ export function registerManagementExpensesRoutes(app: Express): void {
           .returning();
 
         if (!row) return res.status(404).json({ error: "Dépense introuvable" });
+        void recordAudit({
+          req,
+          event: "expenses.archived",
+          metadata: { expenseId: row.id },
+        });
         res.json({ success: true });
       } catch (error) {
         console.error("[Expenses] Delete error:", error);

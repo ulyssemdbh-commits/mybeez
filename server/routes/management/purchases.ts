@@ -39,6 +39,7 @@ import {
   SUPPORTED_MIME_TYPES,
   type SupportedMime,
 } from "../../services/parsing/invoiceParser";
+import { recordAudit } from "../../services/auth/auditService";
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -263,6 +264,16 @@ export function registerManagementPurchasesRoutes(app: Express): void {
           })
           .returning();
 
+        void recordAudit({
+          req,
+          event: "purchases.created",
+          metadata: {
+            purchaseId: row.id,
+            supplierId: row.supplierId,
+            totalTtc: row.totalTtc,
+            invoiceDate: row.invoiceDate,
+          },
+        });
         res.status(201).json({ purchase: row });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -302,6 +313,11 @@ export function registerManagementPurchasesRoutes(app: Express): void {
           .returning();
 
         if (!row) return res.status(404).json({ error: "Achat introuvable" });
+        void recordAudit({
+          req,
+          event: "purchases.updated",
+          metadata: { purchaseId: row.id, fields: Object.keys(data) },
+        });
         res.json({ purchase: row });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -397,6 +413,11 @@ export function registerManagementPurchasesRoutes(app: Express): void {
           .returning();
 
         if (!row) return res.status(404).json({ error: "Achat introuvable" });
+        void recordAudit({
+          req,
+          event: "purchases.archived",
+          metadata: { purchaseId: row.id },
+        });
         res.json({ success: true });
       } catch (error) {
         console.error("[Purchases] Delete error:", error);

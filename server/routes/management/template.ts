@@ -28,6 +28,7 @@ import { tenants } from "../../../shared/schema/tenants";
 import { businessTemplates } from "../../../shared/schema/templates";
 import { tenantService } from "../../services/tenantService";
 import { templateService } from "../../services/templateService";
+import { recordAudit } from "../../services/auth/auditService";
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin"] as const;
@@ -95,6 +96,11 @@ export function registerManagementTemplateRoutes(app: Express): void {
 
       if (!updated) return res.status(404).json({ error: "Tenant introuvable" });
       tenantService.clearCache();
+      void recordAudit({
+        req,
+        event: "tenant.template.changed",
+        metadata: { fromTemplateId: req.tenant?.templateId ?? null, toTemplateId: data.templateId },
+      });
 
       const newCurrent = await templateService.getById(data.templateId);
       const newParent = newCurrent?.parentId
