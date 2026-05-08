@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, jsonb, real, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb, real, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -145,22 +145,69 @@ export const generalExpenses = pgTable("general_expenses", {
   isActive: boolean("is_active").notNull().default(true),
 });
 
-export const files = pgTable("files", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull(),
-  fileName: text("file_name").notNull(),
-  originalName: text("original_name").notNull(),
-  mimeType: text("mime_type").notNull(),
-  fileSize: integer("file_size").notNull(),
-  category: text("category").notNull(),
-  fileType: text("file_type").notNull().default("file"),
-  supplier: text("supplier"),
-  description: text("description"),
-  fileDate: text("file_date"),
-  storagePath: text("storage_path").notNull(),
-  emailedTo: text("emailed_to").array(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+export const files = pgTable(
+  "files",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id").notNull(),
+    fileName: text("file_name").notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+    category: text("category").notNull(),
+    fileType: text("file_type").notNull().default("file"),
+    supplier: text("supplier"),
+    description: text("description"),
+    fileDate: text("file_date"),
+    storagePath: text("storage_path").notNull(),
+    emailedTo: text("emailed_to").array(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    tenantIdx: index("files_tenant_id_idx").on(table.tenantId),
+  }),
+);
+
+/**
+ * Soft-delete trash mirror for `files`. Rows live here until `expiresAt`
+ * (default 7 days), at which point a scheduled purge deletes them from
+ * R2 and from this table. Restore moves a row back to `files` if not yet
+ * expired. PR #71.
+ *
+ * Modelled as a separate table (rather than a `deletedAt` column on
+ * `files`) so the hot-path queries on `files` don't need a `WHERE
+ * deleted_at IS NULL` filter, and the trash list query stays cheap.
+ */
+export const filesTrash = pgTable(
+  "files_trash",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id").notNull(),
+    /** ID the row had in `files` before deletion (free for forensics, not enforced FK). */
+    originalFileId: integer("original_file_id").notNull(),
+    fileName: text("file_name").notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    fileSize: integer("file_size").notNull(),
+    category: text("category").notNull(),
+    fileType: text("file_type").notNull().default("file"),
+    supplier: text("supplier"),
+    description: text("description"),
+    fileDate: text("file_date"),
+    storagePath: text("storage_path").notNull(),
+    emailedTo: text("emailed_to").array(),
+    /** Set when the user moved the file to trash. */
+    deletedAt: timestamp("deleted_at").notNull().defaultNow(),
+    /** Hard-delete cutoff. Once `now() > expiresAt`, purge wipes the row + R2 object. */
+    expiresAt: timestamp("expires_at").notNull(),
+    /** Date the file was originally uploaded (preserved across move-to-trash). */
+    originalCreatedAt: timestamp("original_created_at"),
+  },
+  (table) => ({
+    tenantIdx: index("files_trash_tenant_id_idx").on(table.tenantId),
+    expiresIdx: index("files_trash_expires_at_idx").on(table.expiresAt),
+  }),
+);
 
 export const bankEntries = pgTable("bank_entries", {
   id: serial("id").primaryKey(),
