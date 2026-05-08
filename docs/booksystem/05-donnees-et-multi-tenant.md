@@ -57,11 +57,11 @@ Fichier : `shared/schema/checklist.ts`. Toutes ont `tenantId integer notnull`.
 | `general_expenses` | `isActive` | `category`, `description`, `amount`, `isRecurring`, `recurringFrequency`, `period`, `paymentStatus`, `dueDate`, `paidDate` | — |
 | `bankEntries` | — | `reconciled`, `type` (income/expense) | — |
 | `cashEntries` | — | `type`, `paymentMethod` | — |
-| `files` | — (via files_trash) | `category`, `fileType`, `supplier`, `description`, `mimeType`, `fileSize`, `storagePath`, `emailedTo[]`. Index `tenantId`. | — |
+| `files` | — (via files_trash) | `category`, `fileType`, `supplier`, `description`, `mimeType`, `fileSize`, `storagePath`, `emailedTo[]`, `employeeId` (PR #72, FK logique). Index `tenantId` + `employeeId`. | **employeeId non FK** |
 | `files_trash` | — | mirror de `files` + `deletedAt`, `expiresAt` (TTL 7j), `originalFileId`. Index `tenantId` + `expiresAt`. | — |
-| `employees` | `isActive` | nom, contrat, salaire | — |
-| `payroll` | — | `employeeId`, `month`, brut/net, charges, status | **employeeId non FK** |
-| `absences` | — | `employeeId`, type, dates, status | **employeeId non FK** |
+| `employees` | `isActive` | identité + `contractType` (default CDI) + `socialSecurityNumber` (matching PDF) + `salary` / `hourlyRate` / `weeklyHours` (default 35) + `endDate` + `notes`. Index `tenantId`. (PR #72 enrichissement). | — |
+| `payroll` | — | `employeeId`, `month` (YYYY-MM), brut/net/charges sal, `employerCharges` + `totalEmployerCost` + `bonuses` + `overtime`, `isPaid` + `paidDate`, `pdfFileId` (FK files.id archive bulletin), `notes`. Index tenant + employee + UNIQUE(tenant, employee, month). (PR #72). | **employeeId non FK** |
+| `absences` | — | `employeeId`, `type` (conge/maladie/retard/absence/formation), `startDate` + `endDate` (nullable retard) + `duration`, `isApproved` boolean (= "Alertes" RH dashboard), `notes`. Index tenant + employee. (PR #72). | **employeeId non FK** |
 | `analytics` | — | `date`, `metric`, `value`, `metadata jsonb` | — |
 
 > **Dette.** Les FK logiques manquantes (categoryId, itemId, supplierId,

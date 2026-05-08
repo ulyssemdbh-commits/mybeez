@@ -263,6 +263,15 @@ GET    /api/management/:slug/files/trash     READ
 POST   /api/management/:slug/files/trash/:id/restore  owner/admin/manager
 DELETE /api/management/:slug/files/trash/:id          owner/admin/manager (hard)
 
+# RH (PR #72 — backend, UI à venir)
+GET    /api/management/:slug/employees/summary  READ (stats dashboard RH)
+GET    /api/management/:slug/employees          READ (?activeOnly=true)
+POST/PATCH/DELETE /api/management/:slug/employees/:id   owner/admin/manager (DELETE = soft isActive=false)
+GET    /api/management/:slug/payroll          READ (?period=YYYY-MM&employeeId=N)
+POST/PATCH/DELETE /api/management/:slug/payroll/:id     owner/admin/manager (POST 409 si duplicate employee+month)
+GET    /api/management/:slug/absences         READ (?employeeId=N&from=&to=)
+POST/PATCH/DELETE /api/management/:slug/absences/:id    owner/admin/manager
+
 # Realtime
 GET    /api/:slug/events                     SSE (tous rôles tenant)
 

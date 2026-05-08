@@ -15,10 +15,10 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | Sprint | Module métier | Sécu / Ops | Statut |
 |---|---|---|---|
 | 1 | feat/purchases | MFA TOTP | ✅ sécu (PR #52 + bonus #53/#54/#55) ✅ module (PRs #64/#65/#67) |
-| 2 | feat/cashflow (= expenses + bank + cash) | Audit log writes | ✅ audit (PR #13b/#5c43e8b) ✅ partiel module (expenses #66 livré, bank/cash redesign reportés) |
-| 3 | feat/employees | Lockout login + rate-limit dédié `/api/auth/*` | ⏳ à venir |
-| 4 | feat/payroll-absences | Healthcheck Docker app + cron systemd backup R2 | ⏳ à venir |
-| 5 | feat/files | Logger structuré pino (stdout JSON) | 🟡 module en cours (`feat/files-and-trash`), logger ⏳ |
+| 2 | feat/cashflow (= expenses + bank + cash) | Audit log writes | ✅ audit (PR #68) ✅ bonus lockout + rate-limit auth (PR #69) ✅ partiel module (expenses #66 livré, bank/cash redesign reportés au Sprint 5) |
+| 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + 16b44d1 UI) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
+| 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | 🟡 backend HR livré (PR #72), UI à livrer (PR follow-up) |
+| 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ⏳ à venir |
 | 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ⏳ à venir |
 | 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ⏳ à venir |
 
@@ -53,47 +53,47 @@ Règles :
 - ✅ OCR import facture pré-remplit le formulaire (PR #65).
 - ✅ Module Dépenses générales (PR #66).
 - ✅ OCR auto-match fournisseur + support PDF (PR #67).
-- ✅ Audit log écritures sur événements sensibles (PR #13b — Sprint 2 sécu/ops).
+- ✅ Audit log écritures sur événements sensibles (PR #68 — Sprint 2 sécu/ops).
+- ✅ Lockout par compte + rate-limit IP `/api/auth/*` (PR #69 — Sprint 2 sécu/ops bonus).
+- ✅ Healthcheck Docker `app` + cron systemd backup R2 (PR #70 — Sprint 3 sécu/ops, anticipé du Sprint 4 plan).
+- ✅ Module Files V1 backend (PR #71) + UI section + corbeille (commit `16b44d1`) — Sprint 3 module.
+- ✅ Module RH backend : Employees + Payroll + Absences (PR #72 — Sprint 4 module backend).
 
-### 9.2.2 En cours (branche `feat/files-and-trash`)
+### 9.2.2 En cours / en attente de merge
 
-- 🟡 Module Files (V1) :
-  - ✅ Schéma `files` + `files_trash`.
-  - ✅ Routes API (upload, download, list, soft/hard-delete, restore, trash list).
-  - ✅ Services storage (R2) + naming + trashService (TTL 7j + scheduleTrashPurge).
-  - ⏳ UI section Files (table + dialog upload + table trash + actions).
-  - ⏳ Tests d'intégration multipart + trash expiry.
-  - ⏳ Test manuel R2 cred runtime.
-  - ⏳ Merge sur main.
+- 🟡 **Stack PRs** à merger dans l'ordre : #68 (audit) → #69 (lockout) → #71
+  (files) → #72 (HR backend). Le merge de #68 retarget auto les autres sur main.
+- 🟡 **PR #70** indépendante, mergeable seule.
+- 🟡 **UI module RH** : pages cibles capture utilisateur 2026-05-08 (liste
+  employés + détail employé avec sections Absences / Fiches de Paie / Documents
+  RH). Backend prêt à consommer. PR follow-up Sprint 4 V2.
 
-### 9.2.3 À suivre — Sprint 3 (prochain)
+### 9.2.3 À suivre — Sprint 4 V2 (UI RH + hooks files)
 
-**Module : feat/employees.**
-- Schema `employees` déjà présent.
-- Porter depuis `ulysseclaude/hrRoutes.ts` (voir
-  `project_mybeez_sprint_plan` mémoire pour les 4 garde-fous).
-- UI : `EmployeesSection` avec table + dialog + filtres contrat/actif.
-- Skip reparse PDF V1.
+**UI RH** (consommatrice du backend PR #72) :
+- Page liste employés : stats header (effectif, fiches, alertes, masse
+  salariale) consommant `GET /employees/summary`, table employés, filtres
+  Année/Trimestre/Mois, recherche, export CSV.
+- Détail employé : `EmployeeCard` collapsible avec `EmployeeFilesSection`
+  (filtre `files?employeeId=N`), `Absences & Congés`, `Fiches de Paie`
+  (boutons PDF + Re-parser + Ajouter Fiche).
 
-**Sécu/ops : lockout + rate-limit dédié `/api/auth/*`.**
-- Rate-limit `/api/auth/*` : 10 tentatives login / 5 min / IP.
-- Lockout : 5 échecs consécutifs sur le même email → blocage 15 min + email
-  alert.
-- Détection enumeration : alerte si > N erreurs « email inconnu » d'une même IP.
-- Audit events : `auth.login.lockout`, `auth.login.unlock`.
+**Hooks files V2** (compléments PR #71) :
+- `POST /api/management/:slug/files/send-email-bulk` : `{to, fileIds[]}` →
+  email Resend avec N attachments + append `to` dans `files.emailedTo[]`.
+- `POST /api/management/:slug/payroll/import-pdf` async + parser PDF +
+  `matchEmployee()` (déjà testable, pure helper PR #72) + auto-create employee
+  + archive in `files` + create payroll row.
+- `POST /api/management/:slug/payroll/reparse-all` : itérer
+  `files.category=rh + fileType=bulletin_paie` + re-extract.
 
-### 9.2.4 À suivre — Sprints 4-7
+### 9.2.4 À suivre — Sprints 5-7
 
 | Sprint | Module | Sécu/Ops |
 |---|---|---|
-| 4 | Payroll + Absences (suit Employees) | Healthcheck Docker `app` + cron systemd backup R2 |
-| 5 | Files V2 (déjà entamé V1) → couvert par avance ; remplacer par BankEntries/CashEntries redesign | Logger structuré pino (stdout JSON) |
-| 6 | Analytics (cumul purchases + expenses + KPIs) | HSTS nginx + CSP helmet + check HIBP |
-| 7 | History cross-module (vue unifiée) | Metrics Prometheus + Sentry frontend |
-
-> **Note** : Sprint 5 module a été livré en avance (Files). Le sprint 5 effectif
-> deviendra probablement BankEntries/CashEntries redesign. À retrancher dans le
-> plan quand Files sera mergé.
+| 5 | BankEntries / CashEntries redesign (moyens de paiement génériques) | Logger structuré pino (stdout JSON) |
+| 6 | Analytics (cumul purchases + expenses + payroll + KPIs) | HSTS nginx + CSP helmet + check HIBP |
+| 7 | History cross-module (vue unifiée audit + métier) | Metrics Prometheus + Sentry frontend |
 
 ---
 
@@ -103,7 +103,7 @@ Règles :
 |---|---|---|
 | Multi-vertical via templates | Catalog seedé (4 × 25), `tenants.templateId`, vocabulary par tenant ✓. Alfred lit `tenant.vocabulary` ✓. Wizard signup multi-step ✓. Switch template tenant ✓. Vocabulary editor + modules toggle ✓. Reste : `templateId` NOT NULL + drop `businessType`. | 🟢 95% |
 | Subdomain + custom domain | Subdomain résolution ✓, table `tenant_domains` ✓, custom domain provisioning automatisé ❌ | 🟡 60% |
-| Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓, MFA TOTP ✓, PIN purgé ✓, audit log writes ✓. **Lockout absent**, **MFA pas obligatoire Owner/Admin**, HSTS/CSP/HIBP absents | 🟢 80% |
+| Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓, MFA TOTP ✓, PIN purgé ✓, audit log writes ✓, lockout par compte + rate-limit IP ✓. **MFA pas obligatoire Owner/Admin**, HSTS/CSP/HIBP absents | 🟢 90% |
 
 ---
 
@@ -127,10 +127,13 @@ Règles :
 
 ## 9.5 Verdict global
 
-> **myBeez est un produit en consolidation rapide à ~70%, sur fondations
-> saines, avec 5 modules métier production-ready, sécu de phase 1 quasi-complète
-> (audit log livré sprint 2), et 6 modules métier restants à porter dans les
-> sprints 3-7.**
+> **myBeez est un produit en consolidation rapide à ~80%, sur fondations
+> saines, avec 6 modules métier production-ready (Checklist, Suppliers,
+> Purchases, Expenses, Files, Employees) + 2 backend-only en attente d'UI
+> (Payroll, Absences), sécu de phase 1 complète (audit log + lockout +
+> rate-limit + healthcheck + cron backup livrés sprints 2-3), et 3 modules
+> métier restants à porter dans les sprints 5-7 (Bank/Cash redesign,
+> Analytics, History).**
 
 Ce qui est solide :
 - Architecture multi-tenant cohérente.
@@ -145,9 +148,8 @@ Ce qui est solide :
 - Catalogue verticals enrichi (4 × 25, présentation visuelle).
 
 Ce qui manque pour être *fully bankable* :
-- 6 modules métier (Files V1 en cours, puis Employees/Payroll/Absences/Bank/Cash redesign/Analytics/History).
-- Lockout login + rate-limit dédié `/api/auth/*`.
-- Healthcheck Docker app + cron backups branché.
+- UI module RH (backend prêt PR #72, page consommatrice à livrer).
+- 3 modules métier restants (Bank/Cash redesign, Analytics, History cross).
 - Logger structuré + metrics + Sentry.
 - HSTS + CSP + HIBP.
 - Stripe billing (Phase 2).
@@ -172,7 +174,7 @@ Ce qui manque pour être *fully bankable* :
 ### 9.6.2 Auth / sécurité
 
 - **MFA opt-in seulement** — pas obligatoire pour Owner/Admin.
-- **Lockout login** absent.
+- ~~**Lockout login** absent.~~ ✅ Livré (PR #69).
 - **Pas de check HIBP** sur passwords.
 - **CSP désactivé** dans helmet.
 - **Pas de HSTS** côté nginx.
@@ -198,11 +200,11 @@ Ce qui manque pour être *fully bankable* :
 
 ### 9.6.5 Ops
 
-- **Pas de healthcheck Docker `app`** — pas de restart auto si freeze silencieux.
+- ~~**Pas de healthcheck Docker `app`**~~ ✅ Livré (PR #70).
 - **Pas de logger structuré** — `console.log` only.
 - **Aucune metric applicative** (latence, error rate, DB pool).
 - **Aucun alerting**.
-- **Cron backups** pas câblé en prod.
+- ~~**Cron backups** pas câblé en prod.~~ ✅ Livré units versionnées (PR #70), reste à install sur le host.
 - **Pas de pre-commit hooks** (Husky/lint-staged).
 
 ### 9.6.6 Modules

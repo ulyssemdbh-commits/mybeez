@@ -166,7 +166,10 @@ Toutes mounted at `/api/management/:slug/<module>`, derrière
 | `suppliers.ts` | `/suppliers` | tous | owner/admin/manager | Soft-delete `isActive` |
 | `purchases.ts` | `/purchases` + `/purchases/parse-invoice` + stats | tous | owner/admin/manager | OCR Vision API + auto-match supplier (PRs #65/#67) |
 | `expenses.ts` | `/expenses` + stats | tous | owner/admin/manager | Charges générales (URSSAF, EDF, …) |
-| `files.ts` | `/files` + `/trash` | tous | owner/admin/manager | Upload R2 + corbeille TTL 7j (en cours `feat/files-and-trash`) |
+| `files.ts` | `/files` + `/trash` | tous | owner/admin/manager | Upload R2 (multer 50MB) + corbeille TTL 7j + `files.employeeId` link RH (PR #71 backend + 16b44d1 UI) |
+| `employees.ts` | `/employees` + `/employees/summary` | tous | owner/admin/manager | CRUD + endpoint stats dashboard RH (effectif, masse salariale, alertes, totaux période) (PR #72) |
+| `payroll.ts` | `/payroll` (?period=YYYY-MM&employeeId=N) | tous | owner/admin/manager | UNIQUE(tenant,employee,month) → 409 si duplicate. `pdfFileId` FK files.id archive bulletin. (PR #72) |
+| `absences.ts` | `/absences` (?employeeId=N&from=&to=) | tous | owner/admin/manager | type enum [conge\|maladie\|retard\|absence\|formation], `isApproved` = signal "Alertes" RH (PR #72) |
 
 ### 3.2.10 SSE — Realtime
 
@@ -217,11 +220,14 @@ Fichier : `server/services/`.
 | `auth/tokenService` | SHA-256 hash + TTL constants | — | ✓ |
 | `auth/mfaService` | TOTP enrol/confirm/verify/disable + recovery codes (sha-256, single-use) | — | ✓ |
 | `auth/mailService` | Resend client + templates verify/reset, fail-soft | — | ✓ |
-| `auth/auditService` | `recordAudit({req, event, metadata})` fail-soft + scrub secrets (PR #13b) | — | ✓ |
+| `auth/auditService` | `recordAudit({req, event, metadata})` fail-soft + scrub secrets récursif (password/token/secret/totpCode/recoveryCode/imageBase64...) avec normalisation case/underscore/dash, profondeur max 4, troncature 500 chars (PR #68) | — | ✓ |
+| `auth/lockoutService` | Lockout par compte dérivé d'`audit_log`. `computeLockout(failures, now)` pure (testable). `checkLockout(userId)` fail-soft DB. Seuil 5 / fenêtre 15 min. Wired sur `/login`, `/mfa/challenge`, `/mfa/recovery` AVANT `verifyPassword` (anti-DoS argon2id). (PR #69) | — | ✓ |
 | `parsing/invoiceParser` | OCR Vision API (image + PDF) → champs facture + matchSupplierByName | — | ✓ |
-| `files/naming` | Sanitisation noms + storage key R2 | — | ✓ Pure |
-| `files/storage` | upload/download/delete vers R2 (S3 multipart) | — | ✓ |
-| `files/trashService` | Compute expiresAt + scheduleTrashPurge background job | — | ✓ (job tick local) |
+| `files/naming` | Sanitisation noms + storage key R2 (`files/<tenantId>/<storedName>`, séparé du préfixe `mybeezdb/` backups) | — | ✓ Pure |
+| `files/storage` | upload/download/delete vers R2 (S3 multipart). Client S3 caché lazy. delete fail-soft. | — | ✓ |
+| `files/trashService` | `computeExpiresAt`/`isExpired` purs. `purgeExpiredTrash` cascade R2 + DB. `scheduleTrashPurge` boot+1h, `unref()` pour ne pas bloquer event loop. TTL 7j. | — | ✓ (job tick local) |
+| `hr/employeeMatching` | `matchEmployee(parsed, candidates)` 3-tiers SSN > nom exact (+ permutation) > fuzzy. Normalisation NFD + strip diacritics. Pure. Sera consommé par V2 `import-PDF` bulletin. (PR #72) | — | ✓ Pure |
+| `hr/payrollSummary` | `computePayrollSummary(emps, payrolls, absences, employerChargeRate?)` agrégats dashboard RH (effectif actif, masse salariale, totaux brut/net/charges, estimation employer charges default 13%, ratio social, alertes). Flag `hasEstimatedEmployerCharges`. (PR #72) | — | ✓ Pure |
 
 ### 3.4.2 Convention `recordAudit`
 

@@ -1,11 +1,11 @@
 # Chapitre 07 — Modules métier
 
 > **Résumé.** myBeez est conçu autour de modules métier toggleables par tenant
-> via `tenants.modulesEnabled`. Sur 11 modules planifiés, 5 sont
-> production-ready au 2026-05-08 : Checklist, Suppliers, Purchases (avec OCR
-> + auto-match), Expenses, Files (en cours sur `feat/files-and-trash`).
-> 6 restent à livrer dans les sprints 3-7. Pattern de référence : `purchases.ts`
-> (route) + `PurchasesSection.tsx` (UI).
+> via `tenants.modulesEnabled`. Sur 11 modules planifiés au 2026-05-08, 6 sont
+> production-ready (Checklist, Suppliers, Purchases avec OCR, Expenses, Files
+> avec corbeille TTL, Employees) et 2 ont leur backend livré attendant l'UI
+> (Payroll, Absences). 3 restent à livrer dans les sprints 5-7. Pattern de
+> référence : `purchases.ts` (route) + `PurchasesSection.tsx` (UI).
 
 ---
 
@@ -19,12 +19,12 @@
 | 2 | Suppliers (Fournisseurs) | ✅ | ✅ | ✅ | **Production-ready** (PR #2) |
 | 3 | Purchases (Achats) + OCR | ✅ | ✅ | ✅ | **Production-ready** (PRs #64/#65/#67) |
 | 4 | Expenses (Dépenses générales) | ✅ | ✅ | ✅ | **Production-ready** (PR #66) |
-| 5 | Files (Fichiers + corbeille TTL) | ✅ | 🟡 | 🟡 | **En cours** (`feat/files-and-trash`) |
-| 6 | BankEntries | ✅ | ❌ | ❌ | Schémé, planifié Sprint 2 reliquat |
-| 7 | CashEntries | ✅ | ❌ | ❌ | Schémé, planifié Sprint 2 reliquat (redesign en moyens-paiement génériques) |
-| 8 | Employees | ✅ | ❌ | ❌ | Schémé, planifié Sprint 3 |
-| 9 | Payroll | ✅ | ❌ | ❌ | Schémé, planifié Sprint 4 |
-| 10 | Absences | ✅ | ❌ | ❌ | Schémé, planifié Sprint 4 |
+| 5 | Files (Fichiers + corbeille TTL) | ✅ | ✅ | ✅ | **Production-ready** (PR #71 backend + 16b44d1 UI) |
+| 6 | Employees | ✅ | ✅ | ⏳ | Backend livré (PR #72), UI Sprint 4 V2 |
+| 7 | Payroll | ✅ | ✅ | ⏳ | Backend livré (PR #72), UI Sprint 4 V2 |
+| 8 | Absences | ✅ | ✅ | ⏳ | Backend livré (PR #72), UI Sprint 4 V2 |
+| 9 | BankEntries | ✅ | ❌ | ❌ | Schémé, redesign Sprint 5 (moyens-paiement génériques) |
+| 10 | CashEntries | ✅ | ❌ | ❌ | Schémé, redesign Sprint 5 (idem) |
 | 11 | Analytics | ✅ | ❌ | ❌ | Schémé, planifié Sprint 6 |
 
 ### 7.1.2 Pattern de livraison
@@ -225,9 +225,9 @@ miroir de PurchasesSection. Recyclage 80% des composants `sharedUI/`.
 
 ---
 
-## 7.6 Module Files (Fichiers) — en cours
+## 7.6 Module Files (Fichiers)
 
-Branche : `feat/files-and-trash`. PR #71 attendue.
+PR #71 (backend) + commit `16b44d1` (UI section + corbeille).
 
 ### 7.6.1 Schéma
 
@@ -238,8 +238,10 @@ files(
   category, fileType (default "file"),
   supplier, description, fileDate,
   storagePath, emailedTo[],
+  employeeId,           // FK logique vers employees.id (PR #72) — Documents RH
   createdAt
 )
+// Index: tenant_id, employee_id
 
 files_trash(
   id, tenantId, originalFileId,
@@ -248,6 +250,7 @@ files_trash(
   storagePath, emailedTo[],
   deletedAt, expiresAt, originalCreatedAt
 )
+// Index: tenant_id, expires_at
 ```
 
 ### 7.6.2 Modélisation corbeille
@@ -297,47 +300,119 @@ Reportés en V2 (cf. PR audit) :
 
 ### 7.6.7 Statut au 2026-05-08
 
-- ✅ Schéma `files` + `files_trash` mergé dans `feat/files-and-trash`.
-- ✅ Routes API codées.
+- ✅ Schéma `files` + `files_trash` (PR #71).
+- ✅ Routes API (7 endpoints CRUD + trash/restore/purge).
 - ✅ Services storage + naming + trash.
-- ⏳ UI (Section + dialog upload + table trash + actions restore/purge).
-- ⏳ Tests d'intégration (multipart upload, trash expiry simulée).
-- ⏳ Test manuel R2 (cred runtime).
-- ⏳ Merge sur main.
+- ✅ UI section + corbeille (commit `16b44d1`).
+- ✅ Tests purs naming + trashService (21 tests).
+- ⏳ Hooks V2 : `send-email-bulk`, `parse-preview`, side-effects auto vers
+  expenses/purchases (PR follow-up).
 
 ---
 
-## 7.7 Modules planifiés (Sprints 3-7)
+## 7.7 Module RH — Employees + Payroll + Absences
 
-### 7.7.1 Sprint 3 — Employees
+PR #72 backend. UI à venir (Sprint 4 V2). Cible UX : capture utilisateur
+2026-05-08 (page liste employés + détail employé avec sections Absences /
+Fiches de Paie / Documents RH).
 
-`employees` schema déjà présent. À porter depuis ulysseclaude `hrRoutes.ts`,
-adapté multi-tenant + RBAC + vertical-agnostic. Skip reparse PDF V1.
+### 7.7.1 Schémas
 
-### 7.7.2 Sprint 4 — Payroll + Absences
+```ts
+employees(
+  id, tenantId, firstName, lastName, position,
+  contractType (default "CDI"),
+  startDate, endDate, phone, email,
+  socialSecurityNumber,    // matching PDF bulletin
+  salary, hourlyRate, weeklyHours (default 35),
+  notes, isActive, createdAt
+)
+// Index: tenant_id
 
-`payroll` + `absences` schemas présents. Suit Employees.
+payroll(
+  id, tenantId, employeeId,
+  month,                   // YYYY-MM
+  grossSalary, netSalary, socialCharges,
+  employerCharges, totalEmployerCost,
+  bonuses, overtime, deductions,
+  status (default "draft"), isPaid, paidDate, paidAt,
+  pdfFileId,               // FK files.id archive bulletin
+  notes, createdAt
+)
+// Index: tenant_id, employee_id, UNIQUE(tenant_id, employee_id, month)
 
-### 7.7.3 Sprint 5 — déjà couvert par Files (anticipé en parallèle de Sprint 1-2)
+absences(
+  id, tenantId, employeeId,
+  type,                    // conge | maladie | retard | absence | formation
+  startDate, endDate, duration,
+  reason, notes,
+  status (default "pending"), isApproved (default false),
+  createdAt
+)
+// Index: tenant_id, employee_id
+```
 
-### 7.7.4 Sprint 6 — Analytics
+### 7.7.2 Routes
 
-`analytics` schema présent. Porter depuis `ulysseclaude/suppliersAnalyticsRoutes.ts`,
-**dégénériser TVA + catégories restaurant**. Périodes (jour/semaine/mois/année),
-cumul par module (purchases + expenses), top suppliers, payment status mix.
+| Méthode | Path | Rôles | Notes |
+|---|---|---|---|
+| GET | `/api/management/:slug/employees/summary` | READ | Stats dashboard RH (effectif, masse salariale, alertes, totaux période) |
+| GET | `/api/management/:slug/employees` | READ | `?activeOnly=true` |
+| GET / POST / PATCH / DELETE | `/api/management/:slug/employees/:id` | RBAC matrice | DELETE = soft `isActive=false` |
+| GET | `/api/management/:slug/payroll` | READ | `?period=YYYY-MM&employeeId=N` |
+| POST / PATCH / DELETE | `/api/management/:slug/payroll/:id` | WRITE | POST 409 si duplicate `(employee, month)` |
+| GET | `/api/management/:slug/absences` | READ | `?employeeId=N&from=&to=` |
+| POST / PATCH / DELETE | `/api/management/:slug/absences/:id` | WRITE | `type` enum validé |
 
-### 7.7.5 Sprint 7 — History cross-module
+### 7.7.3 Helpers purs
 
-Vue unifiée des dernières 1000 actions (achats, dépenses, fichiers, employees,
-audit log). Filtres par module + période + user.
+**`server/services/hr/employeeMatching.ts`** — `matchEmployee(parsed, candidates)` 3-tiers :
+1. SSN exact (whitespace normalisé)
+2. Nom complet exact + permutation (les bulletins inversent parfois first/last)
+3. Fuzzy (substring, min 3 chars pour éviter "Le"/"De" qui matchent tout)
 
-### 7.7.6 BankEntries / CashEntries
+Normalisation NFD + strip diacritics : "Lefevre" matche "Lefèvre" (OCR drop
+souvent les accents). Sera consommé par le V2 `import-PDF`.
+
+**`server/services/hr/payrollSummary.ts`** — `computePayrollSummary(emps, payrolls, absences, employerChargeRate?)` :
+agrégats du dashboard RH (effectif actif, masse salariale, totaux brut/net/charges,
+estimation charges patronales avec flag `hasEstimatedEmployerCharges`, ratio
+social, moyenne brut, alertes pending absences). Estimation default 13% des
+charges patronales si la PDF n'a pas extrait, paramétrable via
+`tenant.taxRules.employerChargeRate`.
+
+### 7.7.4 Hors scope V1
+
+Reportés en V2 (PR follow-up) :
+- `POST /payroll/import-pdf` async + parser PDF + auto-create employee + archive in `files`
+- `POST /payroll/reparse-all` : itérer sur files RH + re-extract
+- `send-email-bulk` fiches (réutilise pattern files PR #71 V2)
+- Auto-création employee depuis `POST /payroll` si nom provided
+- UI page RH (consommatrice de `/summary` + listes)
+
+---
+
+## 7.8 Modules planifiés (Sprints 5-7)
+
+### 7.8.1 Sprint 5 — BankEntries / CashEntries (redesign)
 
 Schemas présents mais **redesign nécessaire** : ulysseclaude a un modèle
 restaurant-spécifique (caisse/banque flat). myBeez doit modéliser des
 **moyens de paiement génériques** (CB, espèces, virement, prélèvement, chèque)
 avec lien vers purchases/expenses. NE PAS copier le modèle ulysseclaude tel
 quel.
+
+### 7.8.2 Sprint 6 — Analytics
+
+`analytics` schema présent. Porter depuis `ulysseclaude/suppliersAnalyticsRoutes.ts`,
+**dégénériser TVA + catégories restaurant**. Périodes (jour/semaine/mois/année),
+cumul par module (purchases + expenses + payroll), top suppliers, payment
+status mix, masse salariale historique.
+
+### 7.8.3 Sprint 7 — History cross-module
+
+Vue unifiée des dernières 1000 actions (achats, dépenses, fichiers, employees,
+payroll, audit log). Filtres par module + période + user.
 
 ---
 

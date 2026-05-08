@@ -3,9 +3,9 @@
 > **Résumé.** Auth nominative email + password (Argon2id), MFA TOTP RFC 6238 +
 > recovery codes, RBAC nominatif 5 rôles, sessions Postgres-backed avec
 > rolling expiry, anti-énumération sur forgot-password, audit log avec writes
-> branchées (Sprint 2 PR #13b). PIN partagé tenant-wide purgé en PR #55.
-> Reste à brancher : lockout login, rate-limit dédié `/api/auth/*`, MFA
-> obligatoire Owner/Admin, HSTS + CSP + HIBP.
+> branchées (Sprint 2 PR #68), lockout par compte + rate-limit dédié
+> `/api/auth/*` (Sprint 2 PR #69). PIN partagé tenant-wide purgé en PR #55.
+> Reste à brancher : MFA obligatoire Owner/Admin, HSTS + CSP + HIBP.
 
 ---
 
@@ -211,10 +211,15 @@ Fichier : `server/services/auth/auditService.ts`. Schema `audit_log`
 | `auth` | `auth.login.success`, `auth.login.failure`, `auth.logout` |
 | `mfa` | `mfa.enabled`, `mfa.disabled`, `mfa.challenge.success`, `mfa.recovery.used` |
 | `password` | `password.reset.requested`, `password.reset.success` |
-| `tenant` | `tenant.created`, `tenant.role.changed`, `tenant.template.changed` |
-| `purchases` | `purchases.created`, `purchases.deleted` |
-| `expenses` | `expenses.created`, `expenses.deleted` |
-| `files` | `files.uploaded`, `files.deleted`, `files.restored`, `files.purged` |
+| `tenant` | `tenant.created`, `tenant.updated`, `tenant.template.changed`, `tenant.vocabulary.changed`, `tenant.modules.changed` |
+| `purchases` | `purchases.created`, `purchases.updated`, `purchases.archived` |
+| `expenses` | `expenses.created`, `expenses.updated`, `expenses.archived` |
+| `suppliers` | `suppliers.created`, `suppliers.updated`, `suppliers.archived` |
+| `files` | `files.uploaded`, `files.trashed`, `files.restored`, `files.purged` |
+| `employees` | `employees.created`, `employees.updated`, `employees.archived` |
+| `payroll` | `payroll.created`, `payroll.updated`, `payroll.deleted` |
+| `absences` | `absences.created`, `absences.updated`, `absences.deleted` |
+| `auth.lockout` | `auth.lockout.triggered` (avec source : login / mfa.challenge / mfa.recovery) |
 
 ### 6.6.3 Propriétés clés
 
@@ -244,22 +249,48 @@ LIMIT 100;
 
 ## 6.7 Rate limiting / lockout
 
-Fichier : `server/index.ts`.
+Fichiers : `server/index.ts` (rate-limit IP), `server/services/auth/lockoutService.ts`
+(lockout par compte). Sprint 2 sécu/ops bonus PR #69.
 
-### 6.7.1 Implémenté
+### 6.7.1 Rate-limit IP
 
 | Cible | Fenêtre | Max | Message |
 |---|---|---|---|
 | `/api/` (global) | 60s | 120 | "Trop de requêtes" |
 | `/api/alfred/` | 60s | 20 | "Alfred a besoin d'un moment" |
+| `/api/auth/user/{login,signup,forgot-password,reset-password,verify-email,mfa/challenge,mfa/recovery}` | 15 min | 10 | "Trop de requêtes, réessayez plus tard" |
 
-### 6.7.2 À implémenter (Sprint 3 sécu/ops)
+`/me` et `/mfa/status` (poll légitime client) gardent uniquement le limiter
+global à 120/min.
 
-- **Rate-limit dédié `/api/auth/*`** : ex. 10 tentatives login / 5 min / IP.
-- **Lockout login** : 5 échecs consécutifs sur le même email → blocage 15 min
-  + email alert.
-- **Détection enumeration** : alerte si > N erreurs « email inconnu » d'une
-  même IP.
+### 6.7.2 Lockout par compte
+
+Dérivé de `audit_log` (zéro nouvelle table — capitalise sur PR #68).
+
+| Aspect | Implémentation |
+|---|---|
+| Source de vérité | `audit_log` events `auth.login.failure` + `mfa.challenge.failure` + `mfa.recovery.failure` filtrés par `userId` |
+| Fenêtre | 15 minutes glissantes |
+| Seuil | 5 échecs |
+| Réponse | 429 + `Retry-After` (secondes jusqu'à ce que le plus ancien échec sorte de la fenêtre) |
+| Check | **AVANT** `verifyPassword` — sinon argon2id devient un vecteur d'amplification DoS |
+| Fail-soft | Un échec DB rend l'unlock par défaut (un incident Postgres ne devient pas une DoS pour les vrais users) |
+| Audit | `auth.lockout.triggered` avec metadata `{source, failureCount, retryAfterSeconds}` |
+| Pure helper | `computeLockout(failures, now)` exporté → testable sans DB |
+
+Wired sur `/login`, `/mfa/challenge`, `/mfa/recovery`. La distinction des deux
+couches (IP + compte) est volontaire :
+- **IP-only** ne bloque pas un attaquant distribué (botnet sur 1 compte).
+- **Account-only** ne bloque pas le password spraying (1 mdp × 1000 emails depuis
+  1 IP : aucun email connu = aucun userId = aucun lockout par compte).
+- Les deux ensemble couvrent les deux scénarios.
+
+### 6.7.3 Reste à faire
+
+- **Détection enumeration** dédiée : alerte si > N erreurs « email inconnu »
+  d'une même IP (le rate-limit IP couvre déjà partiellement).
+- **Email alert utilisateur** lors d'un lockout (Phase 2).
+- **Logout-everywhere** quand un user reset son password.
 
 ---
 
@@ -303,14 +334,14 @@ Fichier : `server/services/auth/mailService.ts`.
 | 3 | ~~🔴 critique~~ | PIN codes stockés en clair | `tenants.pinCode/adminCode` | M | ✅ #51 hash, #55 purge complète |
 | 4 | 🟡 moyen | MFA pas obligatoire pour Owner/Admin (opt-in) | politique de gate | M | partiel — implémenté #52, gating à brancher |
 | 5 | 🟠 haut | FK manquantes (orphelins possibles) | items, checks, purchases, payroll, absences | M | à planifier |
-| 6 | ~~🟠 haut~~ | Audit log non écrit | (à implémenter) | M | ✅ Sprint 2 (PR #13b) |
-| 7 | 🟠 haut | Lockout login + rate-limit dédié `/api/auth/*` | rate-limiter | S | Sprint 3 sécu/ops |
+| 6 | ~~🟠 haut~~ | Audit log non écrit | (à implémenter) | M | ✅ Sprint 2 (PR #68) |
+| 7 | ~~🟠 haut~~ | Lockout login + rate-limit dédié `/api/auth/*` | rate-limiter | S | ✅ Sprint 2 bonus (PR #69) |
 | 8 | 🟡 moyen | CSP désactivé dans helmet | `server/index.ts` | M | Sprint 6 sécu/ops |
 | 9 | 🟡 moyen | Pas de HSTS côté nginx | `deploy/nginx/mybeez-ai.com.conf` | XS | Sprint 6 sécu/ops |
 | 10 | 🟡 moyen | Cache `tenantService` process-local | `services/tenantService.ts` | M | scale-out future |
 | 11 | 🟡 moyen | Pas de check HIBP | `auth/passwordService.ts` | S | Sprint 6 sécu/ops |
 | 12 | 🟡 moyen | `db:push` sans migrations versionnées | `drizzle.config.ts` | M | scale-out future |
-| 13 | 🟡 moyen | Pas de healthcheck Docker `app` | `Dockerfile`, `docker-compose.yml` | XS | Sprint 4 sécu/ops |
+| 13 | ~~🟡 moyen~~ | Pas de healthcheck Docker `app` | `Dockerfile`, `docker-compose.yml` | XS | ✅ Sprint 3 sécu/ops (PR #70) |
 | 14 | 🟡 moyen | Pas de logs structurés / persistence | `server/index.ts` | M | Sprint 5 sécu/ops |
 | 15 | ~~🟢 faible~~ | Routes Alfred slug en body | `server/routes/alfred.ts` | S | ✅ #54 |
 | 16 | ~~🟢 faible~~ | Code mort `services/auth.ts` | — | XS | ✅ #55 |

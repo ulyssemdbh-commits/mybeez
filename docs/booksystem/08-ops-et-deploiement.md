@@ -1,10 +1,11 @@
 # Chapitre 08 — Ops et déploiement
 
 > **Résumé.** Hetzner AX422 mutualisé, nginx host-installed, Docker Compose
-> (app Node 20-alpine + Postgres 16-alpine), Cloudflare proxy + Origin Cert,
-> CI GitHub Actions (typecheck + lint + test + build), backups Postgres → R2
-> en streaming avec retention. Reste à brancher : healthcheck Docker app,
-> cron systemd backup, logger structuré pino, metrics Prometheus, Sentry.
+> (app Node 20-alpine + Postgres 16-alpine) avec healthcheck app sur `/api/health`
+> (PR #70), Cloudflare proxy + Origin Cert, CI GitHub Actions (typecheck +
+> lint + test + build), backups Postgres → R2 en streaming avec retention,
+> cron systemd `mybeez-backup.timer` daily 03:15 (PR #70). Reste à brancher :
+> logger structuré pino, metrics Prometheus, Sentry.
 
 ---
 
@@ -108,6 +109,14 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      # Pings /api/health via le runtime Node embarqué (pas de curl/wget
+      # dans node:20-alpine). PR #70.
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/api/health', r => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
   db:
     image: postgres:16-alpine
@@ -141,7 +150,7 @@ networks:
 | Service `db` healthcheck | ✅ |
 | Volume `pgdata` persistant | ✅ |
 | Network bridge isolé | ✅ |
-| Service `app` HEALTHCHECK | ❌ **manquant** (Sprint 4 sécu/ops) |
+| Service `app` HEALTHCHECK | ✅ PR #70 (ping `/api/health` via Node embarqué) |
 | User non-root explicite | ❌ (utilise `node` par défaut, à expliciter) |
 
 ---
@@ -236,23 +245,50 @@ RESTORE_CONFIRM=I_KNOW_WHAT_IM_DOING npm run restore -- latest
 
 ### 8.4.3 Cron systemd
 
-⏳ **Pas encore câblé en prod** (Sprint 4 sécu/ops). Plan :
+✅ **Livré en PR #70** (`deploy/systemd/`). Units versionnées dans le repo.
+
+Schedule : **daily 03:15 host-local**, fenêtre randomisée 30 min
+(`RandomizedDelaySec=1800`) pour smoother la charge si d'autres apps du host
+backupent au même moment. `Persistent=true` pour catch-up si le host était
+offline au scheduled.
 
 ```ini
-# /etc/systemd/system/mybeez-backup.service
+# deploy/systemd/mybeez-backup.service
+[Unit]
+Description=myBeez Postgres backup to R2
+Requires=docker.service
+After=docker.service network-online.target
+
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/mybeez
 ExecStart=/usr/bin/docker compose exec -T app npm run backup
+Restart=no                  # next timer firing retries; pas de boucle d'échec
+TimeoutStartSec=900
 
-# /etc/systemd/system/mybeez-backup.timer
+# deploy/systemd/mybeez-backup.timer
 [Timer]
-OnCalendar=*-*-* 03:00:00
+OnCalendar=*-*-* 03:15:00
+RandomizedDelaySec=1800
 Persistent=true
+Unit=mybeez-backup.service
 
 [Install]
 WantedBy=timers.target
 ```
+
+**Install one-time** sur le host (cf. `deploy/systemd/README.md`) :
+
+```bash
+sudo cp /opt/mybeez/deploy/systemd/mybeez-backup.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now mybeez-backup.timer
+systemctl list-timers mybeez-backup.timer    # vérifier next firing
+```
+
+Failure mode : `Restart=no` est intentionnel — le prochain firing retry. Une
+panne persistante se signale par (a) `journalctl -u mybeez-backup.service`
+non-zero exit, (b) la listing R2 `mybeezdb/` qui n'avance pas au-delà de 24h.
 
 ### 8.4.4 R2 bucket
 
@@ -260,7 +296,7 @@ WantedBy=timers.target
 |---|---|
 | Bucket | `r2mybeez` |
 | Préfixe backups DB | `mybeezdb/` |
-| Préfixe fichiers utilisateurs | `tenants/{tenantId}/files/` (Files module) |
+| Préfixe fichiers utilisateurs | `files/{tenantId}/` (Files module PR #71) |
 | Account | `c6d762e456464de419619694dfa83b8d` |
 | Token | `mybeez-prod` IP-restricted au host |
 
