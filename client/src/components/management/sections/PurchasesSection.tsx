@@ -135,6 +135,7 @@ interface Props {
 }
 
 interface PrefilledFields {
+  supplierId?: number;
   supplierName?: string;
   invoiceNumber?: string;
   invoiceDate?: string;
@@ -147,8 +148,14 @@ interface PrefilledFields {
   category?: string;
 }
 
-const SUPPORTED_OCR_MIME = ["image/jpeg", "image/png", "image/webp"];
-const MAX_OCR_BYTES = 5 * 1024 * 1024;
+const SUPPORTED_OCR_MIME = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+];
+const MAX_OCR_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_OCR_PDF_BYTES = 10 * 1024 * 1024;
 
 export function PurchasesSection({ tenantSlug }: Props) {
   const { toast } = useToast();
@@ -242,15 +249,17 @@ export function PurchasesSection({ tenantSlug }: Props) {
     if (!SUPPORTED_OCR_MIME.includes(file.type)) {
       toast({
         title: "Format non supporté",
-        description: "Utilisez une image JPG, PNG ou WebP. Le PDF n'est pas supporté en V1.",
+        description: "Utilisez une image JPG, PNG, WebP ou un fichier PDF.",
         variant: "destructive",
       });
       return;
     }
-    if (file.size > MAX_OCR_BYTES) {
+    const isPdf = file.type === "application/pdf";
+    const maxBytes = isPdf ? MAX_OCR_PDF_BYTES : MAX_OCR_IMAGE_BYTES;
+    if (file.size > maxBytes) {
       toast({
-        title: "Image trop volumineuse",
-        description: `Maximum ${MAX_OCR_BYTES / 1024 / 1024} MB.`,
+        title: isPdf ? "PDF trop volumineux" : "Image trop volumineuse",
+        description: `Maximum ${maxBytes / 1024 / 1024} MB.`,
         variant: "destructive",
       });
       return;
@@ -287,7 +296,10 @@ export function PurchasesSection({ tenantSlug }: Props) {
       }
 
       const fields = data.fields as Record<string, string | number | null>;
+      const suggestedSupplierId =
+        typeof data.suggestedSupplierId === "number" ? data.suggestedSupplierId : undefined;
       const prefilled: PrefilledFields = {
+        supplierId: suggestedSupplierId,
         supplierName: typeof fields.supplierName === "string" ? fields.supplierName : undefined,
         invoiceNumber: typeof fields.invoiceNumber === "string" ? fields.invoiceNumber : undefined,
         invoiceDate: typeof fields.invoiceDate === "string" ? fields.invoiceDate : undefined,
@@ -301,10 +313,19 @@ export function PurchasesSection({ tenantSlug }: Props) {
       };
 
       setImportedFields(prefilled);
-      const filledCount = Object.values(prefilled).filter(Boolean).length;
+      // supplierId pré-rempli ne compte pas comme un champ "rempli" pour l'utilisateur
+      // (c'est une suggestion implicite, on l'expose dans le toast séparément).
+      const filledCount = Object.entries(prefilled).filter(
+        ([k, v]) => k !== "supplierId" && v !== undefined && v !== "",
+      ).length;
+      const matchedSupplier = suggestedSupplierId
+        ? supplierOptions.find((s) => s.id === suggestedSupplierId)
+        : null;
       toast({
         title: "Facture analysée",
-        description: `${filledCount} champ${filledCount > 1 ? "s" : ""} pré-rempli${filledCount > 1 ? "s" : ""} via ${data.provider}. Vérifiez avant d'enregistrer.`,
+        description: matchedSupplier
+          ? `${filledCount} champ${filledCount > 1 ? "s" : ""} pré-rempli${filledCount > 1 ? "s" : ""}, fournisseur "${matchedSupplier.name}" reconnu. Vérifiez avant d'enregistrer.`
+          : `${filledCount} champ${filledCount > 1 ? "s" : ""} pré-rempli${filledCount > 1 ? "s" : ""} via ${data.provider}. Vérifiez avant d'enregistrer.`,
       });
     } catch (err) {
       toast({
@@ -364,7 +385,7 @@ export function PurchasesSection({ tenantSlug }: Props) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/jpeg,image/png,image/webp"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
@@ -378,7 +399,7 @@ export function PurchasesSection({ tenantSlug }: Props) {
             disabled={importing}
             className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white dark:bg-zinc-900 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
             data-testid="purchases-import"
-            title="Photographier ou téléverser une facture, l'IA pré-remplit le formulaire"
+            title="Photographier ou téléverser une facture (image ou PDF), l'IA pré-remplit le formulaire"
           >
             {importing ? (
               <>
@@ -666,7 +687,11 @@ interface DialogProps {
 function PurchaseDialog({ tenantSlug, purchase, suppliers, prefilled, onClose, onSaved }: DialogProps) {
   const isEdit = purchase !== null;
   const [form, setForm] = useState(() => ({
-    supplierId: purchase?.supplierId ? String(purchase.supplierId) : "",
+    supplierId: purchase?.supplierId
+      ? String(purchase.supplierId)
+      : prefilled?.supplierId
+        ? String(prefilled.supplierId)
+        : "",
     supplierName: purchase?.supplierName ?? prefilled?.supplierName ?? "",
     invoiceNumber: purchase?.invoiceNumber ?? prefilled?.invoiceNumber ?? "",
     invoiceDate: purchase?.invoiceDate ?? prefilled?.invoiceDate ?? new Date().toISOString().slice(0, 10),
