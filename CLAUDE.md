@@ -2,6 +2,11 @@
 
 > Document d'onboarding pour Claude / tout nouveau contributeur.
 > À mettre à jour à la fin de chaque session significative.
+>
+> **Pour le détail complet (architecture, modules, sécu, ops, roadmap), voir
+> le booksystem :** [`docs/booksystem/README.md`](./docs/booksystem/README.md).
+> Ce fichier reste l'onboarding rapide ; le booksystem est la source de vérité
+> exhaustive et est mis à jour à chaque sprint.
 
 ---
 
