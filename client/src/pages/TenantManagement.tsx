@@ -14,6 +14,7 @@ import { useLocation } from "wouter";
 import { TenantAppShell } from "@/components/tenant/TenantAppShell";
 import { SectionPlaceholder } from "@/components/management/SectionPlaceholder";
 import { SuppliersSection } from "@/components/management/sections/SuppliersSection";
+import { PurchasesSection } from "@/components/management/sections/PurchasesSection";
 import {
   DEFAULT_MANAGEMENT_SECTION,
   isManagementSection,
@@ -50,9 +51,11 @@ function SectionContent({ section, tenantSlug }: { section: string; tenantSlug: 
   if (section === "suppliers") {
     return <SuppliersSection tenantSlug={tenantSlug} />;
   }
+  if (section === "purchases") {
+    return <PurchasesSection tenantSlug={tenantSlug} />;
+  }
 
   const descriptions: Record<string, string> = {
-    purchases: "Suivi des factures fournisseurs : montants, échéances, statut de paiement.",
     expenses: "Dépenses générales hors fournisseurs : abonnements, frais récurrents.",
     bank: "Mouvements bancaires : encaissements, prélèvements, rapprochement.",
     cash: "Caisse : entrées et sorties d'espèces, fonds de caisse.",

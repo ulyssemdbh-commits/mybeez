@@ -95,10 +95,19 @@ export const purchases = pgTable("purchases", {
   tvaRate: real("tva_rate").default(20),
   tvaAmount: real("tva_amount"),
   paymentMethod: text("payment_method"),
+  /**
+   * Status enum applicatif : "pending" | "paid" | "late" | "cancelled".
+   * Pas de DB enum pour rester additif (extension future sans migration).
+   */
   paymentStatus: text("payment_status").notNull().default("pending"),
+  /** Date effective de paiement (renseignée à la transition vers "paid"). */
+  paidDate: text("paid_date"),
   dueDate: text("due_date"),
   category: text("category"),
   description: text("description"),
+  notes: text("notes"),
+  /** Soft-delete : DELETE flippe à false, la row reste pour traçabilité. */
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

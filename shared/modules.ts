@@ -55,9 +55,9 @@ export const MODULE_CATALOG: ModuleSpec[] = [
   {
     slug: "purchases",
     label: "Achats",
-    description: "Saisie et suivi des factures fournisseurs (à venir).",
+    description: "Saisie et suivi des factures fournisseurs (HT/TVA/TTC, statut paiement, échéances).",
     category: "gestion",
-    implemented: false,
+    implemented: true,
   },
   {
     slug: "expenses",
