@@ -39,6 +39,7 @@ import { requireUser, getUserSession, clearMfaPending } from "../middleware/auth
 import { PASSWORD_LIMITS } from "../services/auth/passwordService";
 import { mfaService, generatePendingId } from "../services/auth/mfaService";
 import { recordAudit } from "../services/auth/auditService";
+import { checkLockout } from "../services/auth/lockoutService";
 
 function getPrimaryRootDomain(): string {
   const raw = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
@@ -152,6 +153,31 @@ export function registerUserAuthRoutes(app: Express): void {
       const data = loginSchema.parse(req.body);
       const email = normalizeEmail(data.email);
       const user = await userService.findByEmail(email);
+
+      // Account lockout check happens BEFORE the (expensive) password
+      // verification so a locked account cannot be used to amplify
+      // argon2id work into a DoS vector.
+      if (user) {
+        const lock = await checkLockout(user.id);
+        if (lock.locked) {
+          void recordAudit({
+            req,
+            event: "auth.lockout.triggered",
+            userId: user.id,
+            metadata: {
+              source: "login",
+              failureCount: lock.failureCount,
+              retryAfterSeconds: lock.retryAfterSeconds,
+            },
+          });
+          res.setHeader("Retry-After", String(lock.retryAfterSeconds));
+          return res.status(429).json({
+            error: "Trop de tentatives, réessayez plus tard",
+            retryAfterSeconds: lock.retryAfterSeconds,
+          });
+        }
+      }
+
       const ok = user && user.isActive ? await verifyPassword(data.password, user.passwordHash) : false;
       if (!user || !ok) {
         // Generic message — avoid leaking which case applies. L'audit

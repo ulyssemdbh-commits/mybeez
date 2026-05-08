@@ -123,6 +123,32 @@ app.use("/api/", apiLimiter);
 const alfredLimiter = rateLimit({ windowMs: 60_000, max: 20, message: { error: "Alfred a besoin d'un moment" } });
 app.use("/api/alfred/", alfredLimiter);
 
+/**
+ * Stricter limiter on pre-auth routes (PR #13c) — defends against
+ * password-spraying from a single IP. Account-level lockout (per-userId)
+ * lives in services/auth/lockoutService.ts and complements this.
+ *
+ * Mounted explicitly on the pre-auth surface; routes that legitimate
+ * clients poll (e.g. /me, /mfa/status) keep the global apiLimiter only.
+ */
+const authLimiter = rateLimit({
+  windowMs: 15 * 60_000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Trop de requêtes, réessayez plus tard" },
+});
+const AUTH_RATE_LIMITED_PATHS = [
+  "/api/auth/user/login",
+  "/api/auth/user/signup",
+  "/api/auth/user/forgot-password",
+  "/api/auth/user/reset-password",
+  "/api/auth/user/verify-email",
+  "/api/auth/user/mfa/challenge",
+  "/api/auth/user/mfa/recovery",
+];
+for (const p of AUTH_RATE_LIMITED_PATHS) app.use(p, authLimiter);
+
 async function registerRoutes() {
   const { registerSSERoutes, getSseStats } = await import("./services/realtimeSync");
   registerSSERoutes(app);
