@@ -163,6 +163,9 @@ async function registerRoutes() {
   const { registerManagementPurchasesRoutes } = await import("./routes/management/purchases");
   registerManagementPurchasesRoutes(app);
 
+  const { registerManagementExpensesRoutes } = await import("./routes/management/expenses");
+  registerManagementExpensesRoutes(app);
+
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",

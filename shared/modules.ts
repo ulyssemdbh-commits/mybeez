@@ -62,9 +62,9 @@ export const MODULE_CATALOG: ModuleSpec[] = [
   {
     slug: "expenses",
     label: "Dépenses",
-    description: "Dépenses générales hors fournisseurs : abonnements, frais récurrents (à venir).",
+    description: "Dépenses générales : loyer, énergie, assurances, charges sociales, abonnements (récurrentes ou ponctuelles).",
     category: "gestion",
-    implemented: false,
+    implemented: true,
   },
   {
     slug: "bank",
