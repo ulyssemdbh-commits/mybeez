@@ -35,6 +35,7 @@ import {
   clearMfaPending,
 } from "../middleware/auth";
 import { recordAudit } from "../services/auth/auditService";
+import { checkLockout } from "../services/auth/lockoutService";
 
 const codeSchema = z.string().min(6).max(20);
 const passwordSchema = z.string().min(PASSWORD_LIMITS.min).max(PASSWORD_LIMITS.max);
@@ -161,6 +162,26 @@ export function registerUserAuthMfaRoutes(app: Express): void {
     try {
       const data = challengeSchema.parse(req.body);
       const pending = req.mfaPending!;
+
+      const lock = await checkLockout(pending.userId);
+      if (lock.locked) {
+        void recordAudit({
+          req,
+          event: "auth.lockout.triggered",
+          userId: pending.userId,
+          metadata: {
+            source: "mfa.challenge",
+            failureCount: lock.failureCount,
+            retryAfterSeconds: lock.retryAfterSeconds,
+          },
+        });
+        res.setHeader("Retry-After", String(lock.retryAfterSeconds));
+        return res.status(429).json({
+          error: "Trop de tentatives, réessayez plus tard",
+          retryAfterSeconds: lock.retryAfterSeconds,
+        });
+      }
+
       const ok = await mfaService.verifyChallenge(pending.userId, data.code);
       if (!ok) {
         void recordAudit({
@@ -206,6 +227,26 @@ export function registerUserAuthMfaRoutes(app: Express): void {
     try {
       const data = recoverySchema.parse(req.body);
       const pending = req.mfaPending!;
+
+      const lock = await checkLockout(pending.userId);
+      if (lock.locked) {
+        void recordAudit({
+          req,
+          event: "auth.lockout.triggered",
+          userId: pending.userId,
+          metadata: {
+            source: "mfa.recovery",
+            failureCount: lock.failureCount,
+            retryAfterSeconds: lock.retryAfterSeconds,
+          },
+        });
+        res.setHeader("Retry-After", String(lock.retryAfterSeconds));
+        return res.status(429).json({
+          error: "Trop de tentatives, réessayez plus tard",
+          retryAfterSeconds: lock.retryAfterSeconds,
+        });
+      }
+
       const remaining = await mfaService.consumeRecoveryCode(pending.userId, data.code);
       if (remaining === null) {
         void recordAudit({
