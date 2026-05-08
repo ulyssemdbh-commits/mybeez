@@ -1,0 +1,53 @@
+feat(purchases): OCR auto-match fournisseur + support PDF (follow-up #65)
+
+Mini-PR follow-up de #65 (OCR import facture). Deux ameliorations
+ciblees, en partant des limitations explicitement laissees ouvertes
+dans le commentaire de tete d'invoiceParser.ts.
+
+1) Auto-match fournisseur
+- normalizeSupplierName() : lowercase, strip accents, drop ponctuation
+  et formes juridiques (sarl/sas/eurl/sa/sci/gmbh/ltd/llc/inc/co/corp).
+  Permet a "Metro France SAS" et "METRO FRANCE" de matcher.
+- matchSupplierByName() : algo simple a 3 etages
+    1. exact normalise -> 1.0
+    2. substring (>= 4 chars) -> 0.9
+    3. token-overlap >= 60% (refuse si shorter < 2 tokens pour eviter
+       les faux positifs sur fournisseurs a 1 mot court)
+  Match aussi contre shortName (ex. "Etablissements Dupont & Fils"
+  avec shortName "Dupont").
+- Route /parse appelle le matcher apres l'OCR si supplierName != null,
+  retourne suggestedSupplierId dans la reponse. Filtre isActive=true
+  cote DB pour ne pas matcher d'archives.
+- Front : PrefilledFields gagne supplierId, dialog pre-selectionne le
+  fournisseur. Toast adapte : "fournisseur 'X' reconnu" si match.
+
+2) Support PDF
+- Nouveau mime application/pdf accepte cote /parse.
+- Limite separee : MAX_PDF_BYTES = 10 MB (les PDF de facture sont
+  souvent plus lourds que les photos compressees cote client).
+- Path PDF -> Gemini natif (REST direct, fetch avec inline_data
+  application/pdf). Le proxy OpenAI-compat de Gemini ne supporte pas
+  les PDF inline ; OpenAI/Grok demandent une conversion image
+  prealable qu'on ne fait pas.
+- Si pas de GEMINI_API_KEY -> 503 explicite ("PDF necessite Gemini").
+- Front : input accept etend a application/pdf, validation taille
+  selon le type, label "Photographier ou televerser une facture
+  (image ou PDF)".
+
+Tests
+- 16 nouveaux tests sur le parser pur (185 -> 201) :
+  - normalizeSupplierName : accents, formes juridiques, ponctuation,
+    edge cases vides.
+  - matchSupplierByName : exact / shortName / substring / tokens /
+    no-match / liste vide / score le plus haut / refus 1-token court.
+  - validateBase64Image : limite PDF separee (sous 10 MB OK, 7 MB
+    refuse en image, 20 MB refuse en PDF), application/x-pdf rejete.
+  - SUPPORTED_IMAGE_MIME_TYPES : type guard.
+- Quality gates verts : tsc clean, 201/201 tests, lint pas de regression.
+
+Couts
+- Inchanges (~0.0002 USD/facture image via gpt-4o-mini Vision).
+- PDF : Gemini 2.5-flash, pricing equivalent (~0.0001-0.0003 USD selon
+  nombre de pages).
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
