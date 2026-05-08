@@ -1,0 +1,18 @@
+[Unit]
+Description=myBeez Postgres backup to R2
+Documentation=https://github.com/ulyssemdbh-commits/mybeez/tree/main/deploy/systemd
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/mybeez
+ExecStart=/usr/bin/docker compose exec -T app npm run backup
+StandardOutput=journal
+StandardError=journal
+# Don't retry on failure here — the next timer firing will try again.
+# A persistent backup outage will surface in the journal and the
+# `r2mybeez/mybeezdb/` listing not advancing past 24h.
+Restart=no
+TimeoutStartSec=900
