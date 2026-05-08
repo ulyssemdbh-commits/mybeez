@@ -192,6 +192,12 @@ async function registerRoutes() {
   const { registerManagementExpensesRoutes } = await import("./routes/management/expenses");
   registerManagementExpensesRoutes(app);
 
+  const { registerManagementFilesRoutes } = await import("./routes/management/files");
+  registerManagementFilesRoutes(app);
+
+  const { scheduleTrashPurge } = await import("./services/files/trashService");
+  scheduleTrashPurge();
+
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",
