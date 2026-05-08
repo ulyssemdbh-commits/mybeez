@@ -18,7 +18,7 @@
  *   - palette amber (myBeez)
  */
 
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Pencil,
@@ -33,6 +33,9 @@ import {
   CircleDashed,
   XCircle,
   Receipt,
+  FileUp,
+  Sparkles,
+  Loader2,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -131,6 +134,22 @@ interface Props {
   tenantSlug: string;
 }
 
+interface PrefilledFields {
+  supplierName?: string;
+  invoiceNumber?: string;
+  invoiceDate?: string;
+  totalHt?: string;
+  totalTtc?: string;
+  tvaRate?: string;
+  tvaAmount?: string;
+  paymentMethod?: string;
+  dueDate?: string;
+  category?: string;
+}
+
+const SUPPORTED_OCR_MIME = ["image/jpeg", "image/png", "image/webp"];
+const MAX_OCR_BYTES = 5 * 1024 * 1024;
+
 export function PurchasesSection({ tenantSlug }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -141,6 +160,9 @@ export function PurchasesSection({ tenantSlug }: Props) {
   const [editing, setEditing] = useState<Purchase | null>(null);
   const [creating, setCreating] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<Purchase | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importedFields, setImportedFields] = useState<PrefilledFields | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const baseKey = ["/api/management", tenantSlug, "purchases"] as const;
 
@@ -216,6 +238,87 @@ export function PurchasesSection({ tenantSlug }: Props) {
     onError: (e: Error) => toast({ title: "Erreur", description: e.message, variant: "destructive" }),
   });
 
+  async function handleFilePicked(file: File) {
+    if (!SUPPORTED_OCR_MIME.includes(file.type)) {
+      toast({
+        title: "Format non supporté",
+        description: "Utilisez une image JPG, PNG ou WebP. Le PDF n'est pas supporté en V1.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.size > MAX_OCR_BYTES) {
+      toast({
+        title: "Image trop volumineuse",
+        description: `Maximum ${MAX_OCR_BYTES / 1024 / 1024} MB.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setImporting(true);
+    try {
+      // Read file as base64 (data URL → strip prefix).
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = String(reader.result ?? "");
+          const idx = result.indexOf(",");
+          resolve(idx >= 0 ? result.slice(idx + 1) : result);
+        };
+        reader.onerror = () => reject(new Error("Lecture du fichier impossible"));
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch(`/api/management/${tenantSlug}/purchases/parse`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64, mimeType: file.type }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const msg =
+          res.status === 503
+            ? "Le service OCR n'est pas configuré sur ce serveur."
+            : data.error ?? `HTTP ${res.status}`;
+        toast({ title: "Échec de l'import", description: msg, variant: "destructive" });
+        return;
+      }
+
+      const fields = data.fields as Record<string, string | number | null>;
+      const prefilled: PrefilledFields = {
+        supplierName: typeof fields.supplierName === "string" ? fields.supplierName : undefined,
+        invoiceNumber: typeof fields.invoiceNumber === "string" ? fields.invoiceNumber : undefined,
+        invoiceDate: typeof fields.invoiceDate === "string" ? fields.invoiceDate : undefined,
+        totalHt: typeof fields.totalHt === "number" ? String(fields.totalHt) : undefined,
+        totalTtc: typeof fields.totalTtc === "number" ? String(fields.totalTtc) : undefined,
+        tvaRate: typeof fields.tvaRate === "number" ? String(fields.tvaRate) : undefined,
+        tvaAmount: typeof fields.tvaAmount === "number" ? String(fields.tvaAmount) : undefined,
+        paymentMethod: typeof fields.paymentMethod === "string" ? fields.paymentMethod : undefined,
+        dueDate: typeof fields.dueDate === "string" ? fields.dueDate : undefined,
+        category: typeof fields.category === "string" ? fields.category : undefined,
+      };
+
+      setImportedFields(prefilled);
+      const filledCount = Object.values(prefilled).filter(Boolean).length;
+      toast({
+        title: "Facture analysée",
+        description: `${filledCount} champ${filledCount > 1 ? "s" : ""} pré-rempli${filledCount > 1 ? "s" : ""} via ${data.provider}. Vérifiez avant d'enregistrer.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Erreur d'analyse",
+        description: err instanceof Error ? err.message : "Erreur inconnue",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+      // Reset l'input pour permettre re-upload du même fichier.
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
   const markPaidMutation = useMutation({
     mutationFn: async (p: Purchase) => {
       const today = new Date().toISOString().slice(0, 10);
@@ -257,15 +360,49 @@ export function PurchasesSection({ tenantSlug }: Props) {
             Suivi des factures fournisseurs : montants HT/TVA/TTC, échéances, statut de paiement.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setCreating(true)}
-          className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-          data-testid="purchases-add"
-        >
-          <Plus className="w-4 h-4" />
-          Nouvel achat
-        </button>
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void handleFilePicked(f);
+            }}
+            data-testid="purchases-import-file"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importing}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white dark:bg-zinc-900 hover:bg-amber-50 dark:hover:bg-amber-500/10 text-amber-700 dark:text-amber-400 px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60 disabled:cursor-wait"
+            data-testid="purchases-import"
+            title="Photographier ou téléverser une facture, l'IA pré-remplit le formulaire"
+          >
+            {importing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Analyse en cours…
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4" />
+                <FileUp className="w-4 h-4" />
+                Importer une facture
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-3 py-2 text-sm font-medium transition-colors"
+            data-testid="purchases-add"
+          >
+            <Plus className="w-4 h-4" />
+            Nouvel achat
+          </button>
+        </div>
       </header>
 
       {/* KPI strip */}
@@ -476,20 +613,23 @@ export function PurchasesSection({ tenantSlug }: Props) {
         )}
       </div>
 
-      {(creating || editing) && (
+      {(creating || editing || importedFields) && (
         <PurchaseDialog
           tenantSlug={tenantSlug}
           purchase={editing}
           suppliers={supplierOptions}
+          prefilled={importedFields ?? undefined}
           onClose={() => {
             setCreating(false);
             setEditing(null);
+            setImportedFields(null);
           }}
           onSaved={() => {
             queryClient.invalidateQueries({ queryKey: baseKey });
             toast({ title: editing ? "Achat modifié" : "Achat créé" });
             setCreating(false);
             setEditing(null);
+            setImportedFields(null);
           }}
         />
       )}
@@ -517,26 +657,28 @@ interface DialogProps {
   tenantSlug: string;
   purchase: Purchase | null;
   suppliers: SupplierOption[];
+  /** Champs pré-remplis (typiquement issus de l'OCR). Ignorés en mode édition. */
+  prefilled?: PrefilledFields;
   onClose: () => void;
   onSaved: () => void;
 }
 
-function PurchaseDialog({ tenantSlug, purchase, suppliers, onClose, onSaved }: DialogProps) {
+function PurchaseDialog({ tenantSlug, purchase, suppliers, prefilled, onClose, onSaved }: DialogProps) {
   const isEdit = purchase !== null;
   const [form, setForm] = useState(() => ({
     supplierId: purchase?.supplierId ? String(purchase.supplierId) : "",
-    supplierName: purchase?.supplierName ?? "",
-    invoiceNumber: purchase?.invoiceNumber ?? "",
-    invoiceDate: purchase?.invoiceDate ?? new Date().toISOString().slice(0, 10),
-    totalHt: purchase?.totalHt != null ? String(purchase.totalHt) : "",
-    totalTtc: purchase?.totalTtc != null ? String(purchase.totalTtc) : "",
-    tvaRate: purchase?.tvaRate != null ? String(purchase.tvaRate) : "",
-    tvaAmount: purchase?.tvaAmount != null ? String(purchase.tvaAmount) : "",
-    paymentMethod: purchase?.paymentMethod ?? "",
+    supplierName: purchase?.supplierName ?? prefilled?.supplierName ?? "",
+    invoiceNumber: purchase?.invoiceNumber ?? prefilled?.invoiceNumber ?? "",
+    invoiceDate: purchase?.invoiceDate ?? prefilled?.invoiceDate ?? new Date().toISOString().slice(0, 10),
+    totalHt: purchase?.totalHt != null ? String(purchase.totalHt) : (prefilled?.totalHt ?? ""),
+    totalTtc: purchase?.totalTtc != null ? String(purchase.totalTtc) : (prefilled?.totalTtc ?? ""),
+    tvaRate: purchase?.tvaRate != null ? String(purchase.tvaRate) : (prefilled?.tvaRate ?? ""),
+    tvaAmount: purchase?.tvaAmount != null ? String(purchase.tvaAmount) : (prefilled?.tvaAmount ?? ""),
+    paymentMethod: purchase?.paymentMethod ?? prefilled?.paymentMethod ?? "",
     paymentStatus: purchase?.paymentStatus ?? "pending",
     paidDate: purchase?.paidDate ?? "",
-    dueDate: purchase?.dueDate ?? "",
-    category: purchase?.category ?? "",
+    dueDate: purchase?.dueDate ?? prefilled?.dueDate ?? "",
+    category: purchase?.category ?? prefilled?.category ?? "",
     description: purchase?.description ?? "",
     notes: purchase?.notes ?? "",
   }));
@@ -615,11 +757,22 @@ function PurchaseDialog({ tenantSlug, purchase, suppliers, onClose, onSaved }: D
         data-testid="purchase-form"
       >
         <div className="flex items-start justify-between gap-4">
-          <h3 className="text-xl font-semibold">{isEdit ? "Modifier l'achat" : "Nouvel achat"}</h3>
+          <h3 className="text-xl font-semibold">
+            {isEdit ? "Modifier l'achat" : prefilled ? "Vérifier la facture importée" : "Nouvel achat"}
+          </h3>
           <button type="button" onClick={onClose} className="text-muted-foreground hover:text-foreground" aria-label="Fermer">
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {!isEdit && prefilled && (
+          <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-300/60 dark:border-amber-700/40 px-3 py-2 flex items-start gap-2 text-xs">
+            <Sparkles className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-amber-800 dark:text-amber-200">
+              Champs détectés automatiquement par l'OCR. Relisez et corrigez si besoin avant d'enregistrer.
+            </p>
+          </div>
+        )}
 
         <fieldset className="space-y-3">
           <legend className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">

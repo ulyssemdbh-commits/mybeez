@@ -32,6 +32,12 @@ import { db } from "../../db";
 import { purchases, suppliers } from "../../../shared/schema/checklist";
 import { and, eq, gte, lte, asc, desc, sum, count } from "drizzle-orm";
 import { z } from "zod";
+import {
+  parseInvoiceImage,
+  validateBase64Image,
+  SUPPORTED_MIME_TYPES,
+  type SupportedMime,
+} from "../../services/parsing/invoiceParser";
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -302,6 +308,52 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         }
         console.error("[Purchases] Update error:", error);
         res.status(500).json({ error: "Erreur de mise à jour" });
+      }
+    },
+  );
+
+  // ============================== PARSE (OCR) ==============================
+  // Body : { imageBase64: string, mimeType: "image/jpeg|png|webp" }
+  // Retourne les champs détectés, à appliquer côté UI sur le formulaire.
+  // Auth : owner / admin / manager (opération coûteuse côté provider IA).
+  const parseSchema = z.object({
+    imageBase64: z.string().min(100), // un PNG vide fait déjà ~100B en base64
+    mimeType: z.enum(SUPPORTED_MIME_TYPES),
+  });
+
+  app.post(
+    `${r}/parse`,
+    resolveTenant,
+    requireUser,
+    requireRole(...WRITE_ROLES),
+    async (req: Request, res: Response) => {
+      try {
+        const data = parseSchema.parse(req.body);
+
+        const validation = validateBase64Image(data.imageBase64, data.mimeType);
+        if (!validation.ok) {
+          return res.status(400).json({ error: validation.error });
+        }
+
+        // Strip data URL prefix au cas où le client en envoie un.
+        const clean = data.imageBase64.replace(/^data:[^,]+,/, "");
+
+        const result = await parseInvoiceImage(clean, data.mimeType as SupportedMime);
+        res.json({
+          fields: result.fields,
+          provider: result.provider,
+        });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ error: "Données invalides", details: error.errors });
+        }
+        const message = error instanceof Error ? error.message : "Erreur OCR";
+        // Si aucun provider configuré → 503 (config), sinon 502 (upstream).
+        if (message.startsWith("Aucun provider")) {
+          return res.status(503).json({ error: message });
+        }
+        console.error("[Purchases] Parse error:", error);
+        res.status(502).json({ error: message });
       }
     },
   );
