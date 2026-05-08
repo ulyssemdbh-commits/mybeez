@@ -122,7 +122,27 @@ export const generalExpenses = pgTable("general_expenses", {
   isRecurring: boolean("is_recurring").default(false),
   recurringFrequency: text("recurring_frequency"),
   notes: text("notes"),
-  createdAt: timestamp("created_at").defaultNow(),
+  /** Optional supplier link (URSSAF, EDF, assurance…). Pas obligatoire car
+   *  beaucoup de dépenses sont sans fournisseur formel (péages, frais bancaires). */
+  supplierId: integer("supplier_id"),
+  /** Montant TVA si applicable (loyer commercial, certains contrats services). */
+  taxAmount: real("tax_amount"),
+  /** Échéance prévue (différente de la date d'engagement de la dépense). */
+  dueDate: text("due_date"),
+  /** N° pièce / facture si présent (ex. avis URSSAF, quittance loyer). */
+  invoiceNumber: text("invoice_number"),
+  /** Période couverte (YYYY-MM pour mensuel, YYYY pour annuel). */
+  period: text("period"),
+  /**
+   * Status enum applicatif : "pending" | "paid" | "late" | "cancelled".
+   * Aligné sur purchases.paymentStatus pour pouvoir agréger les deux
+   * dans la trésorerie côté analytics.
+   */
+  paymentStatus: text("payment_status").notNull().default("pending"),
+  /** Date effective de paiement. */
+  paidDate: text("paid_date"),
+  /** Soft-delete : DELETE flippe à false, la row reste pour traçabilité. */
+  isActive: boolean("is_active").notNull().default(true),
 });
 
 export const files = pgTable("files", {
