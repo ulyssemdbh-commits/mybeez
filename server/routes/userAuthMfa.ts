@@ -34,6 +34,7 @@ import {
   requireMfaPending,
   clearMfaPending,
 } from "../middleware/auth";
+import { recordAudit } from "../services/auth/auditService";
 
 const codeSchema = z.string().min(6).max(20);
 const passwordSchema = z.string().min(PASSWORD_LIMITS.min).max(PASSWORD_LIMITS.max);
@@ -81,6 +82,7 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       const { secret, recoveryCodes } = await mfaService.startEnrolment(user.id);
       const otpauthUrl = buildOtpauthUrl({ secret, accountName: user.email });
       const qrDataUrl = await QRCode.toDataURL(otpauthUrl, { errorCorrectionLevel: "M" });
+      void recordAudit({ req, event: "mfa.enrolment.started", userId: user.id });
 
       res.json({
         secret,
@@ -107,8 +109,14 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       const u = getUserSession(req)!;
       const ok = await mfaService.confirmEnrolment(u.userId, data.code);
       if (!ok) {
+        void recordAudit({
+          req,
+          event: "mfa.enrolment.confirm_failure",
+          userId: u.userId,
+        });
         return res.status(400).json({ error: "Code invalide" });
       }
+      void recordAudit({ req, event: "mfa.enabled", userId: u.userId });
       res.json({ success: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -127,9 +135,15 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       const u = getUserSession(req)!;
       const user = await reauthenticate(u.userId, data.password);
       if (!user) {
+        void recordAudit({
+          req,
+          event: "mfa.disable.reauth_failure",
+          userId: u.userId,
+        });
         return res.status(401).json({ error: "Mot de passe incorrect" });
       }
       await mfaService.disable(user.id);
+      void recordAudit({ req, event: "mfa.disabled", userId: user.id });
       res.json({ success: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -149,6 +163,11 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       const pending = req.mfaPending!;
       const ok = await mfaService.verifyChallenge(pending.userId, data.code);
       if (!ok) {
+        void recordAudit({
+          req,
+          event: "mfa.challenge.failure",
+          userId: pending.userId,
+        });
         return res.status(401).json({ error: "Code invalide" });
       }
       promoteToFullSession(req, pending.userId);
@@ -157,6 +176,11 @@ export function registerUserAuthMfaRoutes(app: Express): void {
         return res.status(401).json({ error: "Compte introuvable" });
       }
       await userService.recordLogin(user.id);
+      void recordAudit({
+        req,
+        event: "mfa.challenge.success",
+        userId: user.id,
+      });
       res.json({
         user: {
           id: user.id,
@@ -184,6 +208,11 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       const pending = req.mfaPending!;
       const remaining = await mfaService.consumeRecoveryCode(pending.userId, data.code);
       if (remaining === null) {
+        void recordAudit({
+          req,
+          event: "mfa.recovery.failure",
+          userId: pending.userId,
+        });
         return res.status(401).json({ error: "Code de récupération invalide" });
       }
       promoteToFullSession(req, pending.userId);
@@ -192,6 +221,12 @@ export function registerUserAuthMfaRoutes(app: Express): void {
         return res.status(401).json({ error: "Compte introuvable" });
       }
       await userService.recordLogin(user.id);
+      void recordAudit({
+        req,
+        event: "mfa.recovery.success",
+        userId: user.id,
+        metadata: { recoveryCodesRemaining: remaining },
+      });
       res.json({
         user: {
           id: user.id,

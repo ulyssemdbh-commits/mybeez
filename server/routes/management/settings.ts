@@ -21,6 +21,7 @@ import { requireUser, requireRole } from "../../middleware/auth";
 import { db } from "../../db";
 import { tenants } from "../../../shared/schema/tenants";
 import { tenantService } from "../../services/tenantService";
+import { recordAudit } from "../../services/auth/auditService";
 import {
   MODULE_SLUGS,
   MODULE_CATALOG,
@@ -97,6 +98,11 @@ export function registerManagementSettingsRoutes(app: Express): void {
 
         if (!updated) return res.status(404).json({ error: "Tenant introuvable" });
         tenantService.clearCache();
+        void recordAudit({
+          req,
+          event: "tenant.vocabulary.changed",
+          metadata: { keys: Object.keys(clean) },
+        });
         res.json({ vocabulary: updated.vocabulary });
       } catch (error) {
         if (error instanceof z.ZodError) {
@@ -136,6 +142,11 @@ export function registerManagementSettingsRoutes(app: Express): void {
 
         if (!updated) return res.status(404).json({ error: "Tenant introuvable" });
         tenantService.clearCache();
+        void recordAudit({
+          req,
+          event: "tenant.modules.changed",
+          metadata: { modulesEnabled: final },
+        });
         res.json({ modulesEnabled: updated.modulesEnabled });
       } catch (error) {
         if (error instanceof z.ZodError) {

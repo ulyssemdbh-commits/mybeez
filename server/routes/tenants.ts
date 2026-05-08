@@ -18,6 +18,7 @@ import type { Express, Request, Response } from "express";
 import { tenantService } from "../services/tenantService";
 import { insertTenantSchema } from "../../shared/schema/tenants";
 import { requireSuperadmin } from "../middleware/auth";
+import { recordAudit } from "../services/auth/auditService";
 import { z } from "zod";
 
 const updateTenantSchema = z
@@ -44,6 +45,12 @@ export function registerTenantRoutes(app: Express): void {
     try {
       const data = insertTenantSchema.parse(req.body);
       const tenant = await tenantService.create(data);
+      void recordAudit({
+        req,
+        event: "tenant.created",
+        tenantId: tenant.id,
+        metadata: { slug: tenant.slug, name: tenant.name },
+      });
       res.status(201).json({
         id: tenant.id,
         clientCode: tenant.clientCode,
@@ -94,6 +101,12 @@ export function registerTenantRoutes(app: Express): void {
       const data = updateTenantSchema.parse(req.body);
       const tenant = await tenantService.update(id, data);
       if (!tenant) return res.status(404).json({ error: "Client non trouvé" });
+      void recordAudit({
+        req,
+        event: "tenant.updated",
+        tenantId: tenant.id,
+        metadata: { fields: Object.keys(data) },
+      });
       res.json(tenant);
     } catch (error) {
       if (error instanceof z.ZodError) {
