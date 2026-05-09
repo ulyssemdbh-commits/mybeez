@@ -12,9 +12,12 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
+import { CheckSquare, Settings } from "lucide-react";
 import { useUserSession } from "@/hooks/useUserSession";
 import { AlfredChat } from "@/components/alfred/AlfredChat";
 import { TenantAppShell } from "@/components/tenant/TenantAppShell";
+import { tenantPath } from "@/lib/tenantHost";
 import { cn } from "@/lib/utils";
 
 interface Category {
@@ -143,9 +146,13 @@ function ChecklistContent({ slug }: { slug: string }) {
     },
   });
 
+  const isEmpty = !catsLoading && (categories?.length ?? 0) === 0;
+
   return (
     <div className="space-y-6 pb-20">
       {catsLoading && <div className="text-center text-muted-foreground animate-pulse py-8">Chargement...</div>}
+
+      {isEmpty && <ChecklistEmptyState slug={slug} />}
 
       {categories?.map((cat) => (
         <div key={cat.id} className="space-y-1" data-testid={`category-${cat.id}`}>
@@ -185,6 +192,37 @@ function ChecklistContent({ slug }: { slug: string }) {
       ))}
 
       <AlfredChat tenantSlug={slug} checklistContext={dashboard || undefined} />
+    </div>
+  );
+}
+
+/**
+ * Affiché quand le tenant n'a aucune catégorie configurée. Différent du
+ * cas "checklist remplie mais 0 items cochés" — ici on guide vers la
+ * première création (souvent par un admin/owner via /admin).
+ */
+function ChecklistEmptyState({ slug }: { slug: string }) {
+  return (
+    <div className="rounded-2xl border-2 border-dashed bg-amber-50/30 dark:bg-amber-950/10 p-8 sm:p-12 text-center space-y-4">
+      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-100 dark:bg-amber-500/20">
+        <CheckSquare className="w-8 h-8 text-amber-600 dark:text-amber-400" />
+      </div>
+      <div className="space-y-1">
+        <h3 className="text-lg font-semibold">Votre checklist est vide</h3>
+        <p className="text-sm text-muted-foreground max-w-md mx-auto">
+          Créez votre première catégorie et ajoutez les items à cocher chaque
+          jour. Un administrateur peut configurer la checklist depuis les
+          paramètres du tenant.
+        </p>
+      </div>
+      <div>
+        <Link href={tenantPath(slug, "/admin")}>
+          <a className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium transition-colors">
+            <Settings className="w-4 h-4" />
+            Configurer la checklist
+          </a>
+        </Link>
+      </div>
     </div>
   );
 }

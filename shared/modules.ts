@@ -83,9 +83,9 @@ export const MODULE_CATALOG: ModuleSpec[] = [
   {
     slug: "files",
     label: "Fichiers",
-    description: "Stockage des factures, contrats, documents administratifs (à venir).",
+    description: "Stockage des factures, contrats, documents administratifs avec corbeille TTL 7 jours.",
     category: "gestion",
-    implemented: false,
+    implemented: true,
   },
   {
     slug: "analytics",
@@ -104,23 +104,23 @@ export const MODULE_CATALOG: ModuleSpec[] = [
   {
     slug: "employees",
     label: "Employés",
-    description: "Fiches employés, contrats, salaires (à venir).",
+    description: "Fiches employés, contrats, salaires, documents RH par employé.",
     category: "rh",
-    implemented: false,
+    implemented: true,
   },
   {
     slug: "payroll",
     label: "Paie",
-    description: "Paie mensuelle : brut, net, charges sociales (à venir).",
+    description: "Paie mensuelle : brut, net, charges salariales et patronales, primes, statut paiement.",
     category: "rh",
-    implemented: false,
+    implemented: true,
   },
   {
     slug: "absences",
     label: "Absences",
-    description: "Congés, arrêts maladie, calendrier d'absences (à venir).",
+    description: "Congés, arrêts maladie, retards, formations — avec workflow d'approbation.",
     category: "rh",
-    implemented: false,
+    implemented: true,
   },
 ];
 
