@@ -161,10 +161,17 @@ export const files = pgTable(
     fileDate: text("file_date"),
     storagePath: text("storage_path").notNull(),
     emailedTo: text("emailed_to").array(),
+    /**
+     * Optional FK to `employees.id`. Set when this file is linked to an
+     * employee (e.g. payslip, contract, ID copy). Drives the "Documents
+     * Ressources Humaines" section. Nullable. PR #72.
+     */
+    employeeId: integer("employee_id"),
     createdAt: timestamp("created_at").defaultNow(),
   },
   (table) => ({
     tenantIdx: index("files_tenant_id_idx").on(table.tenantId),
+    employeeIdx: index("files_employee_id_idx").on(table.employeeId),
   }),
 );
 
@@ -235,47 +242,122 @@ export const cashEntries = pgTable("cash_entries", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const employees = pgTable("employees", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull(),
-  firstName: text("first_name").notNull(),
-  lastName: text("last_name").notNull(),
-  position: text("position"),
-  contractType: text("contract_type"),
-  startDate: text("start_date"),
-  phone: text("phone"),
-  email: text("email"),
-  salary: real("salary"),
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+/**
+ * Employees — staff roster scoped per tenant. PR #72 enriched the
+ * pre-existing table with HR-specific fields (SSN for payslip-PDF
+ * matching, weekly hours, hourly rate, end date, free notes).
+ */
+export const employees = pgTable(
+  "employees",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id").notNull(),
+    firstName: text("first_name").notNull(),
+    lastName: text("last_name").notNull(),
+    position: text("position"),
+    contractType: text("contract_type").notNull().default("CDI"),
+    startDate: text("start_date"),
+    /** End of contract (resignation, end of CDD, etc.). */
+    endDate: text("end_date"),
+    phone: text("phone"),
+    email: text("email"),
+    /** Sécurité sociale — used to match incoming payslip PDFs. Nullable. */
+    socialSecurityNumber: text("social_security_number"),
+    salary: real("salary"),
+    /** Hourly rate for hour-based contracts (extra/CDD horaire). */
+    hourlyRate: real("hourly_rate"),
+    /** Contracted weekly hours. Default 35 = full-time France. */
+    weeklyHours: real("weekly_hours").default(35),
+    notes: text("notes"),
+    isActive: boolean("is_active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    tenantIdx: index("employees_tenant_id_idx").on(table.tenantId),
+  }),
+);
 
-export const payroll = pgTable("payroll", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull(),
-  employeeId: integer("employee_id").notNull(),
-  month: text("month").notNull(),
-  grossSalary: real("gross_salary").notNull(),
-  netSalary: real("net_salary").notNull(),
-  socialCharges: real("social_charges"),
-  bonuses: real("bonuses"),
-  deductions: real("deductions"),
-  status: text("status").notNull().default("draft"),
-  paidAt: timestamp("paid_at"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+/**
+ * Payroll — one row per (employee, month). PR #72 added the columns
+ * needed to surface employer-side cost on the RH dashboard:
+ * `employerCharges`, `totalEmployerCost`, `bonus`, `overtime`,
+ * `isPaid`, `paidDate`, plus a typed `pdfFileId` FK to the archived
+ * payslip in `files`.
+ */
+export const payroll = pgTable(
+  "payroll",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id").notNull(),
+    employeeId: integer("employee_id").notNull(),
+    /** Period covered, format `YYYY-MM`. */
+    month: text("month").notNull(),
+    grossSalary: real("gross_salary").notNull(),
+    netSalary: real("net_salary").notNull(),
+    socialCharges: real("social_charges"),
+    /** Charges patronales. If null, the UI estimates as gross × tenant.taxRules.employerChargeRate. */
+    employerCharges: real("employer_charges"),
+    /** gross + employerCharges; nullable when not extracted yet. */
+    totalEmployerCost: real("total_employer_cost"),
+    bonuses: real("bonuses"),
+    /** Overtime amount, distinct from bonuses. */
+    overtime: real("overtime"),
+    deductions: real("deductions"),
+    /** Free-form status — kept for back-compat. New flow uses `isPaid` + `paidDate`. */
+    status: text("status").notNull().default("draft"),
+    isPaid: boolean("is_paid").notNull().default(false),
+    /** ISO date of payment. */
+    paidDate: text("paid_date"),
+    paidAt: timestamp("paid_at"),
+    /** Links to `files.id` archive of the original payslip PDF. */
+    pdfFileId: integer("pdf_file_id"),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    tenantIdx: index("payroll_tenant_id_idx").on(table.tenantId),
+    employeeIdx: index("payroll_employee_id_idx").on(table.employeeId),
+    /** Block accidental duplicate fiches for the same (employee, month) within a tenant. */
+    uniqEmpMonth: uniqueIndex("payroll_employee_month_unique").on(
+      table.tenantId,
+      table.employeeId,
+      table.month,
+    ),
+  }),
+);
 
-export const absences = pgTable("absences", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull(),
-  employeeId: integer("employee_id").notNull(),
-  type: text("type").notNull(),
-  startDate: text("start_date").notNull(),
-  endDate: text("end_date").notNull(),
-  reason: text("reason"),
-  status: text("status").notNull().default("pending"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+/**
+ * Absences / congés — PR #72 added `duration` (days) and `isApproved`
+ * boolean which is what the RH dashboard uses for the "Alertes" counter.
+ * `status` text kept for compat but the canonical approval signal is
+ * `isApproved`.
+ */
+export const absences = pgTable(
+  "absences",
+  {
+    id: serial("id").primaryKey(),
+    tenantId: integer("tenant_id").notNull(),
+    employeeId: integer("employee_id").notNull(),
+    /** `conge | maladie | retard | absence | formation` (free-form, validated app-side). */
+    type: text("type").notNull(),
+    startDate: text("start_date").notNull(),
+    /** Nullable for single-day events ("retard"). */
+    endDate: text("end_date"),
+    /** Length in days. Front computes if not provided. */
+    duration: real("duration"),
+    reason: text("reason"),
+    notes: text("notes"),
+    /** Free-form status — back-compat. */
+    status: text("status").notNull().default("pending"),
+    /** Canonical approval flag; `pendingAbsences` count = !isApproved. */
+    isApproved: boolean("is_approved").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => ({
+    tenantIdx: index("absences_tenant_id_idx").on(table.tenantId),
+    employeeIdx: index("absences_employee_id_idx").on(table.employeeId),
+  }),
+);
 
 export const analytics = pgTable("analytics", {
   id: serial("id").primaryKey(),
