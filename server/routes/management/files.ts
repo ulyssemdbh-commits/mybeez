@@ -11,23 +11,25 @@
  *   GET    /trash            list trash rows
  *   POST   /trash/:id/restore   restore si non-expiré (410 si expiré)
  *   DELETE /trash/:id        hard-delete (R2 + DB)
+ *   POST   /send-email-bulk  email Resend N pièces jointes (V2 hook)
  *
  * Auth model :
  *   - READ (GET, download, list trash) : owner | admin | manager | staff | viewer
- *   - WRITE (upload, soft/hard-delete, restore) : owner | admin | manager
+ *   - WRITE (upload, soft/hard-delete, restore, send-email) : owner | admin | manager
  *
- * Hors scope V1 (cf. PR audit) : send-email, parse-preview, side-effects
- * vers expenses/purchases/payroll. Ces hooks viendront en V2.
+ * Hors scope V2 (PR follow-up) : parse-preview, side-effects
+ * vers expenses/purchases/payroll, payroll/import-pdf OCR.
  */
 
 import type { Express, Request, Response } from "express";
 import multer from "multer";
-import { and, eq, ilike, or, desc } from "drizzle-orm";
+import { and, eq, ilike, inArray, or, desc, sql } from "drizzle-orm";
 import { z } from "zod";
 import { resolveTenant } from "../../middleware/tenant";
 import { requireUser, requireRole } from "../../middleware/auth";
 import { db } from "../../db";
 import { files, filesTrash } from "../../../shared/schema/checklist";
+import { tenants } from "../../../shared/schema/tenants";
 import {
   buildStoredName,
   buildStorageKey,
@@ -36,10 +38,12 @@ import {
 import {
   uploadFileToStorage,
   downloadFileFromStorage,
+  downloadFileBufferFromStorage,
   deleteFileFromStorage,
 } from "../../services/files/storage";
 import { computeExpiresAt, isExpired, TRASH_TTL_MS } from "../../services/files/trashService";
 import { recordAudit } from "../../services/auth/auditService";
+import { sendDocumentBundle } from "../../services/auth/mailService";
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -68,6 +72,17 @@ const listQuerySchema = z.object({
   category: z.string().trim().max(60).optional(),
   search: z.string().trim().max(200).optional(),
 });
+
+const sendEmailBulkSchema = z.object({
+  to: z.string().trim().email().max(254),
+  fileIds: z.array(z.number().int().positive()).min(1).max(20),
+  subject: z.string().trim().max(200).optional(),
+  message: z.string().trim().max(2000).optional(),
+});
+
+// Resend caps inbound payloads around 40 MB (encoded). We stay below to
+// leave headroom for base64 expansion (~1.37×) and the email envelope.
+const MAX_BULK_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 export function registerManagementFilesRoutes(app: Express): void {
   const r = "/api/management/:slug/files";
@@ -361,4 +376,94 @@ export function registerManagementFilesRoutes(app: Express): void {
       res.status(500).json({ error: "Erreur de suppression définitive" });
     }
   });
+
+  // ============================== send-email-bulk (V2 hook) ==============================
+  app.post(
+    `${r}/send-email-bulk`,
+    resolveTenant,
+    requireUser,
+    requireRole(...WRITE_ROLES),
+    async (req: Request, res: Response) => {
+      try {
+        const tid = req.tenantId!;
+        const userId = (req.session as unknown as { userId?: number }).userId ?? null;
+        const body = sendEmailBulkSchema.parse(req.body);
+
+        const rows = await db
+          .select()
+          .from(files)
+          .where(and(eq(files.tenantId, tid), inArray(files.id, body.fileIds)));
+
+        if (rows.length === 0) {
+          return res.status(404).json({ error: "Aucun fichier trouvé" });
+        }
+        if (rows.length !== body.fileIds.length) {
+          const found = new Set(rows.map((r) => r.id));
+          const missing = body.fileIds.filter((id) => !found.has(id));
+          return res.status(404).json({ error: "Fichier(s) introuvable(s)", missingIds: missing });
+        }
+
+        const totalSize = rows.reduce((s, r) => s + r.fileSize, 0);
+        if (totalSize > MAX_BULK_ATTACHMENT_BYTES) {
+          return res.status(413).json({
+            error: `Total des pièces jointes trop lourd (${Math.round(totalSize / 1024 / 1024)}MB, max ${MAX_BULK_ATTACHMENT_BYTES / 1024 / 1024}MB)`,
+          });
+        }
+
+        const [tenantRow] = await db
+          .select({ name: tenants.name })
+          .from(tenants)
+          .where(eq(tenants.id, tid))
+          .limit(1);
+        const tenantName = tenantRow?.name ?? "myBeez";
+
+        const attachments = await Promise.all(
+          rows.map(async (r) => ({
+            filename: r.originalName,
+            content: await downloadFileBufferFromStorage(r.storagePath),
+          })),
+        );
+
+        const result = await sendDocumentBundle({
+          to: { email: body.to },
+          tenantName,
+          fileNames: rows.map((r) => r.originalName),
+          subject: body.subject,
+          message: body.message,
+          attachments,
+        });
+
+        // Append `to` to emailedTo[] for each file. array_append handles
+        // null cleanly (returns ARRAY[to]). Drizzle has no first-class
+        // helper for array_append, so we use sql`...` with COALESCE.
+        await db
+          .update(files)
+          .set({
+            emailedTo: sql`COALESCE(${files.emailedTo}, ARRAY[]::text[]) || ARRAY[${body.to}]::text[]`,
+          })
+          .where(and(eq(files.tenantId, tid), inArray(files.id, body.fileIds)));
+
+        void recordAudit({
+          req,
+          event: "files.emailed",
+          userId,
+          metadata: {
+            fileIds: body.fileIds,
+            to: body.to,
+            count: rows.length,
+            totalSize,
+            provider: result.provider,
+          },
+        });
+
+        res.json({ success: true, count: rows.length, provider: result.provider });
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return res.status(400).json({ error: "Paramètres invalides", details: error.errors });
+        }
+        console.error("[files] send-email-bulk error:", error);
+        res.status(500).json({ error: "Erreur d'envoi email" });
+      }
+    },
+  );
 }
