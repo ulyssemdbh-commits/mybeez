@@ -16,6 +16,7 @@ import { SectionPlaceholder } from "@/components/management/SectionPlaceholder";
 import { SuppliersSection } from "@/components/management/sections/SuppliersSection";
 import { PurchasesSection } from "@/components/management/sections/PurchasesSection";
 import { ExpensesSection } from "@/components/management/sections/ExpensesSection";
+import { EmployeesSection } from "@/components/management/sections/EmployeesSection";
 import {
   DEFAULT_MANAGEMENT_SECTION,
   isManagementSection,
@@ -57,6 +58,9 @@ function SectionContent({ section, tenantSlug }: { section: string; tenantSlug: 
   }
   if (section === "expenses") {
     return <ExpensesSection tenantSlug={tenantSlug} />;
+  }
+  if (section === "employees") {
+    return <EmployeesSection tenantSlug={tenantSlug} />;
   }
 
   const descriptions: Record<string, string> = {
