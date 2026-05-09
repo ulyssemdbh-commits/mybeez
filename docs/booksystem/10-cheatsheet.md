@@ -262,8 +262,9 @@ DELETE /api/management/:slug/files/:id       owner/admin/manager (soft → trash
 GET    /api/management/:slug/files/trash     READ
 POST   /api/management/:slug/files/trash/:id/restore  owner/admin/manager
 DELETE /api/management/:slug/files/trash/:id          owner/admin/manager (hard)
+POST   /api/management/:slug/files/send-email-bulk    owner/admin/manager (V2 hook PR #79 — body {to, fileIds[], subject?, message?})
 
-# RH (PR #72 — backend, UI à venir)
+# RH (PR #72 backend + PR #76 UI)
 GET    /api/management/:slug/employees/summary  READ (stats dashboard RH)
 GET    /api/management/:slug/employees          READ (?activeOnly=true)
 POST/PATCH/DELETE /api/management/:slug/employees/:id   owner/admin/manager (DELETE = soft isActive=false)

@@ -47,7 +47,7 @@ mybeez/
 │   └── src/
 │       ├── App.tsx                 # Routing wouter : /, /:slug, /:slug/admin, /:slug/history, /:slug/management
 │       ├── main.tsx
-│       ├── pages/                  # TenantChecklist (le seul implémenté), TenantAdmin/History/Management = stubs
+│       ├── pages/                  # TenantChecklist + TenantManagement (sections Suppliers/Purchases/Expenses/Files/Employees/Payroll/Absences livrées) + TenantAdmin (section vocabulaire/modules/template). TenantHistory = stub.
 │       ├── components/
 │       │   ├── ui/                 # Shadcn générés (button, card, input, dialog, …)
 │       │   ├── alfred/AlfredChat.tsx
@@ -208,8 +208,8 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 ## 6. État actuel — chantiers ouverts & dette technique
 
 ### Chantiers en cours / pages stub
-- `TenantAdmin`, `TenantHistory`, `TenantManagement` ne sont que des placeholders « en cours de développement ».
-- Beaucoup de tables business (suppliers, purchases, employees, payroll, absences, files, bank/cashEntries, analytics) **sont schématisées mais sans routes API ni UI**. Le seul module fonctionnel end-to-end est la **checklist quotidienne**.
+- `TenantHistory` reste un placeholder. `TenantAdmin` a la section vocabulaire/modules/template livrée. `TenantManagement` n'est plus un stub : sections Suppliers, Purchases, Expenses, Files (V1 + UI + hook send-email-bulk V2), Employees, Payroll, Absences livrées (cf. roadmap booksystem 9.2.1).
+- Tables business **toutes schématisées** ; modules livrés end-to-end (backend + UI) : **Checklist, Suppliers, Purchases, Expenses, Files, Employees, Payroll, Absences**. Reste : `bank_entries` / `cash_entries` (redesign Sprint 5), `analytics` (Sprint 6), `history` cross-module (Sprint 7).
 - **Migration restaurant → SaaS générique en cours** :
   - ✅ Catalogue `business_templates` + API publique (PR #9)
   - ✅ `tenants.templateId/vocabulary/modulesEnabled` ajoutés (PR #10a). `businessType` et `features` deprecated, conservés pour compat tant que `templateId` est nullable.
