@@ -59,6 +59,21 @@ export async function downloadFileFromStorage(key: string): Promise<Readable> {
 }
 
 /**
+ * Downloads `key` and collects the full body into a Buffer. Used by the
+ * email-bulk hook (Resend attachments must be in-memory). Callers should
+ * cap aggregate size before invoking this — the function does not enforce
+ * a per-object limit and will gladly buffer multi-MB blobs.
+ */
+export async function downloadFileBufferFromStorage(key: string): Promise<Buffer> {
+  const stream = await downloadFileFromStorage(key);
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+/**
  * Deletes one object. Used by the trash purge and by the hard-delete
  * route. Fails-soft: a missing object logs and returns (the row delete
  * still happens — we don't want a stuck trash row because the file was

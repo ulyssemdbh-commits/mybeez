@@ -18,11 +18,17 @@ interface MailRecipient {
   fullName?: string | null;
 }
 
+interface MailAttachment {
+  filename: string;
+  content: Buffer;
+}
+
 interface SendArgs {
   to: MailRecipient;
   subject: string;
   text: string;
   html: string;
+  attachments?: MailAttachment[];
 }
 
 const FROM_DEFAULT = "myBeez <noreply@mybeez-ai.com>";
@@ -54,16 +60,27 @@ async function send(args: SendArgs): Promise<{ delivered: boolean; provider: "re
     console.log(`  to:      ${args.to.email}`);
     console.log(`  subject: ${args.subject}`);
     console.log(`  text:    ${args.text.replace(/\n/g, "\n           ")}`);
+    if (args.attachments?.length) {
+      const total = args.attachments.reduce((s, a) => s + a.content.length, 0);
+      console.log(`  attach:  ${args.attachments.length} file(s), ${total} bytes total`);
+    }
     return { delivered: false, provider: "console" };
   }
   const client = getClient(cfg.apiKey);
-  const result = await client.emails.send({
+  const payload: Parameters<typeof client.emails.send>[0] = {
     from: cfg.from,
     to: args.to.email,
     subject: args.subject,
     text: args.text,
     html: args.html,
-  });
+  };
+  if (args.attachments?.length) {
+    payload.attachments = args.attachments.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+    }));
+  }
+  const result = await client.emails.send(payload);
   if (result.error) {
     throw new Error(`Resend send failed: ${result.error.message ?? "unknown"}`);
   }
@@ -120,6 +137,41 @@ Si vous n'êtes pas à l'origine de cette demande, ignorez ce message — votre 
   };
 }
 
+interface DocumentBundleArgs {
+  to: MailRecipient;
+  tenantName: string;
+  fileNames: string[];
+  subject?: string;
+  message?: string;
+}
+
+export function buildDocumentBundleEmail(args: DocumentBundleArgs): SendArgs {
+  const { to, tenantName, fileNames } = args;
+  const greeting = to.fullName ? `Bonjour ${to.fullName},` : "Bonjour,";
+  const subject = args.subject?.trim() || `Documents — ${tenantName}`;
+  const intro = args.message?.trim()
+    || `Veuillez trouver ci-joint ${fileNames.length === 1 ? "le document" : `les ${fileNames.length} documents`} envoyé${fileNames.length === 1 ? "" : "s"} par ${tenantName}.`;
+  const listText = fileNames.map((n) => `  - ${n}`).join("\n");
+  const listHtml = fileNames.map((n) => `<li>${n}</li>`).join("");
+  const text = `${greeting}
+
+${intro}
+
+${listText}
+
+— ${tenantName} (via myBeez)`;
+  const html = `<p>${greeting}</p>
+<p>${intro}</p>
+<ul>${listHtml}</ul>
+<p>— ${tenantName} (via myBeez)</p>`;
+  return {
+    to,
+    subject,
+    text,
+    html,
+  };
+}
+
 // ============================== Public API ==============================
 
 export async function sendVerificationEmail(to: MailRecipient, verifyUrl: string) {
@@ -128,6 +180,19 @@ export async function sendVerificationEmail(to: MailRecipient, verifyUrl: string
 
 export async function sendPasswordResetEmail(to: MailRecipient, resetUrl: string) {
   return send(buildPasswordResetEmail(to, resetUrl));
+}
+
+/**
+ * Sends a bundle of files to a recipient (e.g. invoice, payslip,
+ * supplier docs). Used by the management/files/send-email-bulk hook.
+ * Caller is responsible for capping total attachment size — Resend
+ * rejects payloads above ~40MB.
+ */
+export async function sendDocumentBundle(
+  args: DocumentBundleArgs & { attachments: MailAttachment[] },
+) {
+  const built = buildDocumentBundleEmail(args);
+  return send({ ...built, attachments: args.attachments });
 }
 
 /**
