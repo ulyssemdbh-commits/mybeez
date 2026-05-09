@@ -12,6 +12,11 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 
+# pg_dump / psql for `npm run backup` and `npm run restore`. Major version
+# pinned to match the postgres:16 service in docker-compose.yml — pg_dump
+# must be >= server major or it refuses to run.
+RUN apk add --no-cache postgresql16-client
+
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
