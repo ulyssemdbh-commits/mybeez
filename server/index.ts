@@ -256,6 +256,15 @@ async function registerRoutes() {
   const { registerManagementAbsencesRoutes } = await import("./routes/management/absences");
   registerManagementAbsencesRoutes(app);
 
+  const { registerBankAccountsRoutes } = await import("./routes/management/bankAccounts");
+  registerBankAccountsRoutes(app);
+
+  const { registerBankEntriesRoutes } = await import("./routes/management/bankEntries");
+  registerBankEntriesRoutes(app);
+
+  const { registerCashEntriesRoutes } = await import("./routes/management/cashEntries");
+  registerCashEntriesRoutes(app);
+
   app.get("/api/health", (_req, res) => {
     res.json({
       status: "ok",

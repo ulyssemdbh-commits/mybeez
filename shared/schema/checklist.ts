@@ -216,7 +216,14 @@ export const filesTrash = pgTable(
   }),
 );
 
-export const bankEntries = pgTable("bank_entries", {
+/**
+ * @deprecated PR #83 — replaced by `bankEntries` (SQL `bank_entries_v2`) in
+ * `shared/schema/finance.ts`. Kept declared so `drizzle-kit push` doesn't
+ * mark the still-present (empty) SQL table for destructive drop. The SQL
+ * `bank_entries` table will be dropped via a separate hand-written
+ * migration once we're ready to run a destructive deploy.
+ */
+export const legacyBankEntries = pgTable("bank_entries", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   date: text("date").notNull(),
@@ -229,7 +236,12 @@ export const bankEntries = pgTable("bank_entries", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-export const cashEntries = pgTable("cash_entries", {
+/**
+ * @deprecated PR #83 — replaced by `cashEntries` (SQL `cash_entries_v2`)
+ * in `shared/schema/finance.ts`. Same drop-deferred policy as
+ * `legacyBankEntries`.
+ */
+export const legacyCashEntries = pgTable("cash_entries", {
   id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   date: text("date").notNull(),

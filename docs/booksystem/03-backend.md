@@ -57,7 +57,9 @@ Fichier : `server/index.ts`.
 SSE → userAuth → userAuthMfa → tenants → admin → onboarding →
 templates → alfred → checklist →
 management/{suppliers, template, settings, purchases, expenses, files}
-→ scheduleTrashPurge() → /api/health
+→ scheduleTrashPurge() →
+management/{employees, payroll, absences, bankAccounts, bankEntries, cashEntries}
+→ /api/health
 ```
 
 ### 3.1.3 Tâches de fond
@@ -175,6 +177,9 @@ Toutes mounted at `/api/management/:slug/<module>`, derrière
 | `employees.ts` | `/employees` + `/employees/summary` | tous | owner/admin/manager | CRUD + endpoint stats dashboard RH (effectif, masse salariale, alertes, totaux période) (PR #72) |
 | `payroll.ts` | `/payroll` (?period=YYYY-MM&employeeId=N) + `/import-pdf` + `/reparse-all` | tous | owner/admin/manager | UNIQUE(tenant,employee,month) → 409 si duplicate. `pdfFileId` FK files.id archive bulletin. Hooks OCR PR #81 : `import-pdf` (Vision API + matchEmployee + upload R2 + insert files+payroll en transaction) et `reparse-all` (cap 50/run, scan files RH non liés). |
 | `absences.ts` | `/absences` (?employeeId=N&from=&to=) | tous | owner/admin/manager | type enum [conge\|maladie\|retard\|absence\|formation], `isApproved` = signal "Alertes" RH (PR #72) |
+| `bankAccounts.ts` | `/bank-accounts` | tous | owner/admin/manager | CRUD + soft-delete `isActive`. Detail GET retourne `{account, balance}` avec `currentBalance = openingBalance + Σ(entries.amount)` calculé via `computeBankAccountBalance` (PR #83) |
+| `bankEntries.ts` | `/bank-entries` + `/stats` + `/unreconciled` | tous | owner/admin/manager | Hard-delete (audit trace). Amount **signé** (négatif=débit). FK logiques optionnelles `purchaseId`/`expenseId`/`payrollId` pour rapprochement. Filtres `from`,`to`,`accountId`,`category`,`reconciled`. Cross-tenant guard sur `bankAccountId` au create/update. (PR #83) |
+| `cashEntries.ts` | `/cash-entries` + `/stats` | tous | owner/admin/manager | Hard-delete. Amount **toujours positif**, sens via `kind` ('in'\|'out'). Générique (pas de colonnes resto-spécifiques). (PR #83) |
 
 ### 3.2.10 SSE — Realtime
 
@@ -236,6 +241,7 @@ Fichier : `server/services/`.
 | `hr/employeeMatching` | `matchEmployee(parsed, candidates)` 3-tiers SSN > nom exact (+ permutation) > fuzzy. Normalisation NFD + strip diacritics. Pure. Sera consommé par V2 `import-PDF` bulletin. (PR #72) | — | ✓ Pure |
 | `hr/payrollSummary` | `computePayrollSummary(emps, payrolls, absences, employerChargeRate?)` agrégats dashboard RH (effectif actif, masse salariale, totaux brut/net/charges, estimation employer charges default 13%, ratio social, alertes). Flag `hasEstimatedEmployerCharges`. (PR #72) | — | ✓ Pure |
 | `lib/logger` | pino factory : `rootLogger` + `moduleLogger(name)` child. JSON prod / `pino-pretty` dev, `LOG_LEVEL` env, redact secrets. Consommé par tous les routes/services (PR #82). | — | ✓ |
+| `finance/financeSummary` | Helpers purs : `computeBankAccountBalance`, `computeBankStats`, `computeCashStats`. Round-to-cent. Consommés par les routes `/bank-accounts/:id`, `/bank-entries/stats`, `/cash-entries/stats`. (PR #83) | — | ✓ Pure |
 
 ### 3.4.2 Convention `recordAudit`
 
@@ -380,6 +386,7 @@ Fichier : `server/__tests__/`, `server/middleware/__tests__/`,
 | `services/parsing/payslipParser.test.ts` | Validation Zod du `PayslipFieldsSchema` |
 | `services/payroll/payrollImport.test.ts` | Helpers purs eligibility + buildPayrollValues + buildEmployeeValues + warnings (PR #81) |
 | `lib/logger.test.ts` | Smoke pino : levels, child bindings, level inheritance, redact compile (PR #82) |
+| `services/finance/financeSummary.test.ts` | computeBankAccountBalance + computeBankStats + computeCashStats : zeros, signed sum, defense-in-depth, round-to-cent (PR #83) |
 | `services/files/{naming,trashService}.test.ts` | Sanitisation + TTL purge |
 | `seed/templates.test.ts` | Catalog richness + presentation invariants |
 
