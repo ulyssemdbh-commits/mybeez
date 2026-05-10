@@ -276,6 +276,18 @@ POST   /api/management/:slug/payroll/reparse-all        owner/admin/manager (V2 
 GET    /api/management/:slug/absences         READ (?employeeId=N&from=&to=)
 POST/PATCH/DELETE /api/management/:slug/absences/:id    owner/admin/manager
 
+# Bank / Cash (PR #83 backend)
+GET    /api/management/:slug/bank-accounts                       READ (?includeInactive=true)
+GET    /api/management/:slug/bank-accounts/:id                   READ — retourne {account, balance: {openingBalance, netDelta, currentBalance, entryCount}}
+POST/PATCH/DELETE /api/management/:slug/bank-accounts/:id        owner/admin/manager (DELETE = soft isActive=false)
+GET    /api/management/:slug/bank-entries                        READ (?from=YYYY-MM-DD&to=&accountId=&category=&reconciled=true|false)
+GET    /api/management/:slug/bank-entries/stats                  READ (mêmes filtres)
+GET    /api/management/:slug/bank-entries/unreconciled           READ
+POST/PATCH/DELETE /api/management/:slug/bank-entries/:id         owner/admin/manager (DELETE hard, audit_log)
+GET    /api/management/:slug/cash-entries                        READ (?from=&to=&kind=in|out&category=)
+GET    /api/management/:slug/cash-entries/stats                  READ (mêmes filtres)
+POST/PATCH/DELETE /api/management/:slug/cash-entries/:id         owner/admin/manager (DELETE hard, audit_log)
+
 # Realtime
 GET    /api/:slug/events                     SSE (tous rôles tenant)
 
