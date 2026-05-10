@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Purchases Routes — back-office gestion (Management).
  *
  * CRUD + stats sur la table `purchases`. Mounted at
@@ -40,6 +40,9 @@ import {
   type SupportedMime,
 } from "../../services/parsing/invoiceParser";
 import { recordAudit } from "../../services/auth/auditService";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Purchases");
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -155,7 +158,7 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Filtres invalides", details: error.errors });
         }
-        console.error("[Purchases] List error:", error);
+        log.error({ err: error }, "List error");
         res.status(500).json({ error: "Erreur de chargement" });
       }
     },
@@ -204,7 +207,7 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Filtres invalides", details: error.errors });
         }
-        console.error("[Purchases] Stats error:", error);
+        log.error({ err: error }, "Stats error");
         res.status(500).json({ error: "Erreur de statistiques" });
       }
     },
@@ -230,7 +233,7 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         if (!row) return res.status(404).json({ error: "Achat introuvable" });
         res.json({ purchase: row });
       } catch (error) {
-        console.error("[Purchases] Get error:", error);
+        log.error({ err: error }, "Get error");
         res.status(500).json({ error: "Erreur" });
       }
     },
@@ -279,7 +282,7 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Données invalides", details: error.errors });
         }
-        console.error("[Purchases] Create error:", error);
+        log.error({ err: error }, "Create error");
         res.status(500).json({ error: "Erreur de création" });
       }
     },
@@ -323,7 +326,7 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Données invalides", details: error.errors });
         }
-        console.error("[Purchases] Update error:", error);
+        log.error({ err: error }, "Update error");
         res.status(500).json({ error: "Erreur de mise à jour" });
       }
     },
@@ -388,7 +391,7 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         if (message.startsWith("Aucun provider")) {
           return res.status(503).json({ error: message });
         }
-        console.error("[Purchases] Parse error:", error);
+        log.error({ err: error }, "Parse error");
         res.status(502).json({ error: message });
       }
     },
@@ -420,7 +423,7 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         });
         res.json({ success: true });
       } catch (error) {
-        console.error("[Purchases] Delete error:", error);
+        log.error({ err: error }, "Delete error");
         res.status(500).json({ error: "Erreur de suppression" });
       }
     },

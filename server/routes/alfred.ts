@@ -16,6 +16,9 @@ import { z } from "zod";
 import { alfredService } from "../services/alfred/alfredService";
 import { resolveTenant } from "../middleware/tenant";
 import { requireUser, requireRole } from "../middleware/auth";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("Alfred");
 
 const ALFRED_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 
@@ -59,7 +62,7 @@ export function registerAlfredRoutes(app: Express): void {
       if (isUnknownTenantError(error)) {
         return res.status(404).json({ error: "Tenant inconnu" });
       }
-      console.error("[Alfred] Chat error:", error);
+      log.error({ err: error }, "chat error");
       res.status(500).json({ error: "Alfred est temporairement indisponible" });
     }
   });
@@ -77,7 +80,7 @@ export function registerAlfredRoutes(app: Express): void {
       if (isUnknownTenantError(error)) {
         return res.status(404).json({ error: "Tenant inconnu" });
       }
-      console.error("[Alfred] Analyze error:", error);
+      log.error({ err: error }, "analyze error");
       res.status(500).json({ error: "Analyse indisponible" });
     }
   });
@@ -87,7 +90,7 @@ export function registerAlfredRoutes(app: Express): void {
       alfredService.clearHistory(req.tenant!.slug);
       res.json({ success: true });
     } catch (error) {
-      console.error("[Alfred] Clear error:", error);
+      log.error({ err: error }, "clear error");
       res.status(500).json({ error: "Erreur" });
     }
   });

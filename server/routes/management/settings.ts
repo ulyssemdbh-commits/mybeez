@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tenant settings — back-office gestion (Management).
  *
  * Routes pour customiser un tenant au-delà du template choisi :
@@ -27,6 +27,9 @@ import {
   MODULE_CATALOG,
   VOCABULARY_KEYS,
 } from "../../../shared/modules";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Settings");
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin"] as const;
@@ -67,7 +70,7 @@ export function registerManagementSettingsRoutes(app: Express): void {
           modulesEnabled: tenant.modulesEnabled ?? [],
         });
       } catch (error) {
-        console.error("[Settings] Get error:", error);
+        log.error({ err: error }, "Get error");
         res.status(500).json({ error: "Erreur" });
       }
     },
@@ -108,7 +111,7 @@ export function registerManagementSettingsRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Données invalides", details: error.errors });
         }
-        console.error("[Settings] Update vocabulary error:", error);
+        log.error({ err: error }, "Update vocabulary error");
         res.status(500).json({ error: "Erreur de mise à jour" });
       }
     },
@@ -152,7 +155,7 @@ export function registerManagementSettingsRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Données invalides", details: error.errors });
         }
-        console.error("[Settings] Update modules error:", error);
+        log.error({ err: error }, "Update modules error");
         res.status(500).json({ error: "Erreur de mise à jour" });
       }
     },

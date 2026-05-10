@@ -12,6 +12,9 @@ import { getAI } from "../core/openaiClient";
 import { tenantService } from "../tenantService";
 import type { Tenant } from "../../../shared/schema/tenants";
 import { buildSystemPrompt } from "./prompt";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Alfred");
 
 export { buildSystemPrompt };
 
@@ -81,13 +84,12 @@ class AlfredService {
     ];
 
     const providers = ["openai", "gemini", "grok"] as const;
-    let lastError = "";
 
     for (const provider of providers) {
       try {
         const ai = getAI(provider);
         if (!ai) {
-          lastError = `${provider}: not configured`;
+          log.debug({ provider }, "provider not configured, skipping");
           continue;
         }
 
@@ -105,7 +107,7 @@ class AlfredService {
 
         const text = response.choices?.[0]?.message?.content || "";
         if (!text) {
-          lastError = `${provider}: empty response`;
+          log.warn({ provider }, "empty response, trying next provider");
           continue;
         }
 
@@ -121,9 +123,7 @@ class AlfredService {
           tokensUsed: response.usage?.total_tokens,
         };
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        lastError = `${provider}: ${msg}`;
-        console.warn(`[Alfred] ${lastError}`);
+        log.warn({ provider, err }, "provider attempt failed");
         continue;
       }
     }

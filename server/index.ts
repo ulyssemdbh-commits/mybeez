@@ -15,19 +15,24 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { createServer } from "http";
+import { randomUUID } from "crypto";
 import path from "path";
 import fs from "fs";
+import pinoHttp from "pino-http";
 import { pool } from "./db";
 import { warnIfMailNotConfigured } from "./services/auth/mailService";
+import { rootLogger, moduleLogger } from "./lib/logger";
 
-console.log(`[myBeez] Starting — PID=${process.pid}, NODE_ENV=${process.env.NODE_ENV || "development"}`);
+const log = moduleLogger("Bootstrap");
+
+log.info({ pid: process.pid, nodeEnv: process.env.NODE_ENV ?? "development" }, "myBeez starting");
 
 if (!process.env.DATABASE_URL) {
-  console.error("[myBeez] WARNING: DATABASE_URL is not set");
+  log.warn("DATABASE_URL is not set");
 }
 
 if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
-  console.error("[myBeez] FATAL: SESSION_SECRET must be set in production");
+  log.fatal("SESSION_SECRET must be set in production");
   process.exit(1);
 }
 
@@ -36,29 +41,73 @@ if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
 // Host header, which is attacker-controlled (Host-header injection ⇒
 // reset/verify links pointing at a domain owned by the attacker).
 if (process.env.NODE_ENV === "production" && !process.env.APP_BASE_URL) {
-  console.error("[myBeez] FATAL: APP_BASE_URL must be set in production (e.g. https://app.mybeez-ai.com)");
+  log.fatal("APP_BASE_URL must be set in production (e.g. https://app.mybeez-ai.com)");
   process.exit(1);
 }
 
 if (!process.env.SUPERADMIN_TOKEN || process.env.SUPERADMIN_TOKEN.length < 16) {
-  const msg =
-    "[myBeez] WARNING: SUPERADMIN_TOKEN is not set (or shorter than 16 chars). " +
-    "Admin routes (/api/tenants) will respond 503 until configured.";
-  console.warn(msg);
+  log.warn(
+    "SUPERADMIN_TOKEN is not set (or shorter than 16 chars). Admin routes (/api/tenants) will respond 503 until configured.",
+  );
 }
 
 // One-shot warning if Resend (auth emails) isn't configured.
 warnIfMailNotConfigured();
 
 process.on("uncaughtException", (err) => {
-  console.error("[FATAL] Uncaught exception:", err.message, err.stack);
+  rootLogger.fatal({ err }, "uncaughtException");
 });
 process.on("unhandledRejection", (reason) => {
-  console.error("[FATAL] Unhandled rejection:", reason);
+  rootLogger.fatal({ err: reason }, "unhandledRejection");
 });
 
 const app = express();
 app.set("trust proxy", 1);
+
+/**
+ * pino-http : auto-logs every HTTP request with a generated requestId
+ * (UUID v4) and attaches `req.log` (a child logger) for handlers that
+ * want to add structured context. Mounted FIRST so even errors thrown
+ * by helmet/session land in a structured log line.
+ *
+ * `serializers.req` keeps just method/url/headers (already redacted by
+ * the root logger via `req.headers.cookie` and `req.headers.authorization`
+ * paths), discarding the noisy connection-level fields. Custom log level
+ * downgrades 4xx to warn and 5xx to error so the prod default `info`
+ * level still surfaces them but routine 200s stay below the threshold
+ * if we later raise it.
+ */
+app.use(
+  pinoHttp({
+    logger: rootLogger,
+    genReqId: (req) => {
+      const incoming = req.headers["x-request-id"];
+      if (typeof incoming === "string" && incoming.length > 0 && incoming.length < 200) return incoming;
+      return randomUUID();
+    },
+    customLogLevel: (_req, res, err) => {
+      if (err || res.statusCode >= 500) return "error";
+      if (res.statusCode >= 400) return "warn";
+      return "info";
+    },
+    customSuccessMessage: (req, res) => `${req.method} ${req.url} ${res.statusCode}`,
+    customErrorMessage: (req, res, err) =>
+      `${req.method} ${req.url} ${res.statusCode} — ${err?.message ?? "error"}`,
+    serializers: {
+      req(req) {
+        return {
+          id: req.id,
+          method: req.method,
+          url: req.url,
+          remoteAddress: req.remoteAddress,
+        };
+      },
+      res(res) {
+        return { statusCode: res.statusCode };
+      },
+    },
+  }),
+);
 
 app.use(helmet({
   contentSecurityPolicy: false,
@@ -232,7 +281,7 @@ function serveStatic() {
   const indexHtml = path.resolve(distPath, "index.html");
 
   if (!fs.existsSync(distPath)) {
-    console.warn(`[myBeez] Build directory not found: ${distPath}`);
+    log.warn({ distPath }, "Build directory not found");
     return;
   }
 
@@ -253,12 +302,21 @@ registerRoutes()
     const server = createServer(app);
     server.listen(PORT, "0.0.0.0", () => {
       const roots = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
-      console.log(`[myBeez] Server running on port ${PORT}`);
-      console.log(`[myBeez] Tenant root domains: ${roots}`);
-      console.log(`[myBeez] AI: OpenAI=${!!process.env.OPENAI_API_KEY} Gemini=${!!process.env.GEMINI_API_KEY} Grok=${!!process.env.XAI_API_KEY}`);
+      log.info(
+        {
+          port: PORT,
+          rootDomains: roots,
+          ai: {
+            openai: !!process.env.OPENAI_API_KEY,
+            gemini: !!process.env.GEMINI_API_KEY,
+            grok: !!process.env.XAI_API_KEY,
+          },
+        },
+        `Server listening on port ${PORT}`,
+      );
     });
   })
   .catch((err) => {
-    console.error("[myBeez] Failed to start:", err);
+    log.fatal({ err }, "Failed to start");
     process.exit(1);
   });

@@ -18,6 +18,9 @@ import type { Express, Request, Response } from "express";
 import { tenantService } from "../services/tenantService";
 import { insertTenantSchema } from "../../shared/schema/tenants";
 import { requireSuperadmin } from "../middleware/auth";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("Tenants");
 import { recordAudit } from "../services/auth/auditService";
 import { z } from "zod";
 
@@ -66,7 +69,7 @@ export function registerTenantRoutes(app: Express): void {
       if (message.includes("unique")) {
         return res.status(409).json({ error: "Un restaurant avec ce nom ou slug existe déjà" });
       }
-      console.error("[Tenants] Create error:", error);
+      log.error({ err: error }, "create error");
       res.status(500).json({ error: "Erreur de création" });
     }
   });
@@ -88,7 +91,7 @@ export function registerTenantRoutes(app: Express): void {
         })),
       );
     } catch (error) {
-      console.error("[Tenants] List error:", error);
+      log.error({ err: error }, "list error");
       res.status(500).json({ error: "Erreur de chargement" });
     }
   });
@@ -112,7 +115,7 @@ export function registerTenantRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[Tenants] Update error:", error);
+      log.error({ err: error }, "update error");
       res.status(500).json({ error: "Erreur de mise à jour" });
     }
   });

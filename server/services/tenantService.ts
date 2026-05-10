@@ -16,6 +16,9 @@ import { db } from "../db";
 import { tenants, type Tenant, type InsertTenant } from "../../shared/schema/tenants";
 import { eq } from "drizzle-orm";
 import { templateService } from "./templateService";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("Tenant");
 
 class TenantService {
   private cache: Map<string, Tenant> = new Map();
@@ -84,9 +87,9 @@ class TenantService {
 
     this.cache.set(slug, tenant);
     this.cache.set(clientCode, tenant);
-    console.log(
-      `[Tenant] Created: ${tenant.name} (${clientCode}) → /${slug}` +
-        (tenant.templateId ? ` [templateId=${tenant.templateId}]` : ""),
+    log.info(
+      { tenantId: tenant.id, slug, clientCode, templateId: tenant.templateId ?? null },
+      `tenant created: ${tenant.name}`,
     );
     return tenant;
   }

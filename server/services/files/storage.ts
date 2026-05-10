@@ -16,6 +16,9 @@ import {
 } from "@aws-sdk/client-s3";
 import { Readable } from "node:stream";
 import { loadR2Config, makeR2Client, uploadStream } from "../../../scripts/_lib/r2";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("FilesStorage");
 
 interface R2Cache {
   client: S3Client;
@@ -84,7 +87,7 @@ export async function deleteFileFromStorage(key: string): Promise<void> {
     const { client, bucket } = getR2();
     await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
   } catch (err) {
-    console.error(`[files] deleteFileFromStorage(${key}) failed:`, err);
+    log.error({ err, key }, "deleteFileFromStorage failed");
   }
 }
 

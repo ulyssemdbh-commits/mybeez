@@ -22,6 +22,9 @@ import { timingSafeEqual } from "crypto";
 import { userTenantService } from "../services/auth/userTenantService";
 import { userService } from "../services/auth/userService";
 import { TENANT_ROLES, type TenantRole } from "../../shared/schema/users";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("Auth");
 
 /** Shape of the nominative session payload. */
 export interface UserSession {
@@ -56,7 +59,7 @@ export const MFA_PENDING_TTL_MS = 5 * 60 * 1000;
 export function requireSuperadmin(req: Request, res: Response, next: NextFunction) {
   const expected = process.env.SUPERADMIN_TOKEN;
   if (!expected || expected.length < 16) {
-    console.error("[Auth] SUPERADMIN_TOKEN not configured (or too short); admin routes are locked.");
+    log.error("SUPERADMIN_TOKEN not configured (or too short); admin routes are locked");
     return res.status(503).json({ error: "Admin not configured" });
   }
 
@@ -213,7 +216,7 @@ export function requireRole(...allowed: TenantRole[]) {
     const u = getUserSession(req);
     if (!u) return res.status(401).json({ error: "Connexion requise" });
     if (typeof req.tenantId !== "number") {
-      console.error("[Auth] requireRole called without resolved tenantId — middleware order bug");
+      log.error("requireRole called without resolved tenantId — middleware order bug");
       return res.status(500).json({ error: "Configuration serveur" });
     }
     const role = await userTenantService.getRole(u.userId, req.tenantId);

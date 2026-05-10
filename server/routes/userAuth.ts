@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Nominative auth routes — PR #12.
  *
  * Mounted alongside the legacy PIN auth (`/api/auth/{pin-login,me,logout}`)
@@ -40,6 +40,9 @@ import { PASSWORD_LIMITS } from "../services/auth/passwordService";
 import { mfaService, generatePendingId } from "../services/auth/mfaService";
 import { recordAudit } from "../services/auth/auditService";
 import { checkLockout } from "../services/auth/lockoutService";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("AuthRoutes");
 
 function getPrimaryRootDomain(): string {
   const raw = process.env.ROOT_DOMAINS || "mybeez-ai.com,localhost";
@@ -119,7 +122,7 @@ export function registerUserAuthRoutes(app: Express): void {
       try {
         await sendVerificationEmail({ email: user.email, fullName: user.fullName }, verifyUrl);
       } catch (mailErr) {
-        console.error("[auth] verification email failed:", mailErr);
+        log.error({ err: mailErr }, "verification email failed");
         // Don't fail the signup just because the email failed — the
         // user can request a re-send later.
       }
@@ -138,7 +141,7 @@ export function registerUserAuthRoutes(app: Express): void {
         });
         return res.status(409).json({ error: "Cet email est déjà utilisé" });
       }
-      console.error("[auth] signup error:", error);
+      log.error({ err: error }, "signup error");
       res.status(500).json({ error: "Erreur de création du compte" });
     }
   });
@@ -229,7 +232,7 @@ export function registerUserAuthRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[auth] login error:", error);
+      log.error({ err: error }, "login error");
       res.status(500).json({ error: "Erreur de connexion" });
     }
   });
@@ -285,7 +288,7 @@ export function registerUserAuthRoutes(app: Express): void {
         })),
       });
     } catch (error) {
-      console.error("[auth] me error:", error);
+      log.error({ err: error }, "me error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -309,7 +312,7 @@ export function registerUserAuthRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[auth] verify-email error:", error);
+      log.error({ err: error }, "verify-email error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -332,7 +335,7 @@ export function registerUserAuthRoutes(app: Express): void {
             userId: user.id,
           });
         } catch (mailErr) {
-          console.error("[auth] password reset email failed:", mailErr);
+          log.error({ err: mailErr }, "password reset email failed");
         }
       } else {
         void recordAudit({
@@ -346,7 +349,7 @@ export function registerUserAuthRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[auth] forgot-password error:", error);
+      log.error({ err: error }, "forgot-password error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -370,7 +373,7 @@ export function registerUserAuthRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[auth] reset-password error:", error);
+      log.error({ err: error }, "reset-password error");
       res.status(500).json({ error: "Erreur" });
     }
   });

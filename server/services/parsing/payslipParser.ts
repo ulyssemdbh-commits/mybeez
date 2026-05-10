@@ -26,6 +26,9 @@ import {
   SUPPORTED_PDF_MIME_TYPE,
   type SupportedMime,
 } from "./invoiceParser";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("PayslipParser");
 
 const ISO_DATE = z
   .string()
@@ -154,7 +157,7 @@ export async function parsePayslipImage(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       lastError = `${provider}: ${msg}`;
-      console.warn(`[PayslipParser] ${lastError}`);
+      log.warn({ provider, err }, "provider attempt failed");
       continue;
     }
   }

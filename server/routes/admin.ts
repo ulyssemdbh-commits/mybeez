@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Master admin routes — gated on `users.isSuperadmin = true`.
  *
  * All endpoints require a NOMINATIVE session belonging to a superadmin.
@@ -24,6 +24,9 @@ import { userService, EmailAlreadyExistsError } from "../services/auth/userServi
 import { userTenantService } from "../services/auth/userTenantService";
 import { sendPasswordResetEmail } from "../services/auth/mailService";
 import { PASSWORD_LIMITS } from "../services/auth/passwordService";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("Admin");
 
 function getAppBaseUrl(req: Request): string {
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/+$/, "");
@@ -55,7 +58,7 @@ export function registerAdminRoutes(app: Express): void {
         },
       });
     } catch (error) {
-      console.error("[admin] me error:", error);
+      log.error({ err: error }, "me error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -85,7 +88,7 @@ export function registerAdminRoutes(app: Express): void {
         templates: { total: templateCount.c },
       });
     } catch (error) {
-      console.error("[admin] stats error:", error);
+      log.error({ err: error }, "stats error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -109,7 +112,7 @@ export function registerAdminRoutes(app: Express): void {
         .orderBy(desc(users.createdAt));
       res.json({ users: rows });
     } catch (error) {
-      console.error("[admin] users error:", error);
+      log.error({ err: error }, "users error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -186,7 +189,7 @@ export function registerAdminRoutes(app: Express): void {
       if (error instanceof EmailAlreadyExistsError) {
         return res.status(409).json({ error: "Cet email est déjà utilisé", field: "email" });
       }
-      console.error("[admin] create user error:", error);
+      log.error({ err: error }, "create user error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -250,7 +253,7 @@ export function registerAdminRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[admin] patch user error:", error);
+      log.error({ err: error }, "patch user error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -281,7 +284,7 @@ export function registerAdminRoutes(app: Express): void {
       await db.delete(users).where(eq(users.id, id));
       res.json({ success: true });
     } catch (error) {
-      console.error("[admin] delete user error:", error);
+      log.error({ err: error }, "delete user error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -303,12 +306,12 @@ export function registerAdminRoutes(app: Express): void {
       try {
         await sendPasswordResetEmail({ email: target.email, fullName: target.fullName }, resetUrl);
       } catch (mailErr) {
-        console.error("[admin] send-reset email failed:", mailErr);
+        log.error({ err: mailErr }, "send-reset email failed");
         return res.status(502).json({ error: "Lien généré mais l'email n'a pas pu être envoyé" });
       }
       res.json({ success: true });
     } catch (error) {
-      console.error("[admin] send-reset error:", error);
+      log.error({ err: error }, "send-reset error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -333,7 +336,7 @@ export function registerAdminRoutes(app: Express): void {
         .orderBy(desc(tenants.createdAt));
       res.json({ tenants: rows });
     } catch (error) {
-      console.error("[admin] tenants error:", error);
+      log.error({ err: error }, "tenants error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -384,7 +387,7 @@ export function registerAdminRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[admin] patch tenant error:", error);
+      log.error({ err: error }, "patch tenant error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -402,7 +405,7 @@ export function registerAdminRoutes(app: Express): void {
       await db.delete(tenants).where(eq(tenants.id, id));
       res.json({ success: true });
     } catch (error) {
-      console.error("[admin] delete tenant error:", error);
+      log.error({ err: error }, "delete tenant error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -456,7 +459,7 @@ export function registerAdminRoutes(app: Express): void {
 
       res.json({ tenant: t, members });
     } catch (error) {
-      console.error("[admin] tenant detail error:", error);
+      log.error({ err: error }, "tenant detail error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -489,7 +492,7 @@ export function registerAdminRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[admin] add member error:", error);
+      log.error({ err: error }, "add member error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -514,7 +517,7 @@ export function registerAdminRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[admin] patch member error:", error);
+      log.error({ err: error }, "patch member error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -531,7 +534,7 @@ export function registerAdminRoutes(app: Express): void {
       await userTenantService.remove(userId, tenantId);
       res.json({ success: true });
     } catch (error) {
-      console.error("[admin] delete member error:", error);
+      log.error({ err: error }, "delete member error");
       res.status(500).json({ error: "Erreur" });
     }
   });

@@ -21,6 +21,9 @@
 import { and, eq, gte, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import { auditLog } from "../../../shared/schema/users";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Lockout");
 
 export const LOCKOUT_CONSTANTS = {
   /** Failures within the window required to lock the account. */
@@ -96,7 +99,7 @@ export async function checkLockout(
       now,
     );
   } catch (err) {
-    console.error("[lockout] check failed (fail-soft, treating as unlocked):", err);
+    log.error({ err }, "check failed (fail-soft, treating as unlocked)");
     return { locked: false, failureCount: 0, retryAfterSeconds: 0 };
   }
 }

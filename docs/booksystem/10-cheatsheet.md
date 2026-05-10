@@ -95,6 +95,7 @@ npx tsx scripts/grant-superadmin.ts <email>
 | `BACKUP_RETENTION_DAYS` | optionnel | default 30 |
 | `PORT` | optionnel | default 3000 |
 | `NODE_ENV` | — | `development` ou `production` |
+| `LOG_LEVEL` | optionnel | pino level — default `info` prod / `debug` dev. Valeurs : `trace, debug, info, warn, error, fatal, silent`. (PR #82) |
 
 Modèle complet : `.env.example` (à la racine du repo).
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Absences Routes — congés/maladie/retards. Mounted at
  * `/api/management/:slug/absences`.
  *
@@ -20,6 +20,9 @@ import { requireUser, requireRole } from "../../middleware/auth";
 import { db } from "../../db";
 import { absences } from "../../../shared/schema/checklist";
 import { recordAudit } from "../../services/auth/auditService";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Absences");
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -92,7 +95,7 @@ export function registerManagementAbsencesRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Filtres invalides", details: error.errors });
       }
-      console.error("[absences] list error:", error);
+      log.error({ err: error }, "list error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -111,7 +114,7 @@ export function registerManagementAbsencesRoutes(app: Express): void {
       if (!row) return res.status(404).json({ error: "Absence introuvable" });
       res.json({ absence: row });
     } catch (error) {
-      console.error("[absences] detail error:", error);
+      log.error({ err: error }, "detail error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -144,7 +147,7 @@ export function registerManagementAbsencesRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[absences] create error:", error);
+      log.error({ err: error }, "create error");
       res.status(500).json({ error: "Erreur de création" });
     }
   });
@@ -176,7 +179,7 @@ export function registerManagementAbsencesRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[absences] update error:", error);
+      log.error({ err: error }, "update error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -203,7 +206,7 @@ export function registerManagementAbsencesRoutes(app: Express): void {
       });
       res.json({ success: true });
     } catch (error) {
-      console.error("[absences] delete error:", error);
+      log.error({ err: error }, "delete error");
       res.status(500).json({ error: "Erreur" });
     }
   });

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Employees Routes — back-office RH (Management).
  *
  * Mounted at `/api/management/:slug/employees`.
@@ -30,6 +30,9 @@ import {
   computePayrollSummary,
   DEFAULT_EMPLOYER_CHARGE_RATE,
 } from "../../services/hr/payrollSummary";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Employees");
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -120,7 +123,7 @@ export function registerManagementEmployeesRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Filtres invalides", details: error.errors });
       }
-      console.error("[employees] summary error:", error);
+      log.error({ err: error }, "summary error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -139,7 +142,7 @@ export function registerManagementEmployeesRoutes(app: Express): void {
         .orderBy(asc(employees.lastName), asc(employees.firstName));
       res.json({ employees: rows });
     } catch (error) {
-      console.error("[employees] list error:", error);
+      log.error({ err: error }, "list error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -158,7 +161,7 @@ export function registerManagementEmployeesRoutes(app: Express): void {
       if (!row) return res.status(404).json({ error: "Employé introuvable" });
       res.json({ employee: row });
     } catch (error) {
-      console.error("[employees] detail error:", error);
+      log.error({ err: error }, "detail error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -186,7 +189,7 @@ export function registerManagementEmployeesRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[employees] create error:", error);
+      log.error({ err: error }, "create error");
       res.status(500).json({ error: "Erreur de création" });
     }
   });
@@ -218,7 +221,7 @@ export function registerManagementEmployeesRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[employees] update error:", error);
+      log.error({ err: error }, "update error");
       res.status(500).json({ error: "Erreur de mise à jour" });
     }
   });
@@ -246,7 +249,7 @@ export function registerManagementEmployeesRoutes(app: Express): void {
       });
       res.json({ success: true });
     } catch (error) {
-      console.error("[employees] delete error:", error);
+      log.error({ err: error }, "delete error");
       res.status(500).json({ error: "Erreur" });
     }
   });

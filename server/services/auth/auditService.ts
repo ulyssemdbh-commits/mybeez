@@ -27,6 +27,9 @@
 import type { Request } from "express";
 import { db } from "../../db";
 import { auditLog } from "../../../shared/schema/users";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Audit");
 
 /** Cles a JAMAIS persister, meme via accident copy/paste depuis req.body. */
 const SENSITIVE_KEYS = new Set([
@@ -134,6 +137,6 @@ export async function recordAudit(args: RecordAuditArgs): Promise<void> {
   } catch (err) {
     // Fail-soft : on logue mais on ne propage pas. Un incident DB ne doit
     // pas devenir un incident produit a cause de l'audit.
-    console.error("[audit] failed to record event", args.event, err);
+    log.error({ err, event: args.event }, "failed to record event");
   }
 }
