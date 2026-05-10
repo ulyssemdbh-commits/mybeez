@@ -21,7 +21,7 @@ import { userService, EmailAlreadyExistsError } from "../services/auth/userServi
 import { tenantService } from "../services/tenantService";
 import { userTenantService } from "../services/auth/userTenantService";
 import { sendVerificationEmail } from "../services/auth/mailService";
-import { PASSWORD_LIMITS } from "../services/auth/passwordService";
+import { PASSWORD_LIMITS, PasswordPwnedError } from "../services/auth/passwordService";
 import { moduleLogger } from "../lib/logger";
 
 const log = moduleLogger("Onboarding");
@@ -129,7 +129,7 @@ export function registerOnboardingRoutes(app: Express): void {
         });
       }
 
-      // 1. Create user. Throws on email collision.
+      // 1. Create user. Throws on email collision or pwned password.
       let user;
       try {
         user = await userService.create({
@@ -137,10 +137,19 @@ export function registerOnboardingRoutes(app: Express): void {
           password: data.password,
           fullName: data.fullName ?? null,
           locale: "fr",
+          checkPwned: true,
         });
       } catch (e) {
         if (e instanceof EmailAlreadyExistsError) {
           return res.status(409).json({ error: "Cet email est déjà utilisé", field: "email" });
+        }
+        if (e instanceof PasswordPwnedError) {
+          return res.status(400).json({
+            error:
+              "Ce mot de passe a été compromis dans une fuite connue. Choisissez-en un autre.",
+            field: "password",
+            code: "PASSWORD_PWNED",
+          });
         }
         throw e;
       }
