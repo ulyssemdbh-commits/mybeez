@@ -12,6 +12,9 @@
  */
 
 import { Resend } from "resend";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Mail");
 
 interface MailRecipient {
   email: string;
@@ -56,14 +59,21 @@ export function _resetMailClientForTests() {
 async function send(args: SendArgs): Promise<{ delivered: boolean; provider: "resend" | "console" }> {
   const cfg = loadConfig();
   if (!cfg.apiKey) {
-    console.log("[mail:dev] (no RESEND_API_KEY — printing instead of sending)");
-    console.log(`  to:      ${args.to.email}`);
-    console.log(`  subject: ${args.subject}`);
-    console.log(`  text:    ${args.text.replace(/\n/g, "\n           ")}`);
-    if (args.attachments?.length) {
-      const total = args.attachments.reduce((s, a) => s + a.content.length, 0);
-      console.log(`  attach:  ${args.attachments.length} file(s), ${total} bytes total`);
-    }
+    const attachSummary = args.attachments?.length
+      ? {
+          count: args.attachments.length,
+          totalBytes: args.attachments.reduce((s, a) => s + a.content.length, 0),
+        }
+      : undefined;
+    log.info(
+      {
+        to: args.to.email,
+        subject: args.subject,
+        text: args.text,
+        ...(attachSummary ? { attachments: attachSummary } : {}),
+      },
+      "dev mode: no RESEND_API_KEY, printing email instead of sending",
+    );
     return { delivered: false, provider: "console" };
   }
   const client = getClient(cfg.apiKey);
@@ -202,8 +212,8 @@ export async function sendDocumentBundle(
 export function warnIfMailNotConfigured() {
   const cfg = loadConfig();
   if (!cfg.apiKey) {
-    console.warn(
-      "[myBeez] WARNING: RESEND_API_KEY is not set. Auth emails (verify/reset) will be logged to stdout, not sent. Suitable for dev only.",
+    log.warn(
+      "RESEND_API_KEY is not set. Auth emails (verify/reset) will be logged to stdout, not sent. Suitable for dev only.",
     );
   }
 }

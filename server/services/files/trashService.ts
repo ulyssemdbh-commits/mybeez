@@ -11,6 +11,9 @@ import { lt } from "drizzle-orm";
 import { db } from "../../db";
 import { filesTrash } from "../../../shared/schema/checklist";
 import { deleteFileFromStorage } from "./storage";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("FilesTrash");
 
 /** Default retention before hard-delete. 7 days, matching ulysseclaude. */
 export const TRASH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -53,10 +56,10 @@ export async function purgeExpiredTrash(now: Date = new Date()): Promise<number>
     }
 
     await db.delete(filesTrash).where(lt(filesTrash.expiresAt, now));
-    console.log(`[files-trash] purge: ${rows.length} row(s) hard-deleted`);
+    log.info({ purged: rows.length }, "trash purge: rows hard-deleted");
     return rows.length;
   } catch (err) {
-    console.error("[files-trash] purge failed (will retry next interval):", err);
+    log.error({ err }, "purge failed (will retry next interval)");
     return 0;
   }
 }

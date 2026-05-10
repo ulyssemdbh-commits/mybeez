@@ -9,6 +9,9 @@
 import type { Express, Request, Response } from "express";
 import { resolveTenant } from "../middleware/tenant";
 import { requireUser, requireRole } from "../middleware/auth";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("SSE");
 
 // SSE = read-only feed; any tenant role (incl. viewer) may listen.
 const SSE_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
@@ -46,7 +49,7 @@ export function registerSSERoutes(app: Express): void {
       connectedAt: Date.now(),
     });
 
-    console.log(`[SSE] Client ${clientId} connected for tenant ${tenantId} (total: ${clients.size})`);
+    log.info({ clientId, tenantId, total: clients.size }, "client connected");
 
     const keepAlive = setInterval(() => {
       try {
@@ -60,7 +63,7 @@ export function registerSSERoutes(app: Express): void {
     req.on("close", () => {
       clearInterval(keepAlive);
       clients.delete(clientId);
-      console.log(`[SSE] Client ${clientId} disconnected (total: ${clients.size})`);
+      log.info({ clientId, total: clients.size }, "client disconnected");
     });
   });
 }

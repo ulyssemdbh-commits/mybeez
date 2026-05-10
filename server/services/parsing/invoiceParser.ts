@@ -20,6 +20,9 @@
 
 import { z } from "zod";
 import { getAI } from "../core/openaiClient";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("InvoiceParser");
 
 export const SUPPORTED_IMAGE_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 export const SUPPORTED_PDF_MIME_TYPE = "application/pdf" as const;
@@ -154,7 +157,7 @@ export async function parseInvoiceImage(
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       lastError = `${provider}: ${msg}`;
-      console.warn(`[InvoiceParser] ${lastError}`);
+      log.warn({ provider, err }, "provider attempt failed");
       continue;
     }
   }
