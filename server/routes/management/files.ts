@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Files Routes — back-office gestion (Management).
  *
  * Mounted at `/api/management/:slug/files`.
@@ -44,6 +44,9 @@ import {
 import { computeExpiresAt, isExpired, TRASH_TTL_MS } from "../../services/files/trashService";
 import { recordAudit } from "../../services/auth/auditService";
 import { sendDocumentBundle } from "../../services/auth/mailService";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Files");
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -115,7 +118,7 @@ export function registerManagementFilesRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Filtres invalides", details: error.errors });
       }
-      console.error("[files] list error:", error);
+      log.error({ err: error }, "list error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -183,7 +186,7 @@ export function registerManagementFilesRoutes(app: Express): void {
         if (error instanceof Error && error.message.includes("File too large")) {
           return res.status(413).json({ error: `Fichier trop gros (max ${MAX_UPLOAD_BYTES / 1024 / 1024}MB)` });
         }
-        console.error("[files] upload error:", error);
+        log.error({ err: error }, "upload error");
         res.status(500).json({ error: "Erreur d'upload" });
       }
     },
@@ -213,7 +216,7 @@ export function registerManagementFilesRoutes(app: Express): void {
       );
       stream.pipe(res);
     } catch (error) {
-      console.error("[files] download error:", error);
+      log.error({ err: error }, "download error");
       res.status(500).json({ error: "Erreur de téléchargement" });
     }
   });
@@ -267,7 +270,7 @@ export function registerManagementFilesRoutes(app: Express): void {
       });
       res.json({ success: true, expiresAt: expiresAt.toISOString() });
     } catch (error) {
-      console.error("[files] soft-delete error:", error);
+      log.error({ err: error }, "soft-delete error");
       res.status(500).json({ error: "Erreur de suppression" });
     }
   });
@@ -283,7 +286,7 @@ export function registerManagementFilesRoutes(app: Express): void {
         .orderBy(desc(filesTrash.deletedAt));
       res.json({ files: rows });
     } catch (error) {
-      console.error("[files] trash list error:", error);
+      log.error({ err: error }, "trash list error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -338,7 +341,7 @@ export function registerManagementFilesRoutes(app: Express): void {
       });
       res.json({ file: restored });
     } catch (error) {
-      console.error("[files] restore error:", error);
+      log.error({ err: error }, "restore error");
       res.status(500).json({ error: "Erreur de restauration" });
     }
   });
@@ -372,7 +375,7 @@ export function registerManagementFilesRoutes(app: Express): void {
       });
       res.json({ success: true });
     } catch (error) {
-      console.error("[files] hard-delete error:", error);
+      log.error({ err: error }, "hard-delete error");
       res.status(500).json({ error: "Erreur de suppression définitive" });
     }
   });
@@ -461,7 +464,7 @@ export function registerManagementFilesRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Paramètres invalides", details: error.errors });
         }
-        console.error("[files] send-email-bulk error:", error);
+        log.error({ err: error }, "send-email-bulk error");
         res.status(500).json({ error: "Erreur d'envoi email" });
       }
     },

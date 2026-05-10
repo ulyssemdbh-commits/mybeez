@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Payroll Routes — fiches de paie. Mounted at
  * `/api/management/:slug/payroll`.
  *
@@ -45,6 +45,9 @@ import {
   uploadFileToStorage,
   downloadFileBufferFromStorage,
 } from "../../services/files/storage";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Payroll");
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin", "manager"] as const;
@@ -128,7 +131,7 @@ export function registerManagementPayrollRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Filtres invalides", details: error.errors });
       }
-      console.error("[payroll] list error:", error);
+      log.error({ err: error }, "list error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -147,7 +150,7 @@ export function registerManagementPayrollRoutes(app: Express): void {
       if (!row) return res.status(404).json({ error: "Fiche introuvable" });
       res.json({ payroll: row });
     } catch (error) {
-      console.error("[payroll] detail error:", error);
+      log.error({ err: error }, "detail error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -190,7 +193,7 @@ export function registerManagementPayrollRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[payroll] create error:", error);
+      log.error({ err: error }, "create error");
       res.status(500).json({ error: "Erreur de création" });
     }
   });
@@ -222,7 +225,7 @@ export function registerManagementPayrollRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[payroll] update error:", error);
+      log.error({ err: error }, "update error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -249,7 +252,7 @@ export function registerManagementPayrollRoutes(app: Express): void {
       });
       res.json({ success: true });
     } catch (error) {
-      console.error("[payroll] delete error:", error);
+      log.error({ err: error }, "delete error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -292,7 +295,7 @@ export function registerManagementPayrollRoutes(app: Express): void {
           if (msg.startsWith("Aucun provider")) {
             return res.status(503).json({ error: msg });
           }
-          console.error("[payroll] import-pdf OCR error:", err);
+          log.error({ err: err }, "import-pdf OCR error");
           return res.status(502).json({ error: msg });
         }
 
@@ -460,7 +463,7 @@ export function registerManagementPayrollRoutes(app: Express): void {
             .status(409)
             .json({ error: "Une fiche existe déjà pour cet employé et ce mois (race)." });
         }
-        console.error("[payroll] import-pdf error:", error);
+        log.error({ err: error }, "import-pdf error");
         res.status(500).json({ error: "Erreur d'import" });
       }
     },
@@ -650,7 +653,7 @@ export function registerManagementPayrollRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Paramètres invalides", details: error.errors });
         }
-        console.error("[payroll] reparse-all error:", error);
+        log.error({ err: error }, "reparse-all error");
         res.status(500).json({ error: "Erreur" });
       }
     },

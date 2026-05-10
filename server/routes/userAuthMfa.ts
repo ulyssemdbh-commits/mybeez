@@ -1,4 +1,4 @@
-/**
+﻿/**
  * MFA TOTP routes — PR #13.
  *
  * Lifecycle:
@@ -36,6 +36,9 @@ import {
 } from "../middleware/auth";
 import { recordAudit } from "../services/auth/auditService";
 import { checkLockout } from "../services/auth/lockoutService";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("MFA");
 
 const codeSchema = z.string().min(6).max(20);
 const passwordSchema = z.string().min(PASSWORD_LIMITS.min).max(PASSWORD_LIMITS.max);
@@ -62,7 +65,7 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       const status = await mfaService.statusFor(u.userId);
       res.json(status);
     } catch (error) {
-      console.error("[mfa] status error:", error);
+      log.error({ err: error }, "status error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -97,7 +100,7 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[mfa] setup error:", error);
+      log.error({ err: error }, "setup error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -123,7 +126,7 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[mfa] confirm error:", error);
+      log.error({ err: error }, "confirm error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -150,7 +153,7 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[mfa] disable error:", error);
+      log.error({ err: error }, "disable error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -216,7 +219,7 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[mfa] challenge error:", error);
+      log.error({ err: error }, "challenge error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -283,7 +286,7 @@ export function registerUserAuthMfaRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[mfa] recovery error:", error);
+      log.error({ err: error }, "recovery error");
       res.status(500).json({ error: "Erreur" });
     }
   });

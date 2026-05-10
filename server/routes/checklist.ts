@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Checklist Routes — myBeez (Multi-Tenant)
  *
  * All routes are scoped to a tenant via /:slug prefix.
@@ -15,6 +15,9 @@ import { categories, items, checks, futureItems, emailLogs, comments } from "../
 import { eq, and, desc, gte } from "drizzle-orm";
 import { emitChecklistUpdated } from "../services/realtimeSync";
 import { z } from "zod";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("Checklist");
 
 // Permission matrix for tenant-scoped checklist actions.
 // READ: anyone with a tenant binding (incl. viewer / accountant).
@@ -70,7 +73,7 @@ export function registerChecklistRoutes(app: Express): void {
 
       res.json(enriched);
     } catch (error) {
-      console.error("[Checklist] Get categories error:", error);
+      log.error({ err: error }, "Get categories error");
       res.status(500).json({ error: "Erreur de chargement" });
     }
   });
@@ -89,7 +92,7 @@ export function registerChecklistRoutes(app: Express): void {
 
       res.json({ total, checked, unchecked: total - checked, uncheckedItems, date: today });
     } catch (error) {
-      console.error("[Checklist] Dashboard error:", error);
+      log.error({ err: error }, "Dashboard error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -120,7 +123,7 @@ export function registerChecklistRoutes(app: Express): void {
       res.json({ success: true });
       emitChecklistUpdated(req.tenant!.slug);
     } catch (error) {
-      console.error("[Checklist] Toggle error:", error);
+      log.error({ err: error }, "Toggle error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -135,7 +138,7 @@ export function registerChecklistRoutes(app: Express): void {
       res.json({ success: true });
       emitChecklistUpdated(req.tenant!.slug);
     } catch (error) {
-      console.error("[Checklist] Reset error:", error);
+      log.error({ err: error }, "Reset error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -157,7 +160,7 @@ export function registerChecklistRoutes(app: Express): void {
 
       res.status(201).json(item);
     } catch (error) {
-      console.error("[Checklist] Create item error:", error);
+      log.error({ err: error }, "Create item error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -177,7 +180,7 @@ export function registerChecklistRoutes(app: Express): void {
       if (!updated) return res.status(404).json({ error: "Item non trouvé" });
       res.json(updated);
     } catch (error) {
-      console.error("[Checklist] Update item error:", error);
+      log.error({ err: error }, "Update item error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -194,7 +197,7 @@ export function registerChecklistRoutes(app: Express): void {
 
       res.json({ success: true });
     } catch (error) {
-      console.error("[Checklist] Delete item error:", error);
+      log.error({ err: error }, "Delete item error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -213,7 +216,7 @@ export function registerChecklistRoutes(app: Express): void {
 
       res.status(201).json(cat);
     } catch (error) {
-      console.error("[Checklist] Create category error:", error);
+      log.error({ err: error }, "Create category error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -227,7 +230,7 @@ export function registerChecklistRoutes(app: Express): void {
         .limit(50);
       res.json(result);
     } catch (error) {
-      console.error("[Checklist] Get comments error:", error);
+      log.error({ err: error }, "Get comments error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -243,7 +246,7 @@ export function registerChecklistRoutes(app: Express): void {
       }).returning();
       res.status(201).json(comment);
     } catch (error) {
-      console.error("[Checklist] Add comment error:", error);
+      log.error({ err: error }, "Add comment error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -270,7 +273,7 @@ export function registerChecklistRoutes(app: Express): void {
 
       res.json(Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date)));
     } catch (error) {
-      console.error("[Checklist] History error:", error);
+      log.error({ err: error }, "History error");
       res.status(500).json({ error: "Erreur" });
     }
   });

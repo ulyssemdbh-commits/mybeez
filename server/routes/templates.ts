@@ -13,6 +13,9 @@
 
 import type { Express, Request, Response } from "express";
 import { templateService } from "../services/templateService";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("Templates");
 
 export function registerTemplateRoutes(app: Express): void {
   app.get("/api/templates", async (_req: Request, res: Response) => {
@@ -20,7 +23,7 @@ export function registerTemplateRoutes(app: Express): void {
       const tree = await templateService.listTree();
       res.json({ templates: tree });
     } catch (error) {
-      console.error("[Templates] List error:", error);
+      log.error({ err: error }, "list error");
       res.status(500).json({ error: "Erreur de chargement" });
     }
   });
@@ -33,7 +36,7 @@ export function registerTemplateRoutes(app: Express): void {
         t.parentId === null ? await templateService.listChildren(t.id) : [];
       res.json({ template: t, children });
     } catch (error) {
-      console.error("[Templates] Get error:", error);
+      log.error({ err: error, slug: req.params.slug }, "get error");
       res.status(500).json({ error: "Erreur" });
     }
   });

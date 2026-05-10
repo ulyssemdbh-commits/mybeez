@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Suppliers Routes — back-office gestion (Management).
  *
  * Tenant-scoped CRUD on the `suppliers` table.
@@ -21,6 +21,9 @@ import { suppliers } from "../../../shared/schema/checklist";
 import { and, eq, asc } from "drizzle-orm";
 import { z } from "zod";
 import { recordAudit } from "../../services/auth/auditService";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("Suppliers");
 
 function parseId(param: string): number | null {
   const id = Number.parseInt(param, 10);
@@ -85,7 +88,7 @@ export function registerManagementSupplierRoutes(app: Express): void {
 
       res.json({ suppliers: rows });
     } catch (error) {
-      console.error("[Suppliers] List error:", error);
+      log.error({ err: error }, "List error");
       res.status(500).json({ error: "Erreur de chargement" });
     }
   });
@@ -104,7 +107,7 @@ export function registerManagementSupplierRoutes(app: Express): void {
       if (!row) return res.status(404).json({ error: "Fournisseur introuvable" });
       res.json({ supplier: row });
     } catch (error) {
-      console.error("[Suppliers] Get error:", error);
+      log.error({ err: error }, "Get error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -129,7 +132,7 @@ export function registerManagementSupplierRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[Suppliers] Create error:", error);
+      log.error({ err: error }, "Create error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -159,7 +162,7 @@ export function registerManagementSupplierRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[Suppliers] Update error:", error);
+      log.error({ err: error }, "Update error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -184,7 +187,7 @@ export function registerManagementSupplierRoutes(app: Express): void {
       });
       res.json({ success: true });
     } catch (error) {
-      console.error("[Suppliers] Delete error:", error);
+      log.error({ err: error }, "Delete error");
       res.status(500).json({ error: "Erreur" });
     }
   });

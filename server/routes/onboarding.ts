@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Onboarding routes — public signup that creates a user AND their first tenant.
  *
  *   POST /api/onboarding/signup-with-tenant
@@ -22,6 +22,9 @@ import { tenantService } from "../services/tenantService";
 import { userTenantService } from "../services/auth/userTenantService";
 import { sendVerificationEmail } from "../services/auth/mailService";
 import { PASSWORD_LIMITS } from "../services/auth/passwordService";
+import { moduleLogger } from "../lib/logger";
+
+const log = moduleLogger("Onboarding");
 
 function getAppBaseUrl(req: Request): string {
   if (process.env.APP_BASE_URL) return process.env.APP_BASE_URL.replace(/\/+$/, "");
@@ -95,7 +98,7 @@ export function registerOnboardingRoutes(app: Express): void {
       const suggestion = await suggestAvailableSlug(slug);
       return res.json({ available: false, reason: "taken", suggestion });
     } catch (error) {
-      console.error("[onboarding] check-slug error:", error);
+      log.error({ err: error }, "check-slug error");
       res.status(500).json({ error: "Erreur" });
     }
   });
@@ -160,7 +163,7 @@ export function registerOnboardingRoutes(app: Express): void {
         const verifyUrl = `${getAppBaseUrl(req)}/auth/verify?token=${encodeURIComponent(token)}`;
         await sendVerificationEmail({ email: user.email, fullName: user.fullName }, verifyUrl);
       } catch (mailErr) {
-        console.error("[onboarding] verification email failed:", mailErr);
+        log.error({ err: mailErr }, "verification email failed");
       }
 
       // 5. Auto-login the new user.
@@ -186,7 +189,7 @@ export function registerOnboardingRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[onboarding] signup error:", error);
+      log.error({ err: error }, "signup error");
       res.status(500).json({ error: "Erreur de création du compte" });
     }
   });

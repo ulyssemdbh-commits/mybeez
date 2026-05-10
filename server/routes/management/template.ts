@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Tenant template — back-office gestion (Management).
  *
  * Routes pour consulter et changer le `business_template` associé au
@@ -29,6 +29,9 @@ import { businessTemplates } from "../../../shared/schema/templates";
 import { tenantService } from "../../services/tenantService";
 import { templateService } from "../../services/templateService";
 import { recordAudit } from "../../services/auth/auditService";
+import { moduleLogger } from "../../lib/logger";
+
+const log = moduleLogger("TemplateMgmt");
 
 const READ_ROLES = ["owner", "admin", "manager", "staff", "viewer"] as const;
 const WRITE_ROLES = ["owner", "admin"] as const;
@@ -57,7 +60,7 @@ export function registerManagementTemplateRoutes(app: Express): void {
         parent: parent ?? null,
       });
     } catch (error) {
-      console.error("[Templates] Get tenant template error:", error);
+      log.error({ err: error }, "Get tenant template error");
       res.status(500).json({ error: "Erreur de chargement" });
     }
   });
@@ -115,7 +118,7 @@ export function registerManagementTemplateRoutes(app: Express): void {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
       }
-      console.error("[Templates] Update tenant template error:", error);
+      log.error({ err: error }, "Update tenant template error");
       res.status(500).json({ error: "Erreur de mise à jour" });
     }
   });
