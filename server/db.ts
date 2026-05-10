@@ -1,11 +1,13 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import * as schema from "@shared/schema";
+import { moduleLogger } from "./lib/logger";
 
 const { Pool } = pg;
+const log = moduleLogger("DB");
 
 if (!process.env.DATABASE_URL) {
-  console.error("[DB] WARNING: DATABASE_URL not set.");
+  log.warn("DATABASE_URL not set");
 }
 
 export const pool = new Pool({
@@ -19,7 +21,7 @@ export const pool = new Pool({
 });
 
 pool.on("error", (err: Error) => {
-  console.error("[DB] Pool error:", err.message);
+  log.error({ err }, "Pool error");
 });
 
 export const db = drizzle(pool, { schema });
