@@ -180,6 +180,7 @@ Toutes mounted at `/api/management/:slug/<module>`, derrière
 | `bankAccounts.ts` | `/bank-accounts` | tous | owner/admin/manager | CRUD + soft-delete `isActive`. Detail GET retourne `{account, balance}` avec `currentBalance = openingBalance + Σ(entries.amount)` calculé via `computeBankAccountBalance` (PR #83) |
 | `bankEntries.ts` | `/bank-entries` + `/stats` + `/unreconciled` | tous | owner/admin/manager | Hard-delete (audit trace). Amount **signé** (négatif=débit). FK logiques optionnelles `purchaseId`/`expenseId`/`payrollId` pour rapprochement. Filtres `from`,`to`,`accountId`,`category`,`reconciled`. Cross-tenant guard sur `bankAccountId` au create/update. (PR #83) |
 | `cashEntries.ts` | `/cash-entries` + `/stats` | tous | owner/admin/manager | Hard-delete. Amount **toujours positif**, sens via `kind` ('in'\|'out'). Générique (pas de colonnes resto-spécifiques). (PR #83) |
+| `analytics.ts` | `/analytics/dashboard` + `/monthly` + `/tva` | tous | — (read-only) | Compute on-demand depuis purchases/expenses/payroll/bank/cash. Période = mois courant par défaut. Top fournisseurs, payment status mix, séries mensuelles signées, TVA déductible (collectée=null V1, requires future revenue table). (PR #85) |
 
 ### 3.2.10 SSE — Realtime
 
@@ -243,6 +244,7 @@ Fichier : `server/services/`.
 | `hr/payrollSummary` | `computePayrollSummary(emps, payrolls, absences, employerChargeRate?)` agrégats dashboard RH (effectif actif, masse salariale, totaux brut/net/charges, estimation employer charges default 13%, ratio social, alertes). Flag `hasEstimatedEmployerCharges`. (PR #72) | — | ✓ Pure |
 | `lib/logger` | pino factory : `rootLogger` + `moduleLogger(name)` child. JSON prod / `pino-pretty` dev, `LOG_LEVEL` env, redact secrets. Consommé par tous les routes/services (PR #82). | — | ✓ |
 | `finance/financeSummary` | Helpers purs : `computeBankAccountBalance`, `computeBankStats`, `computeCashStats`. Round-to-cent. Consommés par les routes `/bank-accounts/:id`, `/bank-entries/stats`, `/cash-entries/stats`. (PR #83) | — | ✓ Pure |
+| `analytics/analyticsSummary` | Helpers purs : `monthsInRange`, `bucketMonth`, `sumField`, `bucketSumByMonth`, `topByGroup`, `countByGroup`. Compute on-demand pour dashboard / monthly / TVA. Pas de cache, table `analytics` reste libre pour Phase 2. (PR #85) | — | ✓ Pure |
 
 ### 3.4.2 Convention `recordAudit`
 
@@ -389,6 +391,7 @@ Fichier : `server/__tests__/`, `server/middleware/__tests__/`,
 | `lib/logger.test.ts` | Smoke pino : levels, child bindings, level inheritance, redact compile (PR #82) |
 | `services/finance/financeSummary.test.ts` | computeBankAccountBalance + computeBankStats + computeCashStats : zeros, signed sum, defense-in-depth, round-to-cent (PR #83) |
 | `services/auth/hibpService.test.ts` | k-anonymity SHA-1 prefix only, suffixIsPwned parsing, soft-fail réseau / non-2xx, HIBP_DISABLED override (PR #84) |
+| `services/analytics/analyticsSummary.test.ts` | monthsInRange + bucketMonth + sumField + bucketSumByMonth + topByGroup + countByGroup : 23 cas (round-to-cent, year crossover, defense in depth NaN/Infinity, top stable sort, etc.) (PR #85) |
 | `services/files/{naming,trashService}.test.ts` | Sanitisation + TTL purge |
 | `seed/templates.test.ts` | Catalog richness + presentation invariants |
 

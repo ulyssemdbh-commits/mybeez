@@ -289,6 +289,11 @@ GET    /api/management/:slug/cash-entries                        READ (?from=&to
 GET    /api/management/:slug/cash-entries/stats                  READ (mêmes filtres)
 POST/PATCH/DELETE /api/management/:slug/cash-entries/:id         owner/admin/manager (DELETE hard, audit_log)
 
+# Analytics (PR #85 backend — read-only, tous rôles tenant)
+GET    /api/management/:slug/analytics/dashboard      READ (?from=YYYY-MM-DD&to=&topSuppliersLimit=N) — défaut = mois courant
+GET    /api/management/:slug/analytics/monthly        READ (?from=YYYY-MM&to=&months=N) — défaut = 12 mois inclusif
+GET    /api/management/:slug/analytics/tva            READ (?from=&to=) — TVA déductible. collected=null V1.
+
 # Realtime
 GET    /api/:slug/events                     SSE (tous rôles tenant)
 
