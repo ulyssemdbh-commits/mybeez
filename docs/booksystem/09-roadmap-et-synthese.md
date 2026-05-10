@@ -17,7 +17,7 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | 1 | feat/purchases | MFA TOTP | ✅ sécu (PR #52 + bonus #53/#54/#55) ✅ module (PRs #64/#65/#67) |
 | 2 | feat/cashflow (= expenses + bank + cash) | Audit log writes | ✅ audit (PR #68) ✅ bonus lockout + rate-limit auth (PR #69) ✅ partiel module (expenses #66 livré, bank/cash redesign reportés au Sprint 5) |
 | 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + PR #78 UI) ✅ hook V2 send-email-bulk (PR #79) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
-| 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ⏳ payroll/import-pdf OCR + reparse-all à livrer |
+| 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ✅ hooks payroll OCR `import-pdf` + `reparse-all` (PR #81) — **Sprint 4 V2 bouclé** |
 | 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ⏳ à venir |
 | 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ⏳ à venir |
 | 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ⏳ à venir |
@@ -62,26 +62,29 @@ Règles :
 - ✅ UI RH Sprint 4 V2 (PR #76) : page Gestion RH avec employés + payroll + absences (consommatrice de `/employees/summary`, table employés, détail employé avec sections Documents RH / Absences / Fiches de Paie).
 - ✅ Fix UI catalogue modules + empty-state checklist (PR #77).
 - ✅ Fix ops : `postgresql16-client` dans l'image app pour que backup/restore fonctionnent côté container (PR #75).
+- ✅ Hooks payroll OCR (PR #81) : `POST /payroll/import-pdf` (Vision API
+  via `payslipParser` + `matchEmployee` 3-tiers + upload R2 + insert
+  `files`/`payroll` en transaction) et `POST /payroll/reparse-all`
+  (cap 50/run, backfill `files.employeeId`). Helpers purs dans
+  `services/payroll/payrollImport.ts`. **Sprint 4 V2 bouclé.**
 
 ### 9.2.2 En cours / en attente de merge
 
 - (rien en attente — la stack Sprint 3-4 est intégralement mergée sur `main` au 2026-05-09)
 
-### 9.2.3 À suivre — Hooks files V2 reste (payroll OCR)
+### 9.2.3 À suivre — Sprint 4 V2 bouclé
 
-Les chantiers UI RH et `send-email-bulk` étant livrés, il reste :
+Tous les chantiers Sprint 4 V2 sont mergés (UI RH, send-email-bulk,
+hooks payroll OCR via PR #81). La prochaine cible est le Sprint 5
+(Bank/Cash redesign + logger pino), cf. §9.2.4.
 
-**Hooks payroll OCR** (compléments PR #71/#72) :
-- `POST /api/management/:slug/payroll/import-pdf` async + parser PDF +
-  `matchEmployee()` (déjà testable, pure helper PR #72) + auto-create employee
-  + archive in `files` + create payroll row.
-- `POST /api/management/:slug/payroll/reparse-all` : itérer
-  `files.category=rh + fileType=bulletin_paie` + re-extract.
-
-> Note : nécessite l'ajout de `pdf-parse` (ou équivalent) côté deps + un
-> pattern async (job tick local ou process direct selon volume attendu). Le
-> helper `matchEmployee()` est prêt côté `services/hr/employeeMatching.ts`
-> (3-tiers : SSN → nom exact ± permutation → fuzzy NFD).
+> Note ex-prerequis abandonné : initialement on avait planché sur
+> `pdf-parse` pour extraire le texte des bulletins PDF. La PR #81 a
+> tranché autrement — le `payslipParser` envoie le PDF brut à Gemini
+> via `inline_data` (même pattern qu'`invoiceParser`). Vision API gère
+> uniformément photo / PDF scanné / PDF natif, là où `pdf-parse`
+> n'aurait fonctionné que sur PDF natif numérique propre. Aucune
+> nouvelle dépendance ajoutée.
 
 ### 9.2.4 À suivre — Sprints 5-7
 

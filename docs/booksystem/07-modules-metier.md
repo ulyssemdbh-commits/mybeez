@@ -399,12 +399,44 @@ charges patronales si la PDF n'a pas extrait, paramétrable via
 ✅ UI page RH (consommatrice de `/summary` + listes) — PR #76.
 ✅ `send-email-bulk` fiches : utilise directement le hook files V2
    `POST /files/send-email-bulk` avec `fileIds: [pdfFileId, ...]` (PR #79).
+✅ Hooks payroll OCR (PR #81) :
+- `POST /api/management/:slug/payroll/import-pdf` body
+  `{ pdfBase64, originalName, mimeType, autoCreateEmployee? }` — sync,
+  Vision API (image via OpenAI/Gemini/Grok, PDF via Gemini natif),
+  consomme `matchEmployee()` 3-tiers, upload R2 + insert `files`
+  (category=rh, fileType=bulletin_paie) + insert `payroll` en
+  transaction. Pré-check duplicate `(employee, month)` → 409 explicite.
+  Auto-create employee opt-in (default false). Réponse 201 avec
+  `{ payroll, file, employeeId, createdEmployee, parsed: { fields,
+  provider, matchTier }, warnings }`.
+- `POST /api/management/:slug/payroll/reparse-all` body
+  `{ autoCreateEmployee?, employeeId? }` — itère les `files`
+  `category=rh + fileType=bulletin_paie` non liés à un payroll, cap 50
+  par run, télécharge le buffer R2, parse, match, insert payroll +
+  backfill `files.employeeId`. Réponse `{ scanned, created, errored,
+  errors[], remaining: 'more'|'none' }`.
 
-⏳ Reste V2 (PR follow-up) :
-- `POST /payroll/import-pdf` async + parser PDF + auto-create employee
-  + archive in `files` (consomme `matchEmployee()` existant).
-- `POST /payroll/reparse-all` : itérer sur files RH + re-extract.
-- Auto-création employee depuis `POST /payroll` si nom provided.
+Choix de design :
+- **Pas de `pdf-parse`** : Vision API gère uniformément photo / PDF
+  scanné / PDF natif. `pdf-parse` n'aurait fonctionné que sur PDF
+  numérique propre.
+- **Sync** (pas de job queue) : volumétrie cible < 10 bulletins/mois
+  par tenant. Si le run timeout en prod, on passe à un job plus tard.
+  Le batch-cap 50 sur `reparse-all` borne la durée.
+- **Conflit `(employee, month)`** = 409 explicite, l'utilisateur
+  tranche (delete + re-import). Pas d'écrasement implicite.
+- **Helpers purs** dans `services/payroll/payrollImport.ts`
+  (`payslipImportEligibility`, `buildPayrollValues`,
+  `buildEmployeeValues`, `summarizeImportWarnings`) : testables sans
+  DB ni provider IA.
+
+⏳ Reste V2 hors-scope payroll OCR :
+- Auto-création employee depuis `POST /payroll` (création manuelle
+  d'une fiche sans passer par l'OCR). Le helper `buildEmployeeValues`
+  est réutilisable.
+- UI : bouton « Importer un bulletin PDF » côté `EmployeesSection`
+  qui appelle `/import-pdf` + bouton « Re-traiter les bulletins
+  archivés » qui appelle `/reparse-all`.
 
 ---
 
