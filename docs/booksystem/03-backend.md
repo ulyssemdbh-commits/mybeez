@@ -168,7 +168,7 @@ Toutes mounted at `/api/management/:slug/<module>`, derrière
 | `expenses.ts` | `/expenses` + stats | tous | owner/admin/manager | Charges générales (URSSAF, EDF, …) |
 | `files.ts` | `/files` + `/trash` + `/send-email-bulk` | tous | owner/admin/manager | Upload R2 (multer 50MB) + corbeille TTL 7j + `files.employeeId` link RH (PR #71 backend + PR #78 UI) + hook V2 send-email-bulk Resend N attachments cap 25 MB (PR #79) |
 | `employees.ts` | `/employees` + `/employees/summary` | tous | owner/admin/manager | CRUD + endpoint stats dashboard RH (effectif, masse salariale, alertes, totaux période) (PR #72) |
-| `payroll.ts` | `/payroll` (?period=YYYY-MM&employeeId=N) | tous | owner/admin/manager | UNIQUE(tenant,employee,month) → 409 si duplicate. `pdfFileId` FK files.id archive bulletin. (PR #72) |
+| `payroll.ts` | `/payroll` (?period=YYYY-MM&employeeId=N) + `/import-pdf` + `/reparse-all` | tous | owner/admin/manager | UNIQUE(tenant,employee,month) → 409 si duplicate. `pdfFileId` FK files.id archive bulletin. Hooks OCR PR #81 : `import-pdf` (Vision API + matchEmployee + upload R2 + insert files+payroll en transaction) et `reparse-all` (cap 50/run, scan files RH non liés). |
 | `absences.ts` | `/absences` (?employeeId=N&from=&to=) | tous | owner/admin/manager | type enum [conge\|maladie\|retard\|absence\|formation], `isApproved` = signal "Alertes" RH (PR #72) |
 
 ### 3.2.10 SSE — Realtime
@@ -223,6 +223,8 @@ Fichier : `server/services/`.
 | `auth/auditService` | `recordAudit({req, event, metadata})` fail-soft + scrub secrets récursif (password/token/secret/totpCode/recoveryCode/imageBase64...) avec normalisation case/underscore/dash, profondeur max 4, troncature 500 chars (PR #68) | — | ✓ |
 | `auth/lockoutService` | Lockout par compte dérivé d'`audit_log`. `computeLockout(failures, now)` pure (testable). `checkLockout(userId)` fail-soft DB. Seuil 5 / fenêtre 15 min. Wired sur `/login`, `/mfa/challenge`, `/mfa/recovery` AVANT `verifyPassword` (anti-DoS argon2id). (PR #69) | — | ✓ |
 | `parsing/invoiceParser` | OCR Vision API (image + PDF) → champs facture + matchSupplierByName | — | ✓ |
+| `parsing/payslipParser` | OCR Vision API (image + PDF) → champs bulletin de paie. Réutilise `validateBase64Image` + `stripCodeFence` + MIME types d'`invoiceParser`. PDF via Gemini natif (PR #81). | — | ✓ |
+| `payroll/payrollImport` | Helpers purs : `payslipImportEligibility`, `buildPayrollValues`, `buildEmployeeValues`, `summarizeImportWarnings`. Consommés par les routes `/payroll/import-pdf` + `/reparse-all` (PR #81). | — | ✓ Pure |
 | `files/naming` | Sanitisation noms + storage key R2 (`files/<tenantId>/<storedName>`, séparé du préfixe `mybeezdb/` backups) | — | ✓ Pure |
 | `files/storage` | upload/download(stream + buffer)/delete vers R2 (S3 multipart). Client S3 caché lazy. delete fail-soft. `downloadFileBufferFromStorage` ajouté PR #79 (consommé par `send-email-bulk` pour les attachments Resend). | — | ✓ |
 | `files/trashService` | `computeExpiresAt`/`isExpired` purs. `purgeExpiredTrash` cascade R2 + DB. `scheduleTrashPurge` boot+1h, `unref()` pour ne pas bloquer event loop. TTL 7j. | — | ✓ (job tick local) |
@@ -369,6 +371,8 @@ Fichier : `server/__tests__/`, `server/middleware/__tests__/`,
 | `services/auth/{passwordService,tokenService,mailService,mfaService,auditService}.test.ts` | Crypto + tokens + Resend fail-soft + audit scrub |
 | `services/alfred/alfredService.test.ts` | History capping, prompt construction |
 | `services/parsing/invoiceParser.test.ts` | Extract champs + matchSupplierByName |
+| `services/parsing/payslipParser.test.ts` | Validation Zod du `PayslipFieldsSchema` |
+| `services/payroll/payrollImport.test.ts` | Helpers purs eligibility + buildPayrollValues + buildEmployeeValues + warnings (PR #81) |
 | `services/files/{naming,trashService}.test.ts` | Sanitisation + TTL purge |
 | `seed/templates.test.ts` | Catalog richness + presentation invariants |
 

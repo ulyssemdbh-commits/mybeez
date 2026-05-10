@@ -270,6 +270,8 @@ GET    /api/management/:slug/employees          READ (?activeOnly=true)
 POST/PATCH/DELETE /api/management/:slug/employees/:id   owner/admin/manager (DELETE = soft isActive=false)
 GET    /api/management/:slug/payroll          READ (?period=YYYY-MM&employeeId=N)
 POST/PATCH/DELETE /api/management/:slug/payroll/:id     owner/admin/manager (POST 409 si duplicate employee+month)
+POST   /api/management/:slug/payroll/import-pdf         owner/admin/manager (V2 hook PR #81 — body {pdfBase64, originalName, mimeType, autoCreateEmployee?})
+POST   /api/management/:slug/payroll/reparse-all        owner/admin/manager (V2 hook PR #81 — itère files RH non liés, cap 50/run)
 GET    /api/management/:slug/absences         READ (?employeeId=N&from=&to=)
 POST/PATCH/DELETE /api/management/:slug/absences/:id    owner/admin/manager
 
