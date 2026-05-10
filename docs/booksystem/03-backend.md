@@ -21,10 +21,15 @@ Fichier : `server/index.ts`.
    - Prod sans `APP_BASE_URL` → `process.exit(1)` (Host-header injection guard).
    - `SUPERADMIN_TOKEN` < 16 chars → warn (routes `/api/tenants/*` répondent 503).
    - `RESEND_API_KEY` absent → warn (emails loggués stdout en dev).
-2. **Process hooks** : `uncaughtException`, `unhandledRejection` loggués stderr.
+2. **Process hooks** : `uncaughtException`, `unhandledRejection` loggués via `rootLogger.fatal` (PR #82).
 3. **Express init**
    - `app.set("trust proxy", 1)` — pour que `req.ip` reflète la vraie IP
      derrière nginx + Cloudflare.
+   - `pinoHttp` middleware (PR #82) : génère `req.id` UUID v4 (ou
+     réutilise `X-Request-Id` entrant), attache `req.log` enrichi,
+     log auto chaque request avec method + url + status + duration.
+     Mounted **avant** helmet/session pour capturer toutes les erreurs
+     amont. Niveau dérivé : 5xx → error, 4xx → warn, 2xx/3xx → info.
    - `helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false })`
      — CSP désactivé pour Vite dev (Sprint 6 réactivera).
    - `compression({ level: 6, threshold: 1024 })`.
@@ -230,6 +235,7 @@ Fichier : `server/services/`.
 | `files/trashService` | `computeExpiresAt`/`isExpired` purs. `purgeExpiredTrash` cascade R2 + DB. `scheduleTrashPurge` boot+1h, `unref()` pour ne pas bloquer event loop. TTL 7j. | — | ✓ (job tick local) |
 | `hr/employeeMatching` | `matchEmployee(parsed, candidates)` 3-tiers SSN > nom exact (+ permutation) > fuzzy. Normalisation NFD + strip diacritics. Pure. Sera consommé par V2 `import-PDF` bulletin. (PR #72) | — | ✓ Pure |
 | `hr/payrollSummary` | `computePayrollSummary(emps, payrolls, absences, employerChargeRate?)` agrégats dashboard RH (effectif actif, masse salariale, totaux brut/net/charges, estimation employer charges default 13%, ratio social, alertes). Flag `hasEstimatedEmployerCharges`. (PR #72) | — | ✓ Pure |
+| `lib/logger` | pino factory : `rootLogger` + `moduleLogger(name)` child. JSON prod / `pino-pretty` dev, `LOG_LEVEL` env, redact secrets. Consommé par tous les routes/services (PR #82). | — | ✓ |
 
 ### 3.4.2 Convention `recordAudit`
 
@@ -373,6 +379,7 @@ Fichier : `server/__tests__/`, `server/middleware/__tests__/`,
 | `services/parsing/invoiceParser.test.ts` | Extract champs + matchSupplierByName |
 | `services/parsing/payslipParser.test.ts` | Validation Zod du `PayslipFieldsSchema` |
 | `services/payroll/payrollImport.test.ts` | Helpers purs eligibility + buildPayrollValues + buildEmployeeValues + warnings (PR #81) |
+| `lib/logger.test.ts` | Smoke pino : levels, child bindings, level inheritance, redact compile (PR #82) |
 | `services/files/{naming,trashService}.test.ts` | Sanitisation + TTL purge |
 | `seed/templates.test.ts` | Catalog richness + presentation invariants |
 

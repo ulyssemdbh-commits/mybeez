@@ -346,7 +346,7 @@ Convention sur `main` :
 
 ### 8.6.1 Vitest
 
-15 fichiers de test, ~150 tests au 2026-05-08.
+28 fichiers de test, 293 tests au 2026-05-10.
 
 | Zone | Couvre |
 |---|---|
@@ -420,22 +420,60 @@ Config dans `package.json` ou `.prettierrc` :
 | Aspect | État |
 |---|---|
 | `/api/health` (uptime, SSE stats, AI provider flags) | ✅ |
-| Logger structuré (pino, winston, …) | ❌ `console.log` only, préfixes `[Module]` (Sprint 5 sécu/ops) |
+| Logger structuré (pino) | ✅ Livré PR #82 — `server/lib/logger.ts` + `pino-http` middleware, JSON prod / `pino-pretty` dev, redact secrets |
 | Metrics (Prometheus, OpenTelemetry) | ❌ (Sprint 7 sécu/ops) |
 | Alerting | ❌ |
-| `process.on("uncaughtException"/"unhandledRejection")` | ✅ logs stderr |
+| `process.on("uncaughtException"/"unhandledRejection")` | ✅ `rootLogger.fatal` (PR #82) |
 | Persistence logs (ELK, Datadog, Loki…) | ❌ |
 | Sentry frontend | ❌ (Sprint 7 sécu/ops) |
 
-### 8.8.1 Plan Sprint 5 — pino
+### 8.8.1 Logger pino — livré PR #82
 
-Migration vers pino :
-- Stdout JSON structuré.
-- Niveaux trace/debug/info/warn/error/fatal.
-- Champs auto : `time`, `level`, `pid`, `hostname`.
-- Champs contextuels : `tenantId`, `userId`, `route`, `requestId`.
-- Couplage léger : `pino-pretty` en dev, JSON brut en prod.
-- Persistence via redirection stdout → fichier ou agent (à choisir).
+Migration `console.*` → pino structuré (Sprint 5 sécu/ops). 135
+occurrences sur 30 fichiers remplacées en une PR pour éviter une
+période de cohabitation.
+
+**Modules livrés** :
+
+- `server/lib/logger.ts` : `rootLogger` (root du process) +
+  `moduleLogger(name)` (child pré-bound avec `{ name }`, remplace les
+  préfixes `[Module]` legacy).
+- `pino-http` middleware mounté tout en haut dans `server/index.ts` :
+  attache `req.log` (child enrichi `{ requestId }`), génère un `req.id`
+  UUID v4 (ou réutilise `X-Request-Id` entrant), log auto chaque request
+  avec method + url + status + duration. Niveau dérivé : 5xx → error,
+  4xx → warn, 2xx/3xx → info.
+
+**Format** :
+
+- Prod (`NODE_ENV=production`) : JSON brut une ligne par log, capté
+  tel quel par Docker stdout.
+- Dev : `pino-pretty` colorisé, single-line, timestamp `HH:MM:ss.l`.
+
+**Niveau** : `LOG_LEVEL` env var, default `info` prod / `debug` dev.
+
+**Redact** : champs sensibles (password, token, secret, apiKey,
+authorization, cookie, totpSecret, mfaSecret, recoveryCode,
+imageBase64, pdfBase64, plus paths spécifiques `req.headers.cookie`,
+`req.headers.authorization`, `res.headers['set-cookie']`) censurés
+`[REDACTED]` par pino. Liste alignée sur `auditService.ts`
+intentionnellement — même goal "ne jamais logger un credential".
+
+**Convention d'usage** dans les modules :
+
+```ts
+import { moduleLogger } from "../lib/logger";
+const log = moduleLogger("Purchases");
+// …
+log.error({ err, purchaseId }, "create failed");
+log.info({ tenantId, count: rows.length }, "list returned");
+```
+
+**Tests** : `server/lib/__tests__/logger.test.ts` (4 tests smoke :
+levels, child bindings, level inheritance, redact paths compile).
+
+**Persistence logs en prod** : reste sur stdout / Docker logs. Pas
+d'agent (Loki/Datadog) pour l'instant — concern Sprint 7 (obs).
 
 ### 8.8.2 Plan Sprint 7 — Prometheus + Sentry
 

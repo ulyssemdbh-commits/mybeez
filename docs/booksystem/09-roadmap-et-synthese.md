@@ -18,7 +18,7 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | 2 | feat/cashflow (= expenses + bank + cash) | Audit log writes | ✅ audit (PR #68) ✅ bonus lockout + rate-limit auth (PR #69) ✅ partiel module (expenses #66 livré, bank/cash redesign reportés au Sprint 5) |
 | 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + PR #78 UI) ✅ hook V2 send-email-bulk (PR #79) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
 | 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ✅ hooks payroll OCR `import-pdf` + `reparse-all` (PR #81) — **Sprint 4 V2 bouclé** |
-| 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ⏳ à venir |
+| 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) — module métier Bank/Cash redesign à venir |
 | 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ⏳ à venir |
 | 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ⏳ à venir |
 
@@ -67,16 +67,23 @@ Règles :
   `files`/`payroll` en transaction) et `POST /payroll/reparse-all`
   (cap 50/run, backfill `files.employeeId`). Helpers purs dans
   `services/payroll/payrollImport.ts`. **Sprint 4 V2 bouclé.**
+- ✅ Logger structuré pino (PR #82 — Sprint 5 sécu/ops) :
+  `server/lib/logger.ts` (root + `moduleLogger(name)` child) +
+  `pino-http` middleware (UUID requestId, log auto request/response avec
+  duration). 135 occurrences `console.*` migrées sur 30 fichiers. Format
+  JSON prod / `pino-pretty` dev. `LOG_LEVEL` env var. Redact secrets
+  aligné sur `auditService`.
 
 ### 9.2.2 En cours / en attente de merge
 
 - (rien en attente — la stack Sprint 3-4 est intégralement mergée sur `main` au 2026-05-09)
 
-### 9.2.3 À suivre — Sprint 4 V2 bouclé
+### 9.2.3 À suivre — Sprint 5 module métier
 
-Tous les chantiers Sprint 4 V2 sont mergés (UI RH, send-email-bulk,
-hooks payroll OCR via PR #81). La prochaine cible est le Sprint 5
-(Bank/Cash redesign + logger pino), cf. §9.2.4.
+Le sécu/ops Sprint 5 (logger pino) est livré (PR #82). Reste le module
+métier Sprint 5 : **Bank/Cash redesign** (moyens de paiement génériques
+avec lien vers `purchases`/`expenses`, à concevoir en partant de zéro
+plutôt que copier le modèle restaurant-flat d'ulysseclaude).
 
 > Note ex-prerequis abandonné : initialement on avait planché sur
 > `pdf-parse` pour extraire le texte des bulletins PDF. La PR #81 a
@@ -202,7 +209,7 @@ Ce qui manque pour être *fully bankable* :
 ### 9.6.5 Ops
 
 - ~~**Pas de healthcheck Docker `app`**~~ ✅ Livré (PR #70).
-- **Pas de logger structuré** — `console.log` only.
+- ~~**Pas de logger structuré**~~ ✅ Livré pino (PR #82).
 - **Aucune metric applicative** (latence, error rate, DB pool).
 - **Aucun alerting**.
 - ~~**Cron backups** pas câblé en prod.~~ ✅ Livré units versionnées (PR #70), reste à install sur le host.
