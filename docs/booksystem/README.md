@@ -4,7 +4,7 @@
 > préambule, chapitres, sous-chapitres, architecture complète, synthèse et
 > objectifs en cours de réalisation et à suivre.
 >
-> **À jour au :** 2026-05-08 — main + branche `feat/files-and-trash`
+> **À jour au :** 2026-05-09 — main (PRs #78 UI Files, #79 send-email-bulk mergées)
 > **Domaine prod :** https://mybeez-ai.com
 > **Repo :** https://github.com/ulyssemdbh-commits/mybeez
 
@@ -75,7 +75,7 @@ code (et non l'état idéal ou intentionné). Sa raison d'être :
 
 ## Synthèse 30 secondes
 
-**État global au 2026-05-08** : MVP solide à ~70%, fondations saines, en
+**État global au 2026-05-09** : MVP solide à ~85%, fondations saines, en
 durcissement sécu et en livraison continue des modules métier.
 
 | Pilier | État |
@@ -91,19 +91,20 @@ durcissement sécu et en livraison continue des modules métier.
 | Module Suppliers (Fournisseurs) | ✅ |
 | Module Purchases (Achats) + OCR + auto-match | ✅ |
 | Module Expenses (Dépenses générales) | ✅ |
-| Module Files (Fichiers + corbeille TTL 7j) | 🟡 en cours sur `feat/files-and-trash` |
-| Modules Employees/Payroll/Absences/BankEntries/CashEntries/Analytics | ⏳ Sprints 3-7 |
+| Module Files (corbeille TTL 7j + UI + hook send-email-bulk V2) | ✅ |
+| Modules Employees + Payroll + Absences (backend + UI Sprint 4 V2) | ✅ (reste payroll/import-pdf OCR) |
+| Modules BankEntries/CashEntries/Analytics/History | ⏳ Sprints 5-7 |
 | CI/CD GitHub Actions (typecheck + lint + test + build) | ✅ |
-| Backups Postgres → R2 (script + retention) | ✅ (cron systemd ⏳ Sprint 4) |
-| Healthcheck Docker `app` | ⏳ Sprint 4 |
+| Backups Postgres → R2 (script + retention + cron systemd) | ✅ (units versionnées PR #70, install host à faire) |
+| Healthcheck Docker `app` | ✅ (PR #70) |
 | Logger structuré pino | ⏳ Sprint 5 |
 | HSTS + CSP + check HIBP | ⏳ Sprint 6 |
 | Metrics Prometheus + Sentry | ⏳ Sprint 7 |
 | Stripe / billing | ❌ Phase 2 |
 
-**Verrou actuel** : finir le module Files (corbeille TTL 7j, R2 storage) avant
-d'entamer le sprint 3 (Employees + lockout login). Cf.
-`09-roadmap-et-synthese.md`.
+**Verrou actuel** : finir les hooks payroll OCR (`import-pdf` + `reparse-all`)
+pour boucler le Sprint 4 V2 avant d'entamer le Sprint 5 (Bank/Cash redesign +
+logger pino). Cf. `09-roadmap-et-synthese.md`.
 
 ---
 

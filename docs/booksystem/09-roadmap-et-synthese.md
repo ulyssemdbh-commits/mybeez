@@ -1,6 +1,6 @@
 # Chapitre 09 — Roadmap et synthèse
 
-> **Résumé.** Ce chapitre donne l'état réel au 2026-05-08, les sprints livrés,
+> **Résumé.** Ce chapitre donne l'état réel au 2026-05-09, les sprints livrés,
 > ce qui est en cours, ce qui reste à faire pour atteindre l'objectif "200%"
 > (produit bankable + différenciation), et la dette explicitement reconnue.
 > Mettre à jour à chaque sprint terminé.
@@ -16,8 +16,8 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 |---|---|---|---|
 | 1 | feat/purchases | MFA TOTP | ✅ sécu (PR #52 + bonus #53/#54/#55) ✅ module (PRs #64/#65/#67) |
 | 2 | feat/cashflow (= expenses + bank + cash) | Audit log writes | ✅ audit (PR #68) ✅ bonus lockout + rate-limit auth (PR #69) ✅ partiel module (expenses #66 livré, bank/cash redesign reportés au Sprint 5) |
-| 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + 16b44d1 UI) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
-| 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | 🟡 backend HR livré (PR #72), UI à livrer (PR follow-up) |
+| 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + PR #78 UI) ✅ hook V2 send-email-bulk (PR #79) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
+| 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ⏳ payroll/import-pdf OCR + reparse-all à livrer |
 | 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ⏳ à venir |
 | 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ⏳ à venir |
 | 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ⏳ à venir |
@@ -29,7 +29,7 @@ Règles :
 
 ---
 
-## 9.2 État réel au 2026-05-08
+## 9.2 État réel au 2026-05-09
 
 ### 9.2.1 Livré (mergé sur `main`)
 
@@ -56,36 +56,32 @@ Règles :
 - ✅ Audit log écritures sur événements sensibles (PR #68 — Sprint 2 sécu/ops).
 - ✅ Lockout par compte + rate-limit IP `/api/auth/*` (PR #69 — Sprint 2 sécu/ops bonus).
 - ✅ Healthcheck Docker `app` + cron systemd backup R2 (PR #70 — Sprint 3 sécu/ops, anticipé du Sprint 4 plan).
-- ✅ Module Files V1 backend (PR #71) + UI section + corbeille (commit `16b44d1`) — Sprint 3 module.
+- ✅ Module Files V1 backend (PR #71) + UI section + corbeille (PR #78 — recovery du commit orphelin `16b44d1` d'une session parallèle) — Sprint 3 module.
+- ✅ Hook files V2 `POST /files/send-email-bulk` (PR #79) — Resend N attachments + append `to` dans `files.emailedTo[]`, cap 25 MB, fail-soft dev (console). Couvre aussi le single-file via `fileIds: [N]`.
 - ✅ Module RH backend : Employees + Payroll + Absences (PR #72 — Sprint 4 module backend).
+- ✅ UI RH Sprint 4 V2 (PR #76) : page Gestion RH avec employés + payroll + absences (consommatrice de `/employees/summary`, table employés, détail employé avec sections Documents RH / Absences / Fiches de Paie).
+- ✅ Fix UI catalogue modules + empty-state checklist (PR #77).
+- ✅ Fix ops : `postgresql16-client` dans l'image app pour que backup/restore fonctionnent côté container (PR #75).
 
 ### 9.2.2 En cours / en attente de merge
 
-- 🟡 **Stack PRs** à merger dans l'ordre : #68 (audit) → #69 (lockout) → #71
-  (files) → #72 (HR backend). Le merge de #68 retarget auto les autres sur main.
-- 🟡 **PR #70** indépendante, mergeable seule.
-- 🟡 **UI module RH** : pages cibles capture utilisateur 2026-05-08 (liste
-  employés + détail employé avec sections Absences / Fiches de Paie / Documents
-  RH). Backend prêt à consommer. PR follow-up Sprint 4 V2.
+- (rien en attente — la stack Sprint 3-4 est intégralement mergée sur `main` au 2026-05-09)
 
-### 9.2.3 À suivre — Sprint 4 V2 (UI RH + hooks files)
+### 9.2.3 À suivre — Hooks files V2 reste (payroll OCR)
 
-**UI RH** (consommatrice du backend PR #72) :
-- Page liste employés : stats header (effectif, fiches, alertes, masse
-  salariale) consommant `GET /employees/summary`, table employés, filtres
-  Année/Trimestre/Mois, recherche, export CSV.
-- Détail employé : `EmployeeCard` collapsible avec `EmployeeFilesSection`
-  (filtre `files?employeeId=N`), `Absences & Congés`, `Fiches de Paie`
-  (boutons PDF + Re-parser + Ajouter Fiche).
+Les chantiers UI RH et `send-email-bulk` étant livrés, il reste :
 
-**Hooks files V2** (compléments PR #71) :
-- `POST /api/management/:slug/files/send-email-bulk` : `{to, fileIds[]}` →
-  email Resend avec N attachments + append `to` dans `files.emailedTo[]`.
+**Hooks payroll OCR** (compléments PR #71/#72) :
 - `POST /api/management/:slug/payroll/import-pdf` async + parser PDF +
   `matchEmployee()` (déjà testable, pure helper PR #72) + auto-create employee
   + archive in `files` + create payroll row.
 - `POST /api/management/:slug/payroll/reparse-all` : itérer
   `files.category=rh + fileType=bulletin_paie` + re-extract.
+
+> Note : nécessite l'ajout de `pdf-parse` (ou équivalent) côté deps + un
+> pattern async (job tick local ou process direct selon volume attendu). Le
+> helper `matchEmployee()` est prêt côté `services/hr/employeeMatching.ts`
+> (3-tiers : SSN → nom exact ± permutation → fuzzy NFD).
 
 ### 9.2.4 À suivre — Sprints 5-7
 
@@ -127,13 +123,14 @@ Règles :
 
 ## 9.5 Verdict global
 
-> **myBeez est un produit en consolidation rapide à ~80%, sur fondations
-> saines, avec 6 modules métier production-ready (Checklist, Suppliers,
-> Purchases, Expenses, Files, Employees) + 2 backend-only en attente d'UI
-> (Payroll, Absences), sécu de phase 1 complète (audit log + lockout +
+> **myBeez est un produit en consolidation rapide à ~85%, sur fondations
+> saines, avec 8 modules métier production-ready (Checklist, Suppliers,
+> Purchases, Expenses, Files V1+V2 send-email, Employees, Payroll,
+> Absences — backend + UI), sécu de phase 1 complète (audit log + lockout +
 > rate-limit + healthcheck + cron backup livrés sprints 2-3), et 3 modules
 > métier restants à porter dans les sprints 5-7 (Bank/Cash redesign,
-> Analytics, History).**
+> Analytics, History). Reste payroll OCR (`import-pdf` + `reparse-all`)
+> pour boucler le Sprint 4 V2.**
 
 Ce qui est solide :
 - Architecture multi-tenant cohérente.
@@ -148,7 +145,7 @@ Ce qui est solide :
 - Catalogue verticals enrichi (4 × 25, présentation visuelle).
 
 Ce qui manque pour être *fully bankable* :
-- UI module RH (backend prêt PR #72, page consommatrice à livrer).
+- Hooks payroll OCR (`import-pdf` + `reparse-all`) pour boucler Sprint 4 V2.
 - 3 modules métier restants (Bank/Cash redesign, Analytics, History cross).
 - Logger structuré + metrics + Sentry.
 - HSTS + CSP + HIBP.
@@ -191,8 +188,9 @@ Ce qui manque pour être *fully bankable* :
 
 - **3 mécanismes refresh redondants checklist** : `refetchOnWindowFocus` +
   `refetchInterval: 30s` + SSE. Choisir SSE seul + invalidation manuelle.
-- **9 sections `/management/...` en placeholder** — UI à livrer (cf. sprints
-  3-7).
+- **Sections `/management/...` restantes en placeholder** — Bank/Cash,
+  Analytics, History à livrer (cf. sprints 5-7). Files, Employees,
+  Payroll, Absences, Suppliers, Purchases, Expenses ✅ livrés.
 - **`AdminTenant` page stub** — route `/123admin/tenants/:id` ne charge rien.
 - **Aucun test frontend significatif** — uniquement IconRenderer + taxRulesLabels.
 - **Landing page monolithique** (~890 lignes) — à scinder en sections

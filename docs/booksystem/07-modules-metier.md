@@ -1,17 +1,17 @@
 # Chapitre 07 — Modules métier
 
 > **Résumé.** myBeez est conçu autour de modules métier toggleables par tenant
-> via `tenants.modulesEnabled`. Sur 11 modules planifiés au 2026-05-08, 6 sont
+> via `tenants.modulesEnabled`. Sur 11 modules planifiés au 2026-05-09, 8 sont
 > production-ready (Checklist, Suppliers, Purchases avec OCR, Expenses, Files
-> avec corbeille TTL, Employees) et 2 ont leur backend livré attendant l'UI
-> (Payroll, Absences). 3 restent à livrer dans les sprints 5-7. Pattern de
-> référence : `purchases.ts` (route) + `PurchasesSection.tsx` (UI).
+> avec corbeille TTL + hook send-email-bulk V2, Employees, Payroll, Absences).
+> 3 restent à livrer dans les sprints 5-7 (Bank/Cash redesign, Analytics,
+> History). Pattern de référence : `purchases.ts` (route) + `PurchasesSection.tsx` (UI).
 
 ---
 
 ## 7.1 Vue d'ensemble
 
-### 7.1.1 État au 2026-05-08
+### 7.1.1 État au 2026-05-09
 
 | # | Module | Schéma DB | API | UI | État |
 |---|---|---|---|---|---|
@@ -19,10 +19,10 @@
 | 2 | Suppliers (Fournisseurs) | ✅ | ✅ | ✅ | **Production-ready** (PR #2) |
 | 3 | Purchases (Achats) + OCR | ✅ | ✅ | ✅ | **Production-ready** (PRs #64/#65/#67) |
 | 4 | Expenses (Dépenses générales) | ✅ | ✅ | ✅ | **Production-ready** (PR #66) |
-| 5 | Files (Fichiers + corbeille TTL) | ✅ | ✅ | ✅ | **Production-ready** (PR #71 backend + 16b44d1 UI) |
-| 6 | Employees | ✅ | ✅ | ⏳ | Backend livré (PR #72), UI Sprint 4 V2 |
-| 7 | Payroll | ✅ | ✅ | ⏳ | Backend livré (PR #72), UI Sprint 4 V2 |
-| 8 | Absences | ✅ | ✅ | ⏳ | Backend livré (PR #72), UI Sprint 4 V2 |
+| 5 | Files (Fichiers + corbeille TTL + send-email-bulk V2) | ✅ | ✅ | ✅ | **Production-ready** (PR #71 backend + PR #78 UI + PR #79 hook V2) |
+| 6 | Employees | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI) |
+| 7 | Payroll | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI). Reste hooks `import-pdf` + `reparse-all` (Sprint 4 V2). |
+| 8 | Absences | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI) |
 | 9 | BankEntries | ✅ | ❌ | ❌ | Schémé, redesign Sprint 5 (moyens-paiement génériques) |
 | 10 | CashEntries | ✅ | ❌ | ❌ | Schémé, redesign Sprint 5 (idem) |
 | 11 | Analytics | ✅ | ❌ | ❌ | Schémé, planifié Sprint 6 |
@@ -227,7 +227,8 @@ miroir de PurchasesSection. Recyclage 80% des composants `sharedUI/`.
 
 ## 7.6 Module Files (Fichiers)
 
-PR #71 (backend) + commit `16b44d1` (UI section + corbeille).
+PR #71 (backend) + PR #78 (UI section + corbeille — recovery du commit
+orphelin `16b44d1` d'une session parallèle) + PR #79 (hook V2 send-email-bulk).
 
 ### 7.6.1 Schéma
 
@@ -291,30 +292,42 @@ Services :
   `downloadFileFromStorage(key)`, `deleteFileFromStorage(key)`. Wrapper sur le
   client S3 vers R2 (réutilise `scripts/_lib/r2.ts`).
 
-### 7.6.6 Hors scope V1
+### 7.6.6 V2 livré + reste
 
-Reportés en V2 (cf. PR audit) :
-- Send-email (envoyer un fichier par email).
+✅ V2 **send-email-bulk** (PR #79) : `POST /api/management/:slug/files/send-email-bulk`
+   `{to, fileIds[], subject?, message?}` → Resend N pièces jointes (cap 25 MB
+   total) + append `to` dans `files.emailedTo[]` via `array_append` SQL +
+   audit log `files.emailed`. Couvre aussi le single-file via `fileIds: [N]`
+   (pas de route dédiée `/:id/send-email` ajoutée pour garder la surface
+   d'API minimale). Plomberie réutilisable :
+   - `mailService.sendDocumentBundle(...)` + builder pur `buildDocumentBundleEmail(...)`
+   - `mailService.SendArgs.attachments?: {filename, content: Buffer}[]`
+   - `storage.downloadFileBufferFromStorage(key)` (collecte un stream R2 en buffer).
+
+⏳ Reste V2 / V3 :
 - Parse-preview (OCR PDF/image pour extraire metadata).
 - Side-effects automatiques vers expenses/purchases/payroll.
 
-### 7.6.7 Statut au 2026-05-08
+### 7.6.7 Statut au 2026-05-09
 
 - ✅ Schéma `files` + `files_trash` (PR #71).
-- ✅ Routes API (7 endpoints CRUD + trash/restore/purge).
-- ✅ Services storage + naming + trash.
-- ✅ UI section + corbeille (commit `16b44d1`).
+- ✅ Routes API CRUD V1 (7 endpoints upload / list / download / soft-delete /
+  trash / restore / hard-delete).
+- ✅ Hook V2 `send-email-bulk` (PR #79).
+- ✅ Services storage + naming + trash + buffer download.
+- ✅ UI section + corbeille (PR #78 — recovery du commit orphelin `16b44d1`
+  d'une session parallèle).
 - ✅ Tests purs naming + trashService (21 tests).
-- ⏳ Hooks V2 : `send-email-bulk`, `parse-preview`, side-effects auto vers
+- ⏳ Hooks restants : `parse-preview`, side-effects auto vers
   expenses/purchases (PR follow-up).
 
 ---
 
 ## 7.7 Module RH — Employees + Payroll + Absences
 
-PR #72 backend. UI à venir (Sprint 4 V2). Cible UX : capture utilisateur
-2026-05-08 (page liste employés + détail employé avec sections Absences /
-Fiches de Paie / Documents RH).
+PR #72 backend + PR #76 UI (Sprint 4 V2). Page Gestion RH : liste employés
+(stats header + table + filtres période + recherche) + détail employé
+collapsible (sections Documents RH / Absences & Congés / Fiches de Paie).
 
 ### 7.7.1 Schémas
 
@@ -381,14 +394,17 @@ social, moyenne brut, alertes pending absences). Estimation default 13% des
 charges patronales si la PDF n'a pas extrait, paramétrable via
 `tenant.taxRules.employerChargeRate`.
 
-### 7.7.4 Hors scope V1
+### 7.7.4 V2 livré + reste
 
-Reportés en V2 (PR follow-up) :
-- `POST /payroll/import-pdf` async + parser PDF + auto-create employee + archive in `files`
-- `POST /payroll/reparse-all` : itérer sur files RH + re-extract
-- `send-email-bulk` fiches (réutilise pattern files PR #71 V2)
-- Auto-création employee depuis `POST /payroll` si nom provided
-- UI page RH (consommatrice de `/summary` + listes)
+✅ UI page RH (consommatrice de `/summary` + listes) — PR #76.
+✅ `send-email-bulk` fiches : utilise directement le hook files V2
+   `POST /files/send-email-bulk` avec `fileIds: [pdfFileId, ...]` (PR #79).
+
+⏳ Reste V2 (PR follow-up) :
+- `POST /payroll/import-pdf` async + parser PDF + auto-create employee
+  + archive in `files` (consomme `matchEmployee()` existant).
+- `POST /payroll/reparse-all` : itérer sur files RH + re-extract.
+- Auto-création employee depuis `POST /payroll` si nom provided.
 
 ---
 
