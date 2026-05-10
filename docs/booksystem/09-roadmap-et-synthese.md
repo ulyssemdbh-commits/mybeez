@@ -19,7 +19,7 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + PR #78 UI) ✅ hook V2 send-email-bulk (PR #79) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
 | 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ✅ hooks payroll OCR `import-pdf` + `reparse-all` (PR #81) — **Sprint 4 V2 bouclé** |
 | 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) ✅ backend Bank/Cash (PR #83) — UI à venir |
-| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ⏳ à venir |
+| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ✅ sécu/ops (PR #84) — module Analytics à venir |
 | 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ⏳ à venir |
 
 Règles :
@@ -82,20 +82,30 @@ Règles :
   `purchases`/`expenses`/`payroll` pour rapprochement. Anciennes tables
   `bank_entries`/`cash_entries` (vides) renommées `legacyBankEntries`/`legacyCashEntries`
   en TS (drop SQL différé). UI à livrer en PR follow-up.
+- ✅ HSTS + CSP + HIBP (PR #84 — Sprint 6 sécu/ops) :
+  HSTS `max-age=31536000; includeSubDomains; preload` côté nginx + helmet
+  (defense in depth). CSP strict prod (script-src 'self', style-src
+  'self' 'unsafe-inline', frame-ancestors 'none', etc.), désactivé dev
+  pour HMR Vite. HIBP k-anonymity sur signup + reset-password +
+  signup-with-tenant ; soft-fail sur API down ; `HIBP_DISABLED=true`
+  override. Code `PASSWORD_PWNED` retourné en 400 avec message FR.
 
 ### 9.2.2 En cours / en attente de merge
 
 - (rien en attente — la stack Sprint 3-4 est intégralement mergée sur `main` au 2026-05-09)
 
-### 9.2.3 À suivre — UI Bank/Cash + Sprint 6
+### 9.2.3 À suivre — UI Bank/Cash + Sprint 6 module Analytics
 
-Sprint 5 backend bouclé (PR #82 logger pino + PR #83 backend Bank/Cash).
-Reste à livrer **côté UI** :
+Sprint 5 module + Sprint 6 sécu/ops bouclés (#82 pino, #83 Bank/Cash
+backend, #84 HSTS+CSP+HIBP). Reste :
+
+**UI Bank/Cash** (PR follow-up Sprint 5) :
 - `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx`
 - Stats cards (solde par compte, encaissements / décaissements période)
 - Bouton « Rapprocher » avec proposition de match purchase/expense
 
-Puis attaquer Sprint 6 (Analytics + sécu/ops HSTS+CSP+HIBP).
+**Sprint 6 module métier** : Analytics (cumul purchases + expenses +
+payroll + bank/cash + KPIs vertical-aware).
 
 > Note ex-prerequis abandonné : initialement on avait planché sur
 > `pdf-parse` pour extraire le texte des bulletins PDF. La PR #81 a
@@ -121,7 +131,7 @@ Puis attaquer Sprint 6 (Analytics + sécu/ops HSTS+CSP+HIBP).
 |---|---|---|
 | Multi-vertical via templates | Catalog seedé (4 × 25), `tenants.templateId`, vocabulary par tenant ✓. Alfred lit `tenant.vocabulary` ✓. Wizard signup multi-step ✓. Switch template tenant ✓. Vocabulary editor + modules toggle ✓. Reste : `templateId` NOT NULL + drop `businessType`. | 🟢 95% |
 | Subdomain + custom domain | Subdomain résolution ✓, table `tenant_domains` ✓, custom domain provisioning automatisé ❌ | 🟡 60% |
-| Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓, MFA TOTP ✓, PIN purgé ✓, audit log writes ✓, lockout par compte + rate-limit IP ✓. **MFA pas obligatoire Owner/Admin**, HSTS/CSP/HIBP absents | 🟢 90% |
+| Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓, MFA TOTP ✓, PIN purgé ✓, audit log writes ✓, lockout par compte + rate-limit IP ✓, HSTS+CSP+HIBP ✓ (PR #84). **Reste : MFA obligatoire Owner/Admin** | 🟢 95% |
 
 ---
 
@@ -170,7 +180,7 @@ Ce qui manque pour être *fully bankable* :
 - Hooks payroll OCR (`import-pdf` + `reparse-all`) pour boucler Sprint 4 V2.
 - 3 modules métier restants (Bank/Cash redesign, Analytics, History cross).
 - Logger structuré + metrics + Sentry.
-- HSTS + CSP + HIBP.
+- ~~HSTS + CSP + HIBP.~~ ✅ Livré PR #84.
 - Stripe billing (Phase 2).
 
 ---
@@ -194,9 +204,9 @@ Ce qui manque pour être *fully bankable* :
 
 - **MFA opt-in seulement** — pas obligatoire pour Owner/Admin.
 - ~~**Lockout login** absent.~~ ✅ Livré (PR #69).
-- **Pas de check HIBP** sur passwords.
-- **CSP désactivé** dans helmet.
-- **Pas de HSTS** côté nginx.
+- ~~**Pas de check HIBP** sur passwords.~~ ✅ Livré (PR #84).
+- ~~**CSP désactivé** dans helmet.~~ ✅ Livré (PR #84, prod uniquement).
+- ~~**Pas de HSTS** côté nginx.~~ ✅ Livré (PR #84, nginx + helmet).
 - **Pas de chiffrement R2** des dumps.
 - **Pas de CSRF token** (acceptable tant que pas de form cross-origin).
 

@@ -232,6 +232,7 @@ Fichier : `server/services/`.
 | `auth/mailService` | Resend client + templates verify/reset + bundle documents (`sendDocumentBundle` avec attachments, consommé par `/files/send-email-bulk` PR #79), fail-soft | — | ✓ (verify/reset uniquement) |
 | `auth/auditService` | `recordAudit({req, event, metadata})` fail-soft + scrub secrets récursif (password/token/secret/totpCode/recoveryCode/imageBase64...) avec normalisation case/underscore/dash, profondeur max 4, troncature 500 chars (PR #68) | — | ✓ |
 | `auth/lockoutService` | Lockout par compte dérivé d'`audit_log`. `computeLockout(failures, now)` pure (testable). `checkLockout(userId)` fail-soft DB. Seuil 5 / fenêtre 15 min. Wired sur `/login`, `/mfa/challenge`, `/mfa/recovery` AVANT `verifyPassword` (anti-DoS argon2id). (PR #69) | — | ✓ |
+| `auth/hibpService` | `isPasswordPwned(plain)` k-anonymity sur api.pwnedpasswords.com (SHA-1 prefix 5 chars envoyé seul, suffix matché localement). `suffixIsPwned(body, suffix)` pure pour tests. Soft-fail sur API down. `HIBP_DISABLED=true` pour bypass complet. Wired par `passwordService.hashPassword({checkPwned:true})` (PR #84). | — | ✓ |
 | `parsing/invoiceParser` | OCR Vision API (image + PDF) → champs facture + matchSupplierByName | — | ✓ |
 | `parsing/payslipParser` | OCR Vision API (image + PDF) → champs bulletin de paie. Réutilise `validateBase64Image` + `stripCodeFence` + MIME types d'`invoiceParser`. PDF via Gemini natif (PR #81). | — | ✓ |
 | `payroll/payrollImport` | Helpers purs : `payslipImportEligibility`, `buildPayrollValues`, `buildEmployeeValues`, `summarizeImportWarnings`. Consommés par les routes `/payroll/import-pdf` + `/reparse-all` (PR #81). | — | ✓ Pure |
@@ -387,6 +388,7 @@ Fichier : `server/__tests__/`, `server/middleware/__tests__/`,
 | `services/payroll/payrollImport.test.ts` | Helpers purs eligibility + buildPayrollValues + buildEmployeeValues + warnings (PR #81) |
 | `lib/logger.test.ts` | Smoke pino : levels, child bindings, level inheritance, redact compile (PR #82) |
 | `services/finance/financeSummary.test.ts` | computeBankAccountBalance + computeBankStats + computeCashStats : zeros, signed sum, defense-in-depth, round-to-cent (PR #83) |
+| `services/auth/hibpService.test.ts` | k-anonymity SHA-1 prefix only, suffixIsPwned parsing, soft-fail réseau / non-2xx, HIBP_DISABLED override (PR #84) |
 | `services/files/{naming,trashService}.test.ts` | Sanitisation + TTL purge |
 | `seed/templates.test.ts` | Catalog richness + presentation invariants |
 

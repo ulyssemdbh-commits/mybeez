@@ -96,6 +96,7 @@ npx tsx scripts/grant-superadmin.ts <email>
 | `PORT` | optionnel | default 3000 |
 | `NODE_ENV` | — | `development` ou `production` |
 | `LOG_LEVEL` | optionnel | pino level — default `info` prod / `debug` dev. Valeurs : `trace, debug, info, warn, error, fatal, silent`. (PR #82) |
+| `HIBP_DISABLED` | optionnel | `true` désactive le check Have I Been Pwned au signup/reset (utile tests offline / emergency). Toute autre valeur = check actif. (PR #84) |
 
 Modèle complet : `.env.example` (à la racine du repo).
 
