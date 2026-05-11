@@ -62,6 +62,25 @@ export const InvoiceFieldsSchema = z.object({
 
 export type InvoiceFields = z.infer<typeof InvoiceFieldsSchema>;
 
+/**
+ * Erreur typée quand le provider OCR a renvoyé du texte que l'on ne
+ * sait pas convertir en JSON parsable. Utilisée par la route pour
+ * répondre 422 (donnée upstream invalide) au lieu de 502 (qui
+ * sous-entend une infra cassée alors que l'app va bien).
+ */
+export class InvoiceOcrParseError extends Error {
+  readonly provider: "openai" | "gemini" | "grok";
+  readonly rawSample: string;
+  constructor(provider: "openai" | "gemini" | "grok", rawSample: string) {
+    super(
+      "L'OCR a renvoyé un format inattendu. Réessayez ou saisissez l'achat manuellement.",
+    );
+    this.name = "InvoiceOcrParseError";
+    this.provider = provider;
+    this.rawSample = rawSample;
+  }
+}
+
 const SYSTEM_PROMPT = `Tu es un assistant qui extrait des champs structurés à partir d'une facture fournisseur (image scannée ou photo).
 
 Tu dois retourner UNIQUEMENT un JSON valide avec exactement ces clés :
@@ -150,8 +169,7 @@ export async function parseInvoiceImage(
       });
 
       const text = response.choices?.[0]?.message?.content?.trim() ?? "";
-      const json = stripCodeFence(text);
-      const raw = JSON.parse(json);
+      const raw = safeParseInvoiceJson(text, provider);
       const fields = InvoiceFieldsSchema.parse(raw);
       return { provider, fields };
     } catch (err) {
@@ -223,7 +241,7 @@ async function parsePdfViaGemini(pdfBase64: string): Promise<ParseAttempt> {
   if (!text) {
     throw new Error("OCR PDF (Gemini) : réponse vide.");
   }
-  const fields = InvoiceFieldsSchema.parse(JSON.parse(stripCodeFence(text)));
+  const fields = InvoiceFieldsSchema.parse(safeParseInvoiceJson(text, "gemini"));
   return { provider: "gemini", fields };
 }
 
@@ -232,6 +250,38 @@ export function stripCodeFence(text: string): string {
   const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)```$/);
   if (fenced) return fenced[1].trim();
   return text;
+}
+
+/**
+ * Parse défensif de la sortie OCR. `responseMimeType: application/json`
+ * côté Gemini ne garantit pas un JSON parfait à 100% — on a déjà observé
+ * en prod des sorties avec une clé non quotée à mi-chemin.
+ *
+ * Stratégie :
+ *   1. strip des fences markdown éventuelles
+ *   2. JSON.parse direct
+ *   3. fallback : extraire la 1re sous-séquence `{ ... }` (du 1er `{` au
+ *      dernier `}`) et re-tenter
+ *   4. throw `InvoiceOcrParseError` (route → 422) si tout échoue
+ *
+ * @throws {InvoiceOcrParseError}
+ */
+export function safeParseInvoiceJson(
+  text: string,
+  provider: "openai" | "gemini" | "grok",
+): unknown {
+  const stripped = stripCodeFence(text);
+  try {
+    return JSON.parse(stripped);
+  } catch {}
+  const firstBrace = stripped.indexOf("{");
+  const lastBrace = stripped.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      return JSON.parse(stripped.slice(firstBrace, lastBrace + 1));
+    } catch {}
+  }
+  throw new InvoiceOcrParseError(provider, stripped.slice(0, 200));
 }
 
 /** Validation côté serveur d'une string base64 : format + taille. La taille

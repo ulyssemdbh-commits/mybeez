@@ -36,6 +36,7 @@ import {
   parseInvoiceImage,
   validateBase64Image,
   matchSupplierByName,
+  InvoiceOcrParseError,
   SUPPORTED_MIME_TYPES,
   type SupportedMime,
 } from "../../services/parsing/invoiceParser";
@@ -386,8 +387,16 @@ export function registerManagementPurchasesRoutes(app: Express): void {
         if (error instanceof z.ZodError) {
           return res.status(400).json({ error: "Données invalides", details: error.errors });
         }
+        if (error instanceof InvoiceOcrParseError) {
+          // Provider OCR a renvoyé du texte non-JSON — donnée upstream
+          // invalide, pas un crash infra. 422 (pas 502) pour refléter ça.
+          log.warn(
+            { provider: error.provider, rawSample: error.rawSample },
+            "OCR returned malformed JSON",
+          );
+          return res.status(422).json({ error: error.message });
+        }
         const message = error instanceof Error ? error.message : "Erreur OCR";
-        // Si aucun provider configuré → 503 (config), sinon 502 (upstream).
         if (message.startsWith("Aucun provider")) {
           return res.status(503).json({ error: message });
         }
