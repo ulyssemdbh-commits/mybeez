@@ -109,10 +109,62 @@ app.use(
   }),
 );
 
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false,
-}));
+/**
+ * Helmet — security headers (PR #84 reactivates CSP + HSTS).
+ *
+ * `contentSecurityPolicy` :
+ *   - prod : strict policy. `script-src 'self'` (no inline) — Vite bundles
+ *     the front into ./dist/public/assets/*.js so no inline JS at runtime.
+ *     `style-src 'self' 'unsafe-inline'` — required by Tailwind/Shadcn
+ *     which set styles via the `style` attribute (acceptable trade-off,
+ *     CSS injection risks are minimal compared to JS).
+ *     `connect-src 'self'` — apps' own API only ; SSE on the same origin
+ *     fits.
+ *   - dev : disabled. Vite's HMR injects inline scripts and an eval-ish
+ *     module loader that no realistic CSP can whitelist without opening
+ *     the door wide. We accept this in dev only.
+ *
+ * `hsts` :
+ *   - prod : 1-year max-age, includeSubDomains, preload. Belt-and-braces
+ *     with the same header set by nginx — a misconfigured nginx in front
+ *     of this app should not silently weaken HSTS.
+ *   - dev : helmet's default disables HSTS over HTTP, no override needed.
+ *
+ * `crossOriginEmbedderPolicy` stays disabled — myBeez has no SharedArray-
+ * Buffer dependency, COEP would block third-party assets without benefit.
+ */
+const isProd = process.env.NODE_ENV === "production";
+
+app.use(
+  helmet({
+    contentSecurityPolicy: isProd
+      ? {
+          useDefaults: true,
+          directives: {
+            "default-src": ["'self'"],
+            "script-src": ["'self'"],
+            "style-src": ["'self'", "'unsafe-inline'"],
+            "img-src": ["'self'", "data:", "https:"],
+            "font-src": ["'self'", "data:"],
+            "connect-src": ["'self'"],
+            "frame-ancestors": ["'none'"],
+            "base-uri": ["'self'"],
+            "form-action": ["'self'"],
+            "object-src": ["'none'"],
+            "upgrade-insecure-requests": [],
+          },
+        }
+      : false,
+    hsts: isProd
+      ? {
+          maxAge: 31_536_000,
+          includeSubDomains: true,
+          preload: true,
+        }
+      : false,
+    crossOriginEmbedderPolicy: false,
+  }),
+);
 
 app.use(compression({ level: 6, threshold: 1024 }));
 app.use(cookieParser());
@@ -255,6 +307,18 @@ async function registerRoutes() {
 
   const { registerManagementAbsencesRoutes } = await import("./routes/management/absences");
   registerManagementAbsencesRoutes(app);
+
+  const { registerBankAccountsRoutes } = await import("./routes/management/bankAccounts");
+  registerBankAccountsRoutes(app);
+
+  const { registerBankEntriesRoutes } = await import("./routes/management/bankEntries");
+  registerBankEntriesRoutes(app);
+
+  const { registerCashEntriesRoutes } = await import("./routes/management/cashEntries");
+  registerCashEntriesRoutes(app);
+
+  const { registerManagementAnalyticsRoutes } = await import("./routes/management/analytics");
+  registerManagementAnalyticsRoutes(app);
 
   app.get("/api/health", (_req, res) => {
     res.json({

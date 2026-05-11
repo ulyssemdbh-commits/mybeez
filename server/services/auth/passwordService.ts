@@ -15,6 +15,7 @@
  */
 
 import argon2 from "argon2";
+import { isPasswordPwned } from "./hibpService";
 
 const ARGON2_OPTIONS = {
   type: argon2.argon2id,
@@ -41,6 +42,18 @@ export class PasswordTooLongError extends Error {
 }
 
 /**
+ * Thrown by `hashPassword({ checkPwned: true })` when HIBP's k-anonymity
+ * check matches the candidate. Caught by the route layer to produce a
+ * 400 with a clear French message ; the caller decides UX.
+ */
+export class PasswordPwnedError extends Error {
+  constructor() {
+    super("Password has been seen in a known breach");
+    this.name = "PasswordPwnedError";
+  }
+}
+
+/**
  * Validates length bounds before hashing. We do NOT enforce a complexity
  * pattern (NIST SP 800-63B explicitly recommends against it for human
  * usability). The lower bound mirrors NIST's "long passphrase" guidance.
@@ -50,8 +63,24 @@ export function assertPasswordBounds(password: string): void {
   if (password.length > MAX_PASSWORD_LENGTH) throw new PasswordTooLongError();
 }
 
-export async function hashPassword(plain: string): Promise<string> {
+interface HashOptions {
+  /**
+   * When true, run the password through Have I Been Pwned (k-anonymity)
+   * before hashing and throw `PasswordPwnedError` if the password appears
+   * in a known breach. Soft-fails open (treats the password as not pwned)
+   * if HIBP is unreachable — see `hibpService.isPasswordPwned`. Opt-in
+   * because some flows (admin create-user, fixture seeding) want to
+   * accept any compliant password without an external roundtrip.
+   */
+  checkPwned?: boolean;
+}
+
+export async function hashPassword(plain: string, opts: HashOptions = {}): Promise<string> {
   assertPasswordBounds(plain);
+  if (opts.checkPwned) {
+    const pwned = await isPasswordPwned(plain);
+    if (pwned) throw new PasswordPwnedError();
+  }
   return argon2.hash(plain, ARGON2_OPTIONS);
 }
 

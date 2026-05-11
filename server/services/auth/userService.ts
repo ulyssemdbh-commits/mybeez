@@ -45,6 +45,11 @@ class UserService {
    * caller can map to a 409 without leaking which DB constraint fired.
    *
    * `password` is hashed here — callers MUST NOT hash beforehand.
+   *
+   * `checkPwned` (default false) opts the password into the HIBP
+   * k-anonymity check (PR #84). Self-serve signup paths must set it ;
+   * admin user-creation flows leave it off so a superadmin can pick any
+   * compliant password without a HIBP roundtrip.
    */
   async create(data: {
     email: string;
@@ -56,12 +61,13 @@ class UserService {
     isActive?: boolean;
     adminNotes?: string | null;
     markEmailVerified?: boolean;
+    checkPwned?: boolean;
   }): Promise<User> {
     const email = normalizeEmail(data.email);
     const existing = await this.findByEmail(email);
     if (existing) throw new EmailAlreadyExistsError(email);
 
-    const passwordHash = await hashPassword(data.password);
+    const passwordHash = await hashPassword(data.password, { checkPwned: data.checkPwned });
     const [row] = await db
       .insert(users)
       .values({
@@ -79,8 +85,18 @@ class UserService {
     return row;
   }
 
-  async setPassword(userId: number, newPassword: string): Promise<void> {
-    const passwordHash = await hashPassword(newPassword);
+  /**
+   * Update a user's password. `checkPwned` (default false) routes the
+   * new password through HIBP. Wired by the user-facing reset-password
+   * route ; admin-driven reset-by-link goes through the same flow as a
+   * self-serve reset, so it inherits the check.
+   */
+  async setPassword(
+    userId: number,
+    newPassword: string,
+    opts: { checkPwned?: boolean } = {},
+  ): Promise<void> {
+    const passwordHash = await hashPassword(newPassword, { checkPwned: opts.checkPwned });
     await db
       .update(users)
       .set({ passwordHash, updatedAt: new Date() })
@@ -153,6 +169,12 @@ class UserService {
    * (single transaction not used here since drizzle-orm/node-postgres
    * tx requires a callback — keeping linear for readability; race is
    * tolerable: token is single-use enforced by unique index + usedAt).
+   *
+   * The new password runs through HIBP k-anonymity (PR #84). If it's
+   * pwned, we throw `PasswordPwnedError` BEFORE marking the token as
+   * used so the user can retry the same reset link with a stronger
+   * password — otherwise they would be locked out and forced to request
+   * a new email round-trip just because they picked a weak one.
    */
   async consumePasswordResetToken(cleartext: string, newPassword: string): Promise<number | null> {
     const tokenHash = hashToken(cleartext);
@@ -163,11 +185,13 @@ class UserService {
     if (!row) return null;
     if (row.expiresAt.getTime() <= Date.now()) return null;
 
+    // checkPwned BEFORE consuming the token so a rejected password lets
+    // the user retry the same link.
+    await this.setPassword(row.userId, newPassword, { checkPwned: true });
     await db
       .update(passwordResetTokens)
       .set({ usedAt: new Date() })
       .where(eq(passwordResetTokens.id, row.id));
-    await this.setPassword(row.userId, newPassword);
     return row.userId;
   }
 }

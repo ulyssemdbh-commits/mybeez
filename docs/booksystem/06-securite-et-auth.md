@@ -5,7 +5,8 @@
 > rolling expiry, anti-énumération sur forgot-password, audit log avec writes
 > branchées (Sprint 2 PR #68), lockout par compte + rate-limit dédié
 > `/api/auth/*` (Sprint 2 PR #69). PIN partagé tenant-wide purgé en PR #55.
-> Reste à brancher : MFA obligatoire Owner/Admin, HSTS + CSP + HIBP.
+> HSTS + CSP + HIBP livrés Sprint 6 sécu/ops (PR #84). Reste : MFA
+> obligatoire Owner/Admin.
 
 ---
 
@@ -74,7 +75,7 @@ Fichier : `server/services/auth/passwordService.ts`.
 | Min length | 12 | NIST SP 800-63B passphrase-friendly |
 | Max length | 256 | Anti-DoS sur hashing très long |
 | Complexité forcée | ❌ | Intentionnel (NIST SP 800-63B : longueur > complexité) |
-| HIBP check | ❌ | À ajouter Sprint 6 sécu/ops |
+| HIBP check | ✅ Livré PR #84 — k-anonymity sur signup + reset-password (soft-fail si API timeout) |
 
 ---
 
@@ -313,15 +314,80 @@ Fichier : `server/services/auth/mailService.ts`.
 | Header | État |
 |---|---|
 | `helmet` | ✅ activé |
-| CSP | ❌ désactivé (`contentSecurityPolicy: false`) — compatibilité Vite dev |
-| COEP | ❌ désactivé |
-| HSTS côté nginx | ❌ pas configuré |
+| CSP | ✅ Livré PR #84 — politique stricte en prod, désactivée en dev (HMR Vite) |
+| COEP | ❌ désactivé (pas de SharedArrayBuffer) |
+| HSTS côté nginx | ✅ Livré PR #84 — `max-age=31536000; includeSubDomains; preload` |
+| HSTS côté helmet (defense in depth) | ✅ Livré PR #84 — mêmes paramètres, prod uniquement |
 | `X-Frame-Options: DENY` | ✅ via helmet default |
 | `X-Content-Type-Options: nosniff` | ✅ via helmet default |
 | Referrer-Policy | ✅ via helmet default |
 
-> **Sprint 6 sécu/ops** : réactiver CSP avec une politique stricte (nonces ou
-> hashes), ajouter HSTS côté nginx avec `max-age=31536000; includeSubDomains; preload`.
+### 6.9.1 CSP — politique livrée PR #84
+
+`helmet({ contentSecurityPolicy: ... })` activé en prod uniquement.
+Directives :
+
+```
+default-src 'self'
+script-src 'self'                  ← pas d'inline JS, Vite bundle tout vers /assets
+style-src 'self' 'unsafe-inline'   ← Tailwind / Shadcn utilisent `style=` attributes
+img-src 'self' data: https:        ← images Cloudinary, gravatar, base64 d'avatars
+font-src 'self' data:
+connect-src 'self'                 ← API + SSE même origine
+frame-ancestors 'none'             ← équivalent X-Frame-Options
+base-uri 'self'
+form-action 'self'
+object-src 'none'                  ← pas de Flash / applets
+upgrade-insecure-requests
+```
+
+CSP désactivé en dev — Vite HMR injecte des scripts inline et un module
+loader eval-ish que pas un nonces / hashes raisonnable ne whitelist sans
+ouvrir la porte. Trade-off accepté : la production a la politique
+stricte, le dev local a l'efficacité Vite.
+
+### 6.9.2 HSTS — defense in depth
+
+Header émis à la fois par nginx (`add_header Strict-Transport-Security`)
+et par helmet (`hsts: { maxAge, includeSubDomains, preload }`). Si une
+mauvaise config nginx tombe la directive, helmet rattrape. Si Cloudflare
+strippe le header, nginx le réémet à chaque requête.
+
+Le `preload` engage à long terme (le domaine entre dans la liste hardcodée
+des navigateurs). À ne pas activer tant que toutes les sub-zones ne sont
+pas confirmées HTTPS — pour `mybeez-ai.com` c'est OK, le wildcard
+Cloudflare Origin Cert couvre tout.
+
+### 6.9.3 HIBP check — livré PR #84
+
+`server/services/auth/hibpService.ts` consomme l'API
+[Pwned Passwords v3](https://haveibeenpwned.com/API/v3#PwnedPasswords)
+en mode k-anonymity :
+
+1. SHA-1 du password local (le password en clair n'est jamais transmis).
+2. Envoi du **prefix 5 chars** au range API.
+3. Réception d'une liste de suffixes locaux.
+4. Match local → password pwned ou non.
+
+Wired sur :
+- `POST /api/auth/user/signup`
+- `POST /api/auth/user/reset-password`
+- `POST /api/onboarding/signup-with-tenant`
+
+**Pas wired** sur l'admin create-user — le superadmin choisit, et un
+HIBP roundtrip lourd n'a pas de sens dans le flux d'admin batch.
+
+**Soft-fail** : si l'API HIBP est unreachable / lente / 5xx, on traite
+le password comme "not pwned" et on laisse le flux continuer. Log warn
+émis. Une panne HIBP ne doit pas bloquer un signup légitime.
+
+**Override** : `HIBP_DISABLED=true` désactive le check entièrement
+(utile pour les tests offline et un emergency disable). Tout autre
+valeur → check actif.
+
+`PASSWORD_PWNED` est le code retourné côté API (HTTP 400) avec un
+message FR clair (« Ce mot de passe a été compromis dans une fuite
+connue. Choisissez-en un autre. »).
 
 ---
 
@@ -336,10 +402,10 @@ Fichier : `server/services/auth/mailService.ts`.
 | 5 | 🟠 haut | FK manquantes (orphelins possibles) | items, checks, purchases, payroll, absences | M | à planifier |
 | 6 | ~~🟠 haut~~ | Audit log non écrit | (à implémenter) | M | ✅ Sprint 2 (PR #68) |
 | 7 | ~~🟠 haut~~ | Lockout login + rate-limit dédié `/api/auth/*` | rate-limiter | S | ✅ Sprint 2 bonus (PR #69) |
-| 8 | 🟡 moyen | CSP désactivé dans helmet | `server/index.ts` | M | Sprint 6 sécu/ops |
-| 9 | 🟡 moyen | Pas de HSTS côté nginx | `deploy/nginx/mybeez-ai.com.conf` | XS | Sprint 6 sécu/ops |
+| 8 | ~~🟡 moyen~~ | CSP désactivé dans helmet | `server/index.ts` | M | ✅ Sprint 6 sécu/ops (PR #84) |
+| 9 | ~~🟡 moyen~~ | Pas de HSTS côté nginx | `deploy/nginx/mybeez-ai.com.conf` | XS | ✅ Sprint 6 sécu/ops (PR #84) |
 | 10 | 🟡 moyen | Cache `tenantService` process-local | `services/tenantService.ts` | M | scale-out future |
-| 11 | 🟡 moyen | Pas de check HIBP | `auth/passwordService.ts` | S | Sprint 6 sécu/ops |
+| 11 | ~~🟡 moyen~~ | Pas de check HIBP | `auth/passwordService.ts` | S | ✅ Sprint 6 sécu/ops (PR #84) |
 | 12 | 🟡 moyen | `db:push` sans migrations versionnées | `drizzle.config.ts` | M | scale-out future |
 | 13 | ~~🟡 moyen~~ | Pas de healthcheck Docker `app` | `Dockerfile`, `docker-compose.yml` | XS | ✅ Sprint 3 sécu/ops (PR #70) |
 | 14 | 🟡 moyen | Pas de logs structurés / persistence | `server/index.ts` | M | Sprint 5 sécu/ops |

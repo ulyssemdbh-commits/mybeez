@@ -23,9 +23,9 @@
 | 6 | Employees | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI) |
 | 7 | Payroll | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI). Reste hooks `import-pdf` + `reparse-all` (Sprint 4 V2). |
 | 8 | Absences | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI) |
-| 9 | BankEntries | ✅ | ❌ | ❌ | Schémé, redesign Sprint 5 (moyens-paiement génériques) |
-| 10 | CashEntries | ✅ | ❌ | ❌ | Schémé, redesign Sprint 5 (idem) |
-| 11 | Analytics | ✅ | ❌ | ❌ | Schémé, planifié Sprint 6 |
+| 9 | BankAccounts + BankEntries | ✅ | ✅ | ❌ | Backend livré PR #83 (Sprint 5 module métier). UI à venir. |
+| 10 | CashEntries | ✅ | ✅ | ❌ | Backend livré PR #83. UI à venir. |
+| 11 | Analytics | (compute) | ✅ | ❌ | Backend livré PR #85 (Sprint 6 module métier). UI à venir. |
 
 ### 7.1.2 Pattern de livraison
 
@@ -442,20 +442,85 @@ Choix de design :
 
 ## 7.8 Modules planifiés (Sprints 5-7)
 
-### 7.8.1 Sprint 5 — BankEntries / CashEntries (redesign)
+### 7.8.1 Sprint 5 — Bank / Cash (livré PR #83 backend, UI à venir)
 
-Schemas présents mais **redesign nécessaire** : ulysseclaude a un modèle
-restaurant-spécifique (caisse/banque flat). myBeez doit modéliser des
-**moyens de paiement génériques** (CB, espèces, virement, prélèvement, chèque)
-avec lien vers purchases/expenses. NE PAS copier le modèle ulysseclaude tel
-quel.
+**Livré (PR #83)** :
 
-### 7.8.2 Sprint 6 — Analytics
+3 nouvelles tables dans `shared/schema/finance.ts` (séparées du `checklist.ts` qui regroupe les modules antérieurs) :
 
-`analytics` schema présent. Porter depuis `ulysseclaude/suppliersAnalyticsRoutes.ts`,
-**dégénériser TVA + catégories restaurant**. Périodes (jour/semaine/mois/année),
-cumul par module (purchases + expenses + payroll), top suppliers, payment
-status mix, masse salariale historique.
+- `bank_accounts(name, bankName, iban, openingBalance, notes, isActive)` — un compte bancaire suivi par tenant. Multi-comptes supportés (Compte Pro CIC + Livret + Compte Perso). Soft-delete.
+- `bank_entries_v2(bankAccountId, entryDate, label, amount [SIGNÉ], balance, category, reference, isReconciled, purchaseId?, expenseId?, payrollId?, notes)` — opérations bancaires. Amount **signé** (négatif=débit) pour matcher les exports CSV bancaires et permettre `SUM(amount)` direct. FK logiques optionnelles vers `purchases`/`generalExpenses`/`payroll` pour rapprochement.
+- `cash_entries_v2(entryDate, kind ['in'|'out'], amount [POSITIF], label, category, reference, notes)` — saisie manuelle des espèces. Générique : pas de colonnes resto-spécifiques (cb/ticketResto/deliveroo). Si un vertical a besoin d'OCR ticket Z, ce sera une table dédiée plus tard.
+
+**Routes livrées** (cf. [03.2.9](./03-backend.md#329-management--modules-métier)) :
+
+- `/bank-accounts` CRUD + detail avec `currentBalance` calculé
+- `/bank-entries` CRUD + `/stats` (credits/debits/net/reconciledRate) + `/unreconciled`
+- `/cash-entries` CRUD + `/stats` (in/out/net)
+
+**Helpers purs** dans `services/finance/financeSummary.ts` :
+`computeBankAccountBalance`, `computeBankStats`, `computeCashStats`. Round-to-cent. Tests dans `services/finance/__tests__/`.
+
+**Choix de design** :
+
+- **2 tables séparées (bank vs cash)** plutôt qu'un `payments` unifié : suguval ulysseclaude tourne avec cette séparation en prod et c'est sain. Bank = transactions tracées par tiers, signées, rapprochables ; cash = saisies manuelles d'espèces hors banque.
+- **`bank_accounts` table dédiée** (vs suguval qui avait juste `bankName text`) — un client multi-comptes a une UX propre.
+- **Cash générique** — pas de colonnes restaurant hardcodées. Z-ticket parser resto = future feature vertical-spécifique.
+- **Hard-delete** sur les entries (vs soft sur purchases/suppliers) — une opération erronée doit disparaître ; l'audit_log garde la trace.
+- **SQL `_v2`** sur les nouvelles tables : les anciennes `bank_entries` / `cash_entries` (vides en prod, jamais consommées) restent déclarées comme `legacyBankEntries`/`legacyCashEntries` pour ne pas casser `db:push` non-interactif. Drop SQL différé dans une PR de cleanup ultérieure.
+
+**Reste UI** (PR follow-up) :
+- `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx` côté `client/src/components/management/sections/`.
+- Bouton « Rapprocher » sur une bank entry → matching auto/manuel avec un purchase/expense de période proche.
+- Stats cards header (solde par compte, encaissements / décaissements période).
+
+**Hors scope V1** (Phase 2 ou Sprint 7 obs) :
+- Import CSV de relevés bancaires (cf. ulysseclaude `bankStatementParser.ts` + `bankStatementImportService.ts` — code de qualité, à porter quand le besoin sera concret).
+- OCR de ticket Z resto.
+- Table `loans` (emprunts/crédits — utile pour amortissements analytics, peut atterrir Sprint 6).
+
+### 7.8.2 Sprint 6 — Analytics (livré PR #85 backend, UI à venir)
+
+**Livré (PR #85)** :
+
+3 endpoints `/api/management/:slug/analytics/*` + helpers purs
+`services/analytics/analyticsSummary.ts` :
+
+- `GET /analytics/dashboard?from=&to=&topSuppliersLimit=` (default = mois courant)
+  - **purchases** : totalTtc, totalHt, count, byStatus, topSuppliers (topN)
+  - **expenses** : total, count, byStatus
+  - **payroll** : gross, net, employerCost (totalEmployerCost si présent, sinon gross+employerCharges)
+  - **bank** : credits, debits (absolu), netDelta (signé)
+  - **cash** : totalIn, totalOut, net
+
+- `GET /analytics/monthly?from=YYYY-MM&to=YYYY-MM&months=N` (default = 12 derniers mois inclusif)
+  - série mensuelle continue (mois sans data = 0) : purchases, expenses, payrollEmployerCost, bankCredits/Debits, cashIn/Out
+
+- `GET /analytics/tva?from=&to=`
+  - **deductible** : sum tvaAmount (purchases) + taxAmount (expenses)
+  - **collected** : `null` + `collectedReason` — pas de table revenue générique chez myBeez en V1, ajouter Phase 2
+
+**Helpers purs** consommables aussi par d'autres modules :
+- `monthsInRange(from, to)` — liste YYYY-MM inclusive
+- `bucketMonth(value)` — tronque YYYY-MM-DD → YYYY-MM, valide la sémantique mois
+- `sumField(rows, getter)` — somme défensive (skip NaN/Infinity/null)
+- `bucketSumByMonth(rows, getDate, getAmount)` — bucket-then-sum
+- `topByGroup(rows, groupBy, sumBy, limit)` — top N stable (sort total desc, key asc en tie)
+- `countByGroup(rows, groupBy)` — récap categorique (status mix)
+
+**Choix de design vs ulysseclaude `suppliersAnalyticsRoutes.ts`** :
+
+- **Vertical-agnostic** : pas de hardcode resto (`alimentaire`/`boissons`/`emballages`), pas de TVA 10% en dur, pas de food cost % / ratios resto-spécifiques.
+- **Pas de "CA"** : ulysseclaude calcule le CA depuis `suguCashRegister.totalRevenue` (clôture Z resto). myBeez n'a pas de table revenue générique en V1, donc :
+  - pas d'endpoint `/analytics/ratios` (food cost %, payroll %, marge brute)
+  - pas d'endpoint `/analytics/tresorerie` (projection 3 mois)
+  - TVA collectée = `null` documenté, pas un `0` trompeur
+- **Compute on-demand** plutôt que cache snapshot : volumes attendus < 12 mois × few thousand rows ⇒ <100ms. Table `analytics` reste libre pour Phase 2 si signal perf concret.
+
+⏳ **Reste** :
+- UI `AnalyticsSection.tsx` (charts mensuels, KPI cards, top suppliers).
+- Module Revenue générique pour débloquer la TVA collectée + ratios CA-based (Phase 2).
+- CSV export expert-comptable (port pattern ulysseclaude `/analytics/export-comptable` si demandé).
 
 ### 7.8.3 Sprint 7 — History cross-module
 

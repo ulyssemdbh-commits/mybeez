@@ -55,8 +55,11 @@ Fichier : `shared/schema/checklist.ts`. Toutes ont `tenantId integer notnull`.
 | `suppliers` | `isActive` | identité + paiement + IBAN + SIRET + TVA | — |
 | `purchases` | `isActive` | `supplierId`, `supplierName` (snapshot), `totalHt/Ttc`, `tvaRate` default 20, `paymentStatus`, `paidDate`, `dueDate`, `category` | **supplierId non FK** |
 | `general_expenses` | `isActive` | `category`, `description`, `amount`, `isRecurring`, `recurringFrequency`, `period`, `paymentStatus`, `dueDate`, `paidDate` | — |
-| `bankEntries` | — | `reconciled`, `type` (income/expense) | — |
-| `cashEntries` | — | `type`, `paymentMethod` | — |
+| `bankAccounts` (finance.ts, PR #83) | `isActive` | un compte par row (`name`, `bankName`, `iban`, `openingBalance`, `notes`) | — |
+| `bankEntries` (SQL `bank_entries_v2`, PR #83) | — | FK logique `bankAccountId`. Amount **signé**. `isReconciled` + FK logiques optionnelles `purchaseId`/`expenseId`/`payrollId` pour rapprochement. | **bankAccountId/purchaseId/expenseId/payrollId non FK** |
+| `cashEntries` (SQL `cash_entries_v2`, PR #83) | — | `kind` ('in'\|'out'), amount toujours positif. Générique (pas de colonnes resto-flat). | — |
+| ~~`legacyBankEntries`~~ (SQL `bank_entries`, schema kept stub-only) | — | @deprecated PR #83. Tables vides en prod, drop SQL différé. | — |
+| ~~`legacyCashEntries`~~ (SQL `cash_entries`, schema kept stub-only) | — | @deprecated PR #83. Idem. | — |
 | `files` | — (via files_trash) | `category`, `fileType`, `supplier`, `description`, `mimeType`, `fileSize`, `storagePath`, `emailedTo[]`, `employeeId` (PR #72, FK logique). Index `tenantId` + `employeeId`. | **employeeId non FK** |
 | `files_trash` | — | mirror de `files` + `deletedAt`, `expiresAt` (TTL 7j), `originalFileId`. Index `tenantId` + `expiresAt`. | — |
 | `employees` | `isActive` | identité + `contractType` (default CDI) + `socialSecurityNumber` (matching PDF) + `salary` / `hourlyRate` / `weeklyHours` (default 35) + `endDate` + `notes`. Index `tenantId`. (PR #72 enrichissement). | — |

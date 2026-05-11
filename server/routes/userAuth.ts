@@ -33,7 +33,7 @@ import { db } from "../db";
 import { userTenants } from "../../shared/schema/users";
 import { tenants } from "../../shared/schema/tenants";
 import { userService, EmailAlreadyExistsError, normalizeEmail } from "../services/auth/userService";
-import { verifyPassword } from "../services/auth/passwordService";
+import { verifyPassword, PasswordPwnedError } from "../services/auth/passwordService";
 import { sendVerificationEmail, sendPasswordResetEmail } from "../services/auth/mailService";
 import { requireUser, getUserSession, clearMfaPending } from "../middleware/auth";
 import { PASSWORD_LIMITS } from "../services/auth/passwordService";
@@ -115,6 +115,7 @@ export function registerUserAuthRoutes(app: Express): void {
         password: data.password,
         fullName: data.fullName ?? null,
         locale: data.locale ?? "fr",
+        checkPwned: true,
       });
 
       const token = await userService.issueEmailVerificationToken(user.id);
@@ -140,6 +141,19 @@ export function registerUserAuthRoutes(app: Express): void {
           metadata: { reason: "email_already_exists" },
         });
         return res.status(409).json({ error: "Cet email est déjà utilisé" });
+      }
+      if (error instanceof PasswordPwnedError) {
+        void recordAudit({
+          req,
+          event: "auth.signup.failure",
+          metadata: { reason: "password_pwned" },
+        });
+        return res.status(400).json({
+          error:
+            "Ce mot de passe a été compromis dans une fuite connue. Choisissez-en un autre.",
+          field: "password",
+          code: "PASSWORD_PWNED",
+        });
       }
       log.error({ err: error }, "signup error");
       res.status(500).json({ error: "Erreur de création du compte" });
@@ -372,6 +386,19 @@ export function registerUserAuthRoutes(app: Express): void {
     } catch (error) {
       if (error instanceof z.ZodError) {
         return res.status(400).json({ error: "Données invalides", details: error.errors });
+      }
+      if (error instanceof PasswordPwnedError) {
+        void recordAudit({
+          req,
+          event: "auth.password_reset.failure",
+          metadata: { reason: "password_pwned" },
+        });
+        return res.status(400).json({
+          error:
+            "Ce mot de passe a été compromis dans une fuite connue. Choisissez-en un autre.",
+          field: "password",
+          code: "PASSWORD_PWNED",
+        });
       }
       log.error({ err: error }, "reset-password error");
       res.status(500).json({ error: "Erreur" });

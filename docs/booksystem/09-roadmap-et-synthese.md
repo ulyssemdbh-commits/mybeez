@@ -18,8 +18,8 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | 2 | feat/cashflow (= expenses + bank + cash) | Audit log writes | ✅ audit (PR #68) ✅ bonus lockout + rate-limit auth (PR #69) ✅ partiel module (expenses #66 livré, bank/cash redesign reportés au Sprint 5) |
 | 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + PR #78 UI) ✅ hook V2 send-email-bulk (PR #79) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
 | 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ✅ hooks payroll OCR `import-pdf` + `reparse-all` (PR #81) — **Sprint 4 V2 bouclé** |
-| 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) — module métier Bank/Cash redesign à venir |
-| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ⏳ à venir |
+| 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) ✅ backend Bank/Cash (PR #83) — UI à venir |
+| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ✅ sécu/ops (PR #84) ✅ backend Analytics (PR #85) — UI à venir |
 | 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ⏳ à venir |
 
 Règles :
@@ -73,17 +73,46 @@ Règles :
   duration). 135 occurrences `console.*` migrées sur 30 fichiers. Format
   JSON prod / `pino-pretty` dev. `LOG_LEVEL` env var. Redact secrets
   aligné sur `auditService`.
+- ✅ Module Bank/Cash backend (PR #83 — Sprint 5 module métier) :
+  `shared/schema/finance.ts` (3 tables `bank_accounts` + `bank_entries_v2`
+  + `cash_entries_v2`), 3 sets de routes CRUD + stats + unreconciled,
+  helpers purs `services/finance/financeSummary.ts` (`computeBankAccountBalance`,
+  `computeBankStats`, `computeCashStats`). Amount **signé** côté banque,
+  **positif** + `kind` côté caisse. FK logiques optionnelles vers
+  `purchases`/`expenses`/`payroll` pour rapprochement. Anciennes tables
+  `bank_entries`/`cash_entries` (vides) renommées `legacyBankEntries`/`legacyCashEntries`
+  en TS (drop SQL différé). UI à livrer en PR follow-up.
+- ✅ HSTS + CSP + HIBP (PR #84 — Sprint 6 sécu/ops) :
+  HSTS `max-age=31536000; includeSubDomains; preload` côté nginx + helmet
+  (defense in depth). CSP strict prod (script-src 'self', style-src
+  'self' 'unsafe-inline', frame-ancestors 'none', etc.), désactivé dev
+  pour HMR Vite. HIBP k-anonymity sur signup + reset-password +
+  signup-with-tenant ; soft-fail sur API down ; `HIBP_DISABLED=true`
+  override. Code `PASSWORD_PWNED` retourné en 400 avec message FR.
+- ✅ Module Analytics backend (PR #85 — Sprint 6 module métier) :
+  3 endpoints `/analytics/{dashboard,monthly,tva}` + helpers purs
+  `services/analytics/analyticsSummary.ts`. Compute on-demand
+  (vertical-agnostic, pas de hardcode resto). Top suppliers, payment
+  status mix, séries mensuelles signées (bank/cash), TVA déductible.
+  TVA collectée = `null` documenté (requires future revenue table).
+  UI à livrer en PR follow-up.
 
 ### 9.2.2 En cours / en attente de merge
 
-- (rien en attente — la stack Sprint 3-4 est intégralement mergée sur `main` au 2026-05-09)
+- (rien en attente — la stack Sprint 3-4-5-6 est intégralement mergée sur `main` au 2026-05-10)
 
-### 9.2.3 À suivre — Sprint 5 module métier
+### 9.2.3 À suivre — UI Bank/Cash + Analytics + Sprint 7
 
-Le sécu/ops Sprint 5 (logger pino) est livré (PR #82). Reste le module
-métier Sprint 5 : **Bank/Cash redesign** (moyens de paiement génériques
-avec lien vers `purchases`/`expenses`, à concevoir en partant de zéro
-plutôt que copier le modèle restaurant-flat d'ulysseclaude).
+Backend complet jusqu'à Sprint 6 (#82 pino, #83 Bank/Cash, #84 HSTS+
+CSP+HIBP, #85 Analytics). Reste :
+
+**UI follow-up** :
+- `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx` (PR Sprint 5 follow-up)
+- `AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers (PR Sprint 6 follow-up)
+
+**Sprint 7** :
+- Module métier : History cross-module (vue unifiée audit + métier).
+- Sécu/ops : Metrics Prometheus + Sentry frontend.
 
 > Note ex-prerequis abandonné : initialement on avait planché sur
 > `pdf-parse` pour extraire le texte des bulletins PDF. La PR #81 a
@@ -98,7 +127,7 @@ plutôt que copier le modèle restaurant-flat d'ulysseclaude).
 | Sprint | Module | Sécu/Ops |
 |---|---|---|
 | 5 | BankEntries / CashEntries redesign (moyens de paiement génériques) | Logger structuré pino (stdout JSON) |
-| 6 | Analytics (cumul purchases + expenses + payroll + KPIs) | HSTS nginx + CSP helmet + check HIBP |
+| ~~6~~ | ~~Analytics~~ ✅ Livré PR #85 (backend, UI à venir) | ~~HSTS nginx + CSP helmet + check HIBP~~ ✅ Livré PR #84 |
 | 7 | History cross-module (vue unifiée audit + métier) | Metrics Prometheus + Sentry frontend |
 
 ---
@@ -109,7 +138,7 @@ plutôt que copier le modèle restaurant-flat d'ulysseclaude).
 |---|---|---|
 | Multi-vertical via templates | Catalog seedé (4 × 25), `tenants.templateId`, vocabulary par tenant ✓. Alfred lit `tenant.vocabulary` ✓. Wizard signup multi-step ✓. Switch template tenant ✓. Vocabulary editor + modules toggle ✓. Reste : `templateId` NOT NULL + drop `businessType`. | 🟢 95% |
 | Subdomain + custom domain | Subdomain résolution ✓, table `tenant_domains` ✓, custom domain provisioning automatisé ❌ | 🟡 60% |
-| Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓, MFA TOTP ✓, PIN purgé ✓, audit log writes ✓, lockout par compte + rate-limit IP ✓. **MFA pas obligatoire Owner/Admin**, HSTS/CSP/HIBP absents | 🟢 90% |
+| Auth max-secure | Argon2id ✓, sessions Postgres ✓, RBAC nominatif ✓, MFA TOTP ✓, PIN purgé ✓, audit log writes ✓, lockout par compte + rate-limit IP ✓, HSTS+CSP+HIBP ✓ (PR #84). **Reste : MFA obligatoire Owner/Admin** | 🟢 95% |
 
 ---
 
@@ -158,7 +187,7 @@ Ce qui manque pour être *fully bankable* :
 - Hooks payroll OCR (`import-pdf` + `reparse-all`) pour boucler Sprint 4 V2.
 - 3 modules métier restants (Bank/Cash redesign, Analytics, History cross).
 - Logger structuré + metrics + Sentry.
-- HSTS + CSP + HIBP.
+- ~~HSTS + CSP + HIBP.~~ ✅ Livré PR #84.
 - Stripe billing (Phase 2).
 
 ---
@@ -182,9 +211,9 @@ Ce qui manque pour être *fully bankable* :
 
 - **MFA opt-in seulement** — pas obligatoire pour Owner/Admin.
 - ~~**Lockout login** absent.~~ ✅ Livré (PR #69).
-- **Pas de check HIBP** sur passwords.
-- **CSP désactivé** dans helmet.
-- **Pas de HSTS** côté nginx.
+- ~~**Pas de check HIBP** sur passwords.~~ ✅ Livré (PR #84).
+- ~~**CSP désactivé** dans helmet.~~ ✅ Livré (PR #84, prod uniquement).
+- ~~**Pas de HSTS** côté nginx.~~ ✅ Livré (PR #84, nginx + helmet).
 - **Pas de chiffrement R2** des dumps.
 - **Pas de CSRF token** (acceptable tant que pas de form cross-origin).
 
@@ -220,8 +249,9 @@ Ce qui manque pour être *fully bankable* :
 - **Checklist `GET /history`** : `byDate[date].total = allItems.length` calcule
   le total avec items actifs *aujourd'hui*, pas à la date X — biaise les
   pourcentages historiques.
-- **BankEntries / CashEntries** : schemas restaurant-flat, à redesigner en
-  moyens-paiement génériques avant d'implémenter routes/UI.
+- ~~**BankEntries / CashEntries** : schemas restaurant-flat~~ ✅ Redesigné PR #83
+  (`bank_accounts` + `bank_entries_v2` + `cash_entries_v2` dans `finance.ts`).
+  Anciens schémas renommés `legacy*` ; drop SQL définitif différé.
 
 ---
 

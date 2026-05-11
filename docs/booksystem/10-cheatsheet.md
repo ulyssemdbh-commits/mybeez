@@ -96,6 +96,7 @@ npx tsx scripts/grant-superadmin.ts <email>
 | `PORT` | optionnel | default 3000 |
 | `NODE_ENV` | — | `development` ou `production` |
 | `LOG_LEVEL` | optionnel | pino level — default `info` prod / `debug` dev. Valeurs : `trace, debug, info, warn, error, fatal, silent`. (PR #82) |
+| `HIBP_DISABLED` | optionnel | `true` désactive le check Have I Been Pwned au signup/reset (utile tests offline / emergency). Toute autre valeur = check actif. (PR #84) |
 
 Modèle complet : `.env.example` (à la racine du repo).
 
@@ -275,6 +276,23 @@ POST   /api/management/:slug/payroll/import-pdf         owner/admin/manager (V2 
 POST   /api/management/:slug/payroll/reparse-all        owner/admin/manager (V2 hook PR #81 — itère files RH non liés, cap 50/run)
 GET    /api/management/:slug/absences         READ (?employeeId=N&from=&to=)
 POST/PATCH/DELETE /api/management/:slug/absences/:id    owner/admin/manager
+
+# Bank / Cash (PR #83 backend)
+GET    /api/management/:slug/bank-accounts                       READ (?includeInactive=true)
+GET    /api/management/:slug/bank-accounts/:id                   READ — retourne {account, balance: {openingBalance, netDelta, currentBalance, entryCount}}
+POST/PATCH/DELETE /api/management/:slug/bank-accounts/:id        owner/admin/manager (DELETE = soft isActive=false)
+GET    /api/management/:slug/bank-entries                        READ (?from=YYYY-MM-DD&to=&accountId=&category=&reconciled=true|false)
+GET    /api/management/:slug/bank-entries/stats                  READ (mêmes filtres)
+GET    /api/management/:slug/bank-entries/unreconciled           READ
+POST/PATCH/DELETE /api/management/:slug/bank-entries/:id         owner/admin/manager (DELETE hard, audit_log)
+GET    /api/management/:slug/cash-entries                        READ (?from=&to=&kind=in|out&category=)
+GET    /api/management/:slug/cash-entries/stats                  READ (mêmes filtres)
+POST/PATCH/DELETE /api/management/:slug/cash-entries/:id         owner/admin/manager (DELETE hard, audit_log)
+
+# Analytics (PR #85 backend — read-only, tous rôles tenant)
+GET    /api/management/:slug/analytics/dashboard      READ (?from=YYYY-MM-DD&to=&topSuppliersLimit=N) — défaut = mois courant
+GET    /api/management/:slug/analytics/monthly        READ (?from=YYYY-MM&to=&months=N) — défaut = 12 mois inclusif
+GET    /api/management/:slug/analytics/tva            READ (?from=&to=) — TVA déductible. collected=null V1.
 
 # Realtime
 GET    /api/:slug/events                     SSE (tous rôles tenant)
