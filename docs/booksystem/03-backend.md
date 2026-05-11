@@ -189,6 +189,7 @@ Toutes mounted at `/api/management/:slug/<module>`, derrière
 | `bankEntries.ts` | `/bank-entries` + `/stats` + `/unreconciled` | tous | owner/admin/manager | Hard-delete (audit trace). Amount **signé** (négatif=débit). FK logiques optionnelles `purchaseId`/`expenseId`/`payrollId` pour rapprochement. Filtres `from`,`to`,`accountId`,`category`,`reconciled`. Cross-tenant guard sur `bankAccountId` au create/update. (PR #83) |
 | `cashEntries.ts` | `/cash-entries` + `/stats` | tous | owner/admin/manager | Hard-delete. Amount **toujours positif**, sens via `kind` ('in'\|'out'). Générique (pas de colonnes resto-spécifiques). (PR #83) |
 | `analytics.ts` | `/analytics/dashboard` + `/monthly` + `/tva` | tous | — (read-only) | Compute on-demand depuis purchases/expenses/payroll/bank/cash. Période = mois courant par défaut. Top fournisseurs, payment status mix, séries mensuelles signées, TVA déductible (collectée=null V1, requires future revenue table). (PR #85) |
+| `history.ts` | `/history` | tous | — (read-only) | Flux unifié `audit_log` décoré (module, action, label FR, entityType/entityId). Filtres `module`, `action`, `from`, `to`, `userId`, `limit` (1..200, default 50), `offset`. Pagination offset-based. (PR #88) |
 
 ### 3.2.10 SSE — Realtime
 
@@ -254,6 +255,7 @@ Fichier : `server/services/`.
 | `finance/financeSummary` | Helpers purs : `computeBankAccountBalance`, `computeBankStats`, `computeCashStats`. Round-to-cent. Consommés par les routes `/bank-accounts/:id`, `/bank-entries/stats`, `/cash-entries/stats`. (PR #83) | — | ✓ Pure |
 | `analytics/analyticsSummary` | Helpers purs : `monthsInRange`, `bucketMonth`, `sumField`, `bucketSumByMonth`, `topByGroup`, `countByGroup`. Compute on-demand pour dashboard / monthly / TVA. Pas de cache, table `analytics` reste libre pour Phase 2. (PR #85) | — | ✓ Pure |
 | `observability/metrics` | Prometheus registry + http duration histogram + counters + DB pool gauges + AI provider gauges + default Node.js collectors. `routeLabel(req)` lit le pattern Express → cardinalité bornée. `metricsBearerToken()` lit `METRICS_TOKEN` env (≥16 chars). (PR #87) | — | ✓ Process-local (prom-client est par-process, multi-noeud = agréger côté Prometheus) |
+| `history/historyDecorator` | Helpers purs : `parseEvent` (split `domain.action.outcome`), `buildLabel` (FR via MODULE_LABELS + ACTION_LABELS), `extractEntityRef` (purchaseId/expenseId/payrollId/... selon module), `decorateRow` (fallback gracieux sur events legacy). (PR #88) | — | ✓ Pure |
 
 ### 3.4.2 Convention `recordAudit`
 
@@ -402,6 +404,7 @@ Fichier : `server/__tests__/`, `server/middleware/__tests__/`,
 | `services/auth/hibpService.test.ts` | k-anonymity SHA-1 prefix only, suffixIsPwned parsing, soft-fail réseau / non-2xx, HIBP_DISABLED override (PR #84) |
 | `services/analytics/analyticsSummary.test.ts` | monthsInRange + bucketMonth + sumField + bucketSumByMonth + topByGroup + countByGroup : 23 cas (round-to-cent, year crossover, defense in depth NaN/Infinity, top stable sort, etc.) (PR #85) |
 | `services/observability/metrics.test.ts` | routeLabel + metricsBearerToken + registry smoke (default + custom collectors présents, content-type Prometheus) (PR #87) |
+| `services/history/historyDecorator.test.ts` | parseEvent + buildLabel + extractEntityRef + decorateRow : 22 cas (split kebab, outcome multi-segment, fallbacks, defense in depth ids invalides) (PR #88) |
 | `services/files/{naming,trashService}.test.ts` | Sanitisation + TTL purge |
 | `seed/templates.test.ts` | Catalog richness + presentation invariants |
 

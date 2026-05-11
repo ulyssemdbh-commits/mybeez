@@ -20,7 +20,7 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ✅ hooks payroll OCR `import-pdf` + `reparse-all` (PR #81) — **Sprint 4 V2 bouclé** |
 | 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) ✅ backend Bank/Cash (PR #83) — UI à venir |
 | 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ✅ sécu/ops (PR #84) ✅ backend Analytics (PR #85) — UI à venir |
-| 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ✅ sécu/ops (PR #87) — module History cross à venir |
+| 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ✅ sécu/ops (PR #87) ✅ backend History cross (PR #88) — **Sprint 7 backend bouclé**, UI à venir |
 
 Règles :
 - Quality gates avant merge : `npm run check` + lint + test + CI verte.
@@ -105,20 +105,30 @@ Règles :
   Sentry frontend `client/src/lib/sentry.ts` no-op si `VITE_SENTRY_DSN`
   absent. `ErrorBoundary.componentDidCatch` forwarde via
   `captureBoundaryError`. Scrub credentials dans `beforeSend`.
+- ✅ Module History cross-module backend (PR #88 — Sprint 7 module) :
+  endpoint `GET /history` qui retourne un flux unifié `audit_log`
+  décoré (`module`, `action`, `label FR`, `entityType + entityId` pour
+  deep-link). Filtres `module`, `action`, `from`, `to`, `userId`,
+  `limit/offset`. Helpers purs dans `services/history/historyDecorator.ts`
+  (parseEvent, buildLabel, extractEntityRef, decorateRow + 22 tests).
+  Fallback gracieux sur events legacy malformés. Pas de nouvelle table
+  — audit_log est la source de vérité.
 
 ### 9.2.2 En cours / en attente de merge
 
-- (rien en attente — la stack Sprint 3-7 sécu/ops est intégralement mergée sur `main` au 2026-05-11)
+- (rien en attente — Sprints 3-7 sont intégralement bouclés côté backend au 2026-05-11)
 
-### 9.2.3 À suivre — UI follow-ups + Sprint 7 module
+### 9.2.3 À suivre — UI follow-ups
 
-**UI follow-up** :
+Tous les 12 modules métier sont **livrés côté API** au 2026-05-11.
+Reste exclusivement la **couche UI** :
+
 - `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx` (PR Sprint 5 follow-up)
 - `AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers (PR Sprint 6 follow-up)
+- `HistorySection.tsx` — table + filtres + deep-link entity (PR Sprint 7 follow-up)
 
-**Sprint 7 module métier** : History cross-module — vue unifiée des
-1000 dernières actions (purchases, expenses, files, employees,
-payroll, bank/cash, audit log). Filtres par module + période + user.
+Hors-200% : Phase 2 (Stripe billing, MFA obligatoire Owner/Admin,
+WebAuthn, SSO, etc.) — cf. §9.7.
 
 > Note ex-prerequis abandonné : initialement on avait planché sur
 > `pdf-parse` pour extraire le texte des bulletins PDF. La PR #81 a
@@ -134,7 +144,7 @@ payroll, bank/cash, audit log). Filtres par module + période + user.
 |---|---|---|
 | 5 | BankEntries / CashEntries redesign (moyens de paiement génériques) | Logger structuré pino (stdout JSON) |
 | ~~6~~ | ~~Analytics~~ ✅ Livré PR #85 (backend, UI à venir) | ~~HSTS nginx + CSP helmet + check HIBP~~ ✅ Livré PR #84 |
-| 7 | History cross-module (vue unifiée audit + métier) | ~~Metrics Prometheus + Sentry frontend~~ ✅ Livré PR #87 |
+| ~~7~~ | ~~History cross-module~~ ✅ Livré PR #88 (backend, UI à venir) | ~~Metrics Prometheus + Sentry frontend~~ ✅ Livré PR #87 |
 
 ---
 
