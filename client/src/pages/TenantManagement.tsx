@@ -18,6 +18,8 @@ import { PurchasesSection } from "@/components/management/sections/PurchasesSect
 import { ExpensesSection } from "@/components/management/sections/ExpensesSection";
 import { EmployeesSection } from "@/components/management/sections/EmployeesSection";
 import { FilesSection } from "@/components/management/sections/FilesSection";
+import { BankSection } from "@/components/management/sections/BankSection";
+import { CashSection } from "@/components/management/sections/CashSection";
 import {
   DEFAULT_MANAGEMENT_SECTION,
   isManagementSection,
@@ -66,10 +68,14 @@ function SectionContent({ section, tenantSlug }: { section: string; tenantSlug: 
   if (section === "employees") {
     return <EmployeesSection tenantSlug={tenantSlug} />;
   }
+  if (section === "bank") {
+    return <BankSection tenantSlug={tenantSlug} />;
+  }
+  if (section === "cash") {
+    return <CashSection tenantSlug={tenantSlug} />;
+  }
 
   const descriptions: Record<string, string> = {
-    bank: "Mouvements bancaires : encaissements, prélèvements, rapprochement.",
-    cash: "Caisse : entrées et sorties d'espèces, fonds de caisse.",
     payroll: "Paie mensuelle : brut, net, charges sociales, primes.",
     absences: "Congés et absences : demandes, validation, calendrier.",
     analytics: "Tableau de bord : KPIs, tendances, top fournisseurs.",
