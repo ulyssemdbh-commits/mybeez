@@ -26,7 +26,7 @@
 | 8 | Absences | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI) |
 | 9 | BankAccounts + BankEntries | ✅ | ✅ | ✅ | **Production-ready** (PR #83 backend + PR #90 UI) |
 | 10 | CashEntries | ✅ | ✅ | ✅ | **Production-ready** (PR #83 backend + PR #90 UI) |
-| 11 | Analytics | (compute) | ✅ | ❌ | Backend livré PR #85 (Sprint 6 module métier). UI à venir. |
+| 11 | Analytics | (compute) | ✅ | ✅ | **Production-ready** (PR #85 backend + PR #91 UI) |
 | 12 | History cross-module | (audit_log compute) | ✅ | ❌ | Backend livré PR #88 (Sprint 7 module métier). UI à venir. |
 
 ### 7.1.2 Pattern de livraison

@@ -124,7 +124,7 @@ Tous les 12 modules métier sont **livrés côté API** au 2026-05-11.
 Reste exclusivement la **couche UI** :
 
 - ~~`BankSection.tsx` (tabs Comptes/Opérations) + `CashSection.tsx`~~ ✅ Livré PR #90 — UI Bank/Cash (Sprint 5 follow-up)
-- `AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers (PR Sprint 6 follow-up)
+- ~~`AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers~~ ✅ Livré PR #91 — UI Analytics (Sprint 6 follow-up)
 - `HistorySection.tsx` — table + filtres + deep-link entity (PR Sprint 7 follow-up)
 
 Hors-200% : Phase 2 (Stripe billing, MFA obligatoire Owner/Admin,
