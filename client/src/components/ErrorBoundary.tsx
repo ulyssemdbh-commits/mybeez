@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { captureBoundaryError } from "@/lib/sentry";
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -22,6 +23,8 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("[myBeez] Error caught by boundary:", error, info);
+    // Forward to Sentry (no-op if VITE_SENTRY_DSN is unset). PR #87.
+    captureBoundaryError(error, info.componentStack);
   }
 
   render() {
