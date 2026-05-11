@@ -1,11 +1,12 @@
 # Chapitre 07 — Modules métier
 
 > **Résumé.** myBeez est conçu autour de modules métier toggleables par tenant
-> via `tenants.modulesEnabled`. Sur 11 modules planifiés au 2026-05-09, 8 sont
-> production-ready (Checklist, Suppliers, Purchases avec OCR, Expenses, Files
-> avec corbeille TTL + hook send-email-bulk V2, Employees, Payroll, Absences).
-> 3 restent à livrer dans les sprints 5-7 (Bank/Cash redesign, Analytics,
-> History). Pattern de référence : `purchases.ts` (route) + `PurchasesSection.tsx` (UI).
+> via `tenants.modulesEnabled`. **Tous les modules planifiés sont livrés
+> backend au 2026-05-11** : 8 production-ready (Checklist, Suppliers,
+> Purchases+OCR, Expenses, Files, Employees, Payroll, Absences) + 4 backend
+> livrés en attente d'UI (BankAccounts, BankEntries, CashEntries, Analytics,
+> History cross). Pattern de référence : `purchases.ts` (route) +
+> `PurchasesSection.tsx` (UI).
 
 ---
 
@@ -26,6 +27,7 @@
 | 9 | BankAccounts + BankEntries | ✅ | ✅ | ❌ | Backend livré PR #83 (Sprint 5 module métier). UI à venir. |
 | 10 | CashEntries | ✅ | ✅ | ❌ | Backend livré PR #83. UI à venir. |
 | 11 | Analytics | (compute) | ✅ | ❌ | Backend livré PR #85 (Sprint 6 module métier). UI à venir. |
+| 12 | History cross-module | (audit_log compute) | ✅ | ❌ | Backend livré PR #88 (Sprint 7 module métier). UI à venir. |
 
 ### 7.1.2 Pattern de livraison
 
@@ -522,10 +524,73 @@ Choix de design :
 - Module Revenue générique pour débloquer la TVA collectée + ratios CA-based (Phase 2).
 - CSV export expert-comptable (port pattern ulysseclaude `/analytics/export-comptable` si demandé).
 
-### 7.8.3 Sprint 7 — History cross-module
+### 7.8.3 Sprint 7 — History cross-module (livré PR #88 backend, UI à venir)
 
-Vue unifiée des dernières 1000 actions (achats, dépenses, fichiers, employees,
-payroll, audit log). Filtres par module + période + user.
+**Livré (PR #88)** :
+
+Endpoint `GET /api/management/:slug/history` qui retourne un flux unifié
+des rows `audit_log` du tenant, décorées pour la UI :
+
+- **Source** : 100% `audit_log`. Tous les modules existants écrivent déjà
+  via `recordAudit({event, metadata, ...})` — donc **pas de nouvelle
+  table, pas de duplication**. Le `history` est juste une vue
+  spécialisée sur le log d'audit déjà en place.
+
+- **Filtres** :
+  - `module=purchases|expenses|files|payroll|...` → `event LIKE 'module.%'`
+  - `action=created|updated|...` → match middle segment via SQL `LIKE`
+  - `from=YYYY-MM-DD&to=YYYY-MM-DD` → range `created_at` (bornes inclusives, début/fin de jour UTC)
+  - `userId=N` → filtre par acteur
+  - `limit` 1..200 (default 50), `offset` 0..100k
+
+- **Réponse** :
+  ```json
+  {
+    "items": [{
+      "id", "createdAt", "event",
+      "module": "purchases", "action": "created", "outcome": null,
+      "label": "Achat créé",                 // décoré FR via MODULE_LABELS + ACTION_LABELS
+      "userId", "tenantId", "metadata",
+      "ipAddress", "userAgent",
+      "entityType": "purchase", "entityId": 42   // pour deep-link UI (null si module sans entity)
+    }],
+    "total", "limit", "offset", "hasMore"
+  }
+  ```
+
+- **Helpers purs** dans `services/history/historyDecorator.ts`
+  (`parseEvent`, `buildLabel`, `extractEntityRef`, `decorateRow`,
+  `MODULE_LABELS`, `ACTION_LABELS`, `FILTERABLE_MODULES`). 22 tests
+  unitaires (decorator + label + entity ref + fallback gracieux sur
+  events legacy malformés).
+
+- **Cardinalité / coût** : `count(*)` pour `total` peut devenir coûteux
+  sur un audit_log de plusieurs millions. V1 vit avec, bascule cursor-
+  based si signal perf concret (l'index `audit_log_tenant_id_idx`
+  + `audit_log_created_at_idx` couvrent déjà 95% des cas).
+
+**Choix de design** :
+
+- **Pas de nouvelle table `history`** : audit_log est déjà la source de
+  vérité de tous les writes sensibles, dupliquer serait du gâchis et
+  ouvrirait un risque de drift entre les deux.
+- **Décoration côté serveur** plutôt que côté UI : le mapping
+  `event → label FR` est connaissance back (les conventions
+  `domain.action.outcome` sont propres à `recordAudit`). Évite que
+  la UI reimplemente cette logique, et permet de la tester sans front.
+- **Fallback gracieux** sur les events malformés ou inconnus : la
+  history endpoint ne doit jamais 500 sur un event legacy bizarre,
+  même si la décoration tombe à `module=unknown, label=<raw event>`.
+- **`entityType + entityId` extracts** : permet à la UI de générer un
+  deep-link `/management/purchases/42` sans connaître la structure des
+  metadata par module. Whitelist explicite par module — un mauvais
+  mapping serait pire qu'un manquant.
+
+⏳ **Reste** :
+- UI `HistorySection.tsx` (table + filtres + click → deep-link entity).
+- Si volume → cursor-based pagination (`?cursor=...&limit=...` au lieu
+  de `?offset=...`).
+- Si signal d'usage → export CSV pour expert-comptable.
 
 ---
 

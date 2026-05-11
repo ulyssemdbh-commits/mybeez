@@ -298,6 +298,10 @@ GET    /api/management/:slug/analytics/dashboard      READ (?from=YYYY-MM-DD&to=
 GET    /api/management/:slug/analytics/monthly        READ (?from=YYYY-MM&to=&months=N) — défaut = 12 mois inclusif
 GET    /api/management/:slug/analytics/tva            READ (?from=&to=) — TVA déductible. collected=null V1.
 
+# History cross-module (PR #88 backend — read-only, tous rôles tenant)
+GET    /api/management/:slug/history                  READ (?module=&action=&from=YYYY-MM-DD&to=&userId=N&limit=1..200&offset=0..100k)
+       → { items: [{ id, createdAt, event, module, action, outcome, label, userId, tenantId, metadata, entityType, entityId, ... }], total, limit, offset, hasMore }
+
 # Observabilité (PR #87)
 GET    /metrics                                       Bearer METRICS_TOKEN — Prometheus scrape (text/plain version=0.0.4)
 
