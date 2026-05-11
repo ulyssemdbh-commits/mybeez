@@ -19,7 +19,7 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + PR #78 UI) ✅ hook V2 send-email-bulk (PR #79) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
 | 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ✅ hooks payroll OCR `import-pdf` + `reparse-all` (PR #81) — **Sprint 4 V2 bouclé** |
 | 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) ✅ backend Bank/Cash (PR #83) — UI à venir |
-| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ✅ sécu/ops (PR #84) — module Analytics à venir |
+| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ✅ sécu/ops (PR #84) ✅ backend Analytics (PR #85) — UI à venir |
 | 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ⏳ à venir |
 
 Règles :
@@ -89,23 +89,30 @@ Règles :
   pour HMR Vite. HIBP k-anonymity sur signup + reset-password +
   signup-with-tenant ; soft-fail sur API down ; `HIBP_DISABLED=true`
   override. Code `PASSWORD_PWNED` retourné en 400 avec message FR.
+- ✅ Module Analytics backend (PR #85 — Sprint 6 module métier) :
+  3 endpoints `/analytics/{dashboard,monthly,tva}` + helpers purs
+  `services/analytics/analyticsSummary.ts`. Compute on-demand
+  (vertical-agnostic, pas de hardcode resto). Top suppliers, payment
+  status mix, séries mensuelles signées (bank/cash), TVA déductible.
+  TVA collectée = `null` documenté (requires future revenue table).
+  UI à livrer en PR follow-up.
 
 ### 9.2.2 En cours / en attente de merge
 
-- (rien en attente — la stack Sprint 3-4 est intégralement mergée sur `main` au 2026-05-09)
+- (rien en attente — la stack Sprint 3-4-5-6 est intégralement mergée sur `main` au 2026-05-10)
 
-### 9.2.3 À suivre — UI Bank/Cash + Sprint 6 module Analytics
+### 9.2.3 À suivre — UI Bank/Cash + Analytics + Sprint 7
 
-Sprint 5 module + Sprint 6 sécu/ops bouclés (#82 pino, #83 Bank/Cash
-backend, #84 HSTS+CSP+HIBP). Reste :
+Backend complet jusqu'à Sprint 6 (#82 pino, #83 Bank/Cash, #84 HSTS+
+CSP+HIBP, #85 Analytics). Reste :
 
-**UI Bank/Cash** (PR follow-up Sprint 5) :
-- `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx`
-- Stats cards (solde par compte, encaissements / décaissements période)
-- Bouton « Rapprocher » avec proposition de match purchase/expense
+**UI follow-up** :
+- `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx` (PR Sprint 5 follow-up)
+- `AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers (PR Sprint 6 follow-up)
 
-**Sprint 6 module métier** : Analytics (cumul purchases + expenses +
-payroll + bank/cash + KPIs vertical-aware).
+**Sprint 7** :
+- Module métier : History cross-module (vue unifiée audit + métier).
+- Sécu/ops : Metrics Prometheus + Sentry frontend.
 
 > Note ex-prerequis abandonné : initialement on avait planché sur
 > `pdf-parse` pour extraire le texte des bulletins PDF. La PR #81 a
@@ -120,7 +127,7 @@ payroll + bank/cash + KPIs vertical-aware).
 | Sprint | Module | Sécu/Ops |
 |---|---|---|
 | 5 | BankEntries / CashEntries redesign (moyens de paiement génériques) | Logger structuré pino (stdout JSON) |
-| 6 | Analytics (cumul purchases + expenses + payroll + KPIs) | HSTS nginx + CSP helmet + check HIBP |
+| ~~6~~ | ~~Analytics~~ ✅ Livré PR #85 (backend, UI à venir) | ~~HSTS nginx + CSP helmet + check HIBP~~ ✅ Livré PR #84 |
 | 7 | History cross-module (vue unifiée audit + métier) | Metrics Prometheus + Sentry frontend |
 
 ---

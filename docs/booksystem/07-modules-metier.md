@@ -25,7 +25,7 @@
 | 8 | Absences | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI) |
 | 9 | BankAccounts + BankEntries | ✅ | ✅ | ❌ | Backend livré PR #83 (Sprint 5 module métier). UI à venir. |
 | 10 | CashEntries | ✅ | ✅ | ❌ | Backend livré PR #83. UI à venir. |
-| 11 | Analytics | ✅ | ❌ | ❌ | Schémé, planifié Sprint 6 |
+| 11 | Analytics | (compute) | ✅ | ❌ | Backend livré PR #85 (Sprint 6 module métier). UI à venir. |
 
 ### 7.1.2 Pattern de livraison
 
@@ -479,12 +479,48 @@ Choix de design :
 - OCR de ticket Z resto.
 - Table `loans` (emprunts/crédits — utile pour amortissements analytics, peut atterrir Sprint 6).
 
-### 7.8.2 Sprint 6 — Analytics
+### 7.8.2 Sprint 6 — Analytics (livré PR #85 backend, UI à venir)
 
-`analytics` schema présent. Porter depuis `ulysseclaude/suppliersAnalyticsRoutes.ts`,
-**dégénériser TVA + catégories restaurant**. Périodes (jour/semaine/mois/année),
-cumul par module (purchases + expenses + payroll), top suppliers, payment
-status mix, masse salariale historique.
+**Livré (PR #85)** :
+
+3 endpoints `/api/management/:slug/analytics/*` + helpers purs
+`services/analytics/analyticsSummary.ts` :
+
+- `GET /analytics/dashboard?from=&to=&topSuppliersLimit=` (default = mois courant)
+  - **purchases** : totalTtc, totalHt, count, byStatus, topSuppliers (topN)
+  - **expenses** : total, count, byStatus
+  - **payroll** : gross, net, employerCost (totalEmployerCost si présent, sinon gross+employerCharges)
+  - **bank** : credits, debits (absolu), netDelta (signé)
+  - **cash** : totalIn, totalOut, net
+
+- `GET /analytics/monthly?from=YYYY-MM&to=YYYY-MM&months=N` (default = 12 derniers mois inclusif)
+  - série mensuelle continue (mois sans data = 0) : purchases, expenses, payrollEmployerCost, bankCredits/Debits, cashIn/Out
+
+- `GET /analytics/tva?from=&to=`
+  - **deductible** : sum tvaAmount (purchases) + taxAmount (expenses)
+  - **collected** : `null` + `collectedReason` — pas de table revenue générique chez myBeez en V1, ajouter Phase 2
+
+**Helpers purs** consommables aussi par d'autres modules :
+- `monthsInRange(from, to)` — liste YYYY-MM inclusive
+- `bucketMonth(value)` — tronque YYYY-MM-DD → YYYY-MM, valide la sémantique mois
+- `sumField(rows, getter)` — somme défensive (skip NaN/Infinity/null)
+- `bucketSumByMonth(rows, getDate, getAmount)` — bucket-then-sum
+- `topByGroup(rows, groupBy, sumBy, limit)` — top N stable (sort total desc, key asc en tie)
+- `countByGroup(rows, groupBy)` — récap categorique (status mix)
+
+**Choix de design vs ulysseclaude `suppliersAnalyticsRoutes.ts`** :
+
+- **Vertical-agnostic** : pas de hardcode resto (`alimentaire`/`boissons`/`emballages`), pas de TVA 10% en dur, pas de food cost % / ratios resto-spécifiques.
+- **Pas de "CA"** : ulysseclaude calcule le CA depuis `suguCashRegister.totalRevenue` (clôture Z resto). myBeez n'a pas de table revenue générique en V1, donc :
+  - pas d'endpoint `/analytics/ratios` (food cost %, payroll %, marge brute)
+  - pas d'endpoint `/analytics/tresorerie` (projection 3 mois)
+  - TVA collectée = `null` documenté, pas un `0` trompeur
+- **Compute on-demand** plutôt que cache snapshot : volumes attendus < 12 mois × few thousand rows ⇒ <100ms. Table `analytics` reste libre pour Phase 2 si signal perf concret.
+
+⏳ **Reste** :
+- UI `AnalyticsSection.tsx` (charts mensuels, KPI cards, top suppliers).
+- Module Revenue générique pour débloquer la TVA collectée + ratios CA-based (Phase 2).
+- CSV export expert-comptable (port pattern ulysseclaude `/analytics/export-comptable` si demandé).
 
 ### 7.8.3 Sprint 7 — History cross-module
 
