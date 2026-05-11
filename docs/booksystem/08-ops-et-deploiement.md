@@ -421,11 +421,11 @@ Config dans `package.json` ou `.prettierrc` :
 |---|---|
 | `/api/health` (uptime, SSE stats, AI provider flags) | ✅ |
 | Logger structuré (pino) | ✅ Livré PR #82 — `server/lib/logger.ts` + `pino-http` middleware, JSON prod / `pino-pretty` dev, redact secrets |
-| Metrics (Prometheus, OpenTelemetry) | ❌ (Sprint 7 sécu/ops) |
-| Alerting | ❌ |
+| Metrics Prometheus | ✅ Livré PR #87 — endpoint `/metrics` Bearer-token gated, http duration histogram + counters + DB pool gauges + AI provider gauges + default Node.js collectors |
+| Alerting | ❌ (côté Prometheus / Alertmanager — config opérationnelle, hors repo) |
 | `process.on("uncaughtException"/"unhandledRejection")` | ✅ `rootLogger.fatal` (PR #82) |
 | Persistence logs (ELK, Datadog, Loki…) | ❌ |
-| Sentry frontend | ❌ (Sprint 7 sécu/ops) |
+| Sentry frontend | ✅ Livré PR #87 — `@sentry/react` no-op si `VITE_SENTRY_DSN` absent, scrub des credentials dans `beforeSend`, `ErrorBoundary` forwarde |
 
 ### 8.8.1 Logger pino — livré PR #82
 
@@ -475,12 +475,69 @@ levels, child bindings, level inheritance, redact paths compile).
 **Persistence logs en prod** : reste sur stdout / Docker logs. Pas
 d'agent (Loki/Datadog) pour l'instant — concern Sprint 7 (obs).
 
-### 8.8.2 Plan Sprint 7 — Prometheus + Sentry
+### 8.8.2 Metrics Prometheus — livré PR #87
 
-- `prom-client` : `/metrics` (latence par route, error rate, DB pool stats,
-  process metrics).
-- Sentry frontend : capture erreurs JS + traces React.
-- Alerting via Alertmanager ou Cloudflare/BetterStack (à décider).
+`server/services/observability/metrics.ts` expose un registre
+`prom-client` avec les default Node.js collectors + 4 collectors
+custom :
+
+| Métrique | Type | Labels | Quoi |
+|---|---|---|---|
+| `http_request_duration_seconds` | Histogram | `method`, `route`, `status_code` | Latence par request. Buckets `[5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s]`. |
+| `http_requests_total` | Counter | `method`, `route`, `status_code` | Compteur compagnon de l'histogramme (utile pour rate alerts par status sans unpacker les buckets). |
+| `db_pool_total` / `_idle` / `_waiting` | Gauge | — | État `pg.Pool` actualisé au moment du scrape. |
+| `ai_provider_configured` | Gauge | `provider` | 0/1 reflet du flag `OPENAI_API_KEY` / `GEMINI_API_KEY` / `XAI_API_KEY`. |
+
+**Cardinalité contrôlée** : `routeLabel(req)` lit `req.route?.path`
+(pattern Express : `/api/checklist/:slug/items/:id`), pas `req.path`,
+pour que les slugs tenants n'explosent pas le nombre de séries. Fallback
+`unknown` sur 404 / early-middleware (matcher pas encore tournée).
+
+**Endpoint `GET /metrics`** :
+
+- Bearer-token gate via `METRICS_TOKEN` env (≥16 chars, sinon endpoint
+  répond 503 — même convention que `SUPERADMIN_TOKEN` sur
+  `/api/tenants/*`). Compare via `timingSafeEqual` pour éviter la fuite
+  du token par timing.
+- Refresh des gauges point-in-time (DB pool, AI flags) **juste avant**
+  la sérialisation pour que Prometheus voie l'état courant et pas un
+  snapshot du tick précédent.
+- Pas sous `/api/...` → pas dans le scope du rate-limiter global. À
+  protéger côté nginx par IP allowlist (Prometheus host) si exposé
+  publiquement.
+
+**Cluster-safe ?** Process-local (prom-client). Multi-noeud = chaque
+node expose son `/metrics` et Prometheus agrège. Alignement avec les
+caches process-local existants (`tenantService`, `alfredService`).
+
+### 8.8.3 Sentry frontend — livré PR #87
+
+`client/src/lib/sentry.ts` exporte :
+- `initSentry()` : init lazy `@sentry/react`. **No-op** si
+  `VITE_SENTRY_DSN` n'est pas set (dev local, smoke testing sans
+  polluer l'org). Sampling traces `0.1` par défaut, surchargeable via
+  `VITE_SENTRY_TRACES_SAMPLE_RATE`. `release` lu depuis `VITE_RELEASE`.
+- `captureBoundaryError(error, componentStack)` : helper appelé par
+  `ErrorBoundary.componentDidCatch`. No-op silencieux si SDK pas
+  initialisé.
+
+`beforeSend` scrubbe les `extra.{password|token|secret|apiKey|…}` et
+neutralise `request.headers.cookie` / `authorization` — defense en
+profondeur sur les data scrubbers Sentry par défaut.
+
+Init dans `client/src/main.tsx` **avant** `createRoot()` pour qu'une
+exception au boot soit capturée.
+
+### 8.8.4 Hors scope (Phase 2)
+
+- Sentry backend (`@sentry/node`) : `/api/health` + audit log + pino
+  fatal couvrent déjà 80% du besoin. Add-on à considérer si Sentry
+  frontend remonte des cas serveur impossibles à debugger autrement.
+- Persistence logs (Loki / Datadog) : pour l'instant Docker logs
+  stdout suffisent. Coupler à un agent quand on aura un cas concret de
+  retro-analyse > 24h en arrière.
+- Alerting : configuration Prometheus / Alertmanager / BetterStack —
+  côté ops, hors repo applicatif.
 
 ---
 
