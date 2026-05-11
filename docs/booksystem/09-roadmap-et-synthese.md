@@ -123,7 +123,7 @@ Règles :
 Tous les 12 modules métier sont **livrés côté API** au 2026-05-11.
 Reste exclusivement la **couche UI** :
 
-- `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx` (PR Sprint 5 follow-up)
+- ~~`BankSection.tsx` (tabs Comptes/Opérations) + `CashSection.tsx`~~ ✅ Livré PR #89 — UI Bank/Cash (Sprint 5 follow-up)
 - `AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers (PR Sprint 6 follow-up)
 - `HistorySection.tsx` — table + filtres + deep-link entity (PR Sprint 7 follow-up)
 

@@ -24,8 +24,8 @@
 | 6 | Employees | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI) |
 | 7 | Payroll | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI). Reste hooks `import-pdf` + `reparse-all` (Sprint 4 V2). |
 | 8 | Absences | ✅ | ✅ | ✅ | **Production-ready** (PR #72 backend + PR #76 UI) |
-| 9 | BankAccounts + BankEntries | ✅ | ✅ | ❌ | Backend livré PR #83 (Sprint 5 module métier). UI à venir. |
-| 10 | CashEntries | ✅ | ✅ | ❌ | Backend livré PR #83. UI à venir. |
+| 9 | BankAccounts + BankEntries | ✅ | ✅ | ✅ | **Production-ready** (PR #83 backend + PR #89 UI) |
+| 10 | CashEntries | ✅ | ✅ | ✅ | **Production-ready** (PR #83 backend + PR #89 UI) |
 | 11 | Analytics | (compute) | ✅ | ❌ | Backend livré PR #85 (Sprint 6 module métier). UI à venir. |
 | 12 | History cross-module | (audit_log compute) | ✅ | ❌ | Backend livré PR #88 (Sprint 7 module métier). UI à venir. |
 
