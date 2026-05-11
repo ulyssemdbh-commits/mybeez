@@ -30,8 +30,16 @@ Fichier : `server/index.ts`.
      log auto chaque request avec method + url + status + duration.
      Mounted **avant** helmet/session pour capturer toutes les erreurs
      amont. Niveau dérivé : 5xx → error, 4xx → warn, 2xx/3xx → info.
-   - `helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false })`
-     — CSP désactivé pour Vite dev (Sprint 6 réactivera).
+   - **Metrics middleware** (PR #87) : `res.on("finish")` enregistre
+     duration dans `http_request_duration_seconds` + incrémente
+     `http_requests_total` avec labels `{method, route, status_code}`.
+     `route` lit le pattern Express matché pour borner la cardinalité.
+   - **`GET /metrics`** (PR #87) : Bearer-token gated (`METRICS_TOKEN`),
+     répond 503 si token absent/<16 chars. `timingSafeEqual` sur la
+     comparaison. Refresh DB pool + AI gauges juste avant la
+     sérialisation. Pas sous `/api/...` → hors rate-limit.
+   - `helmet({ contentSecurityPolicy: ... CSP strict prod / HSTS })`
+     (PR #84).
    - `compression({ level: 6, threshold: 1024 })`.
    - `cookieParser()`.
    - `express.json({ limit: "10mb" })`.
@@ -245,6 +253,7 @@ Fichier : `server/services/`.
 | `lib/logger` | pino factory : `rootLogger` + `moduleLogger(name)` child. JSON prod / `pino-pretty` dev, `LOG_LEVEL` env, redact secrets. Consommé par tous les routes/services (PR #82). | — | ✓ |
 | `finance/financeSummary` | Helpers purs : `computeBankAccountBalance`, `computeBankStats`, `computeCashStats`. Round-to-cent. Consommés par les routes `/bank-accounts/:id`, `/bank-entries/stats`, `/cash-entries/stats`. (PR #83) | — | ✓ Pure |
 | `analytics/analyticsSummary` | Helpers purs : `monthsInRange`, `bucketMonth`, `sumField`, `bucketSumByMonth`, `topByGroup`, `countByGroup`. Compute on-demand pour dashboard / monthly / TVA. Pas de cache, table `analytics` reste libre pour Phase 2. (PR #85) | — | ✓ Pure |
+| `observability/metrics` | Prometheus registry + http duration histogram + counters + DB pool gauges + AI provider gauges + default Node.js collectors. `routeLabel(req)` lit le pattern Express → cardinalité bornée. `metricsBearerToken()` lit `METRICS_TOKEN` env (≥16 chars). (PR #87) | — | ✓ Process-local (prom-client est par-process, multi-noeud = agréger côté Prometheus) |
 
 ### 3.4.2 Convention `recordAudit`
 
@@ -392,6 +401,7 @@ Fichier : `server/__tests__/`, `server/middleware/__tests__/`,
 | `services/finance/financeSummary.test.ts` | computeBankAccountBalance + computeBankStats + computeCashStats : zeros, signed sum, defense-in-depth, round-to-cent (PR #83) |
 | `services/auth/hibpService.test.ts` | k-anonymity SHA-1 prefix only, suffixIsPwned parsing, soft-fail réseau / non-2xx, HIBP_DISABLED override (PR #84) |
 | `services/analytics/analyticsSummary.test.ts` | monthsInRange + bucketMonth + sumField + bucketSumByMonth + topByGroup + countByGroup : 23 cas (round-to-cent, year crossover, defense in depth NaN/Infinity, top stable sort, etc.) (PR #85) |
+| `services/observability/metrics.test.ts` | routeLabel + metricsBearerToken + registry smoke (default + custom collectors présents, content-type Prometheus) (PR #87) |
 | `services/files/{naming,trashService}.test.ts` | Sanitisation + TTL purge |
 | `seed/templates.test.ts` | Catalog richness + presentation invariants |
 

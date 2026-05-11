@@ -97,6 +97,10 @@ npx tsx scripts/grant-superadmin.ts <email>
 | `NODE_ENV` | — | `development` ou `production` |
 | `LOG_LEVEL` | optionnel | pino level — default `info` prod / `debug` dev. Valeurs : `trace, debug, info, warn, error, fatal, silent`. (PR #82) |
 | `HIBP_DISABLED` | optionnel | `true` désactive le check Have I Been Pwned au signup/reset (utile tests offline / emergency). Toute autre valeur = check actif. (PR #84) |
+| `METRICS_TOKEN` | optionnel (≥16 chars) | Bearer token pour `GET /metrics`. Sans token ≥16 chars, endpoint répond 503. (PR #87) |
+| `VITE_SENTRY_DSN` | optionnel | DSN Sentry frontend. No-op si absent. (PR #87) |
+| `VITE_SENTRY_TRACES_SAMPLE_RATE` | optionnel | Sampling traces Sentry, default 0.1. (PR #87) |
+| `VITE_RELEASE` | optionnel | Tag release pour Sentry (utile en prod déploiement versionné). |
 
 Modèle complet : `.env.example` (à la racine du repo).
 
@@ -293,6 +297,9 @@ POST/PATCH/DELETE /api/management/:slug/cash-entries/:id         owner/admin/man
 GET    /api/management/:slug/analytics/dashboard      READ (?from=YYYY-MM-DD&to=&topSuppliersLimit=N) — défaut = mois courant
 GET    /api/management/:slug/analytics/monthly        READ (?from=YYYY-MM&to=&months=N) — défaut = 12 mois inclusif
 GET    /api/management/:slug/analytics/tva            READ (?from=&to=) — TVA déductible. collected=null V1.
+
+# Observabilité (PR #87)
+GET    /metrics                                       Bearer METRICS_TOKEN — Prometheus scrape (text/plain version=0.0.4)
 
 # Realtime
 GET    /api/:slug/events                     SSE (tous rôles tenant)

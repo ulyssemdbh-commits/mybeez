@@ -15,13 +15,21 @@ import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import rateLimit from "express-rate-limit";
 import { createServer } from "http";
-import { randomUUID } from "crypto";
+import { randomUUID, timingSafeEqual } from "crypto";
 import path from "path";
 import fs from "fs";
 import pinoHttp from "pino-http";
 import { pool } from "./db";
 import { warnIfMailNotConfigured } from "./services/auth/mailService";
 import { rootLogger, moduleLogger } from "./lib/logger";
+import {
+  registry as metricsRegistry,
+  httpRequestDuration,
+  httpRequestsTotal,
+  refreshPointInTimeGauges,
+  routeLabel,
+  metricsBearerToken,
+} from "./services/observability/metrics";
 
 const log = moduleLogger("Bootstrap");
 
@@ -108,6 +116,69 @@ app.use(
     },
   }),
 );
+
+/**
+ * Prometheus metrics middleware (PR #87) — observes every request's
+ * duration + outcome. Mounted after pino-http so a request that throws
+ * inside an earlier middleware (helmet, session) still appears in the
+ * log, but observe `res.on("finish")` so we capture the final status
+ * code even when the response went through error handlers.
+ *
+ * `routeLabel` reads `req.route?.path` (Express-matched pattern, e.g.
+ * `/api/checklist/:slug/items/:id`) so tenant slugs don't explode the
+ * metric cardinality with one series per tenant. On 404 / early
+ * middleware paths the matcher hasn't run ; we fall back to `unknown`
+ * so the label set stays bounded.
+ */
+app.use((req, res, next) => {
+  const endTimer = httpRequestDuration.startTimer();
+  res.on("finish", () => {
+    const labels = {
+      method: req.method,
+      route: routeLabel(req),
+      status_code: String(res.statusCode),
+    };
+    endTimer(labels);
+    httpRequestsTotal.inc(labels);
+  });
+  next();
+});
+
+/**
+ * GET /metrics — Prometheus scrape endpoint. Bearer-token gated via
+ * `METRICS_TOKEN` env (≥16 chars). Without a token, replies 503 so a
+ * misconfig is loud rather than silent (same convention as
+ * `SUPERADMIN_TOKEN` on `/api/tenants/*`). The compare uses
+ * `timingSafeEqual` to avoid leaking the token via response timing.
+ *
+ * Refresh point-in-time gauges (DB pool, AI providers) right before
+ * serialisation so the scrape sees current values rather than stale
+ * snapshots from the previous tick.
+ */
+app.get("/metrics", async (req, res) => {
+  const expected = metricsBearerToken();
+  if (!expected) {
+    return res.status(503).json({ error: "METRICS_TOKEN not configured" });
+  }
+  const header = req.headers.authorization ?? "";
+  const presented = header.startsWith("Bearer ") ? header.slice("Bearer ".length) : "";
+  const expectedBuf = Buffer.from(expected);
+  const presentedBuf = Buffer.from(presented);
+  if (
+    presentedBuf.length !== expectedBuf.length ||
+    !timingSafeEqual(presentedBuf, expectedBuf)
+  ) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  try {
+    refreshPointInTimeGauges(pool);
+    res.setHeader("Content-Type", metricsRegistry.contentType);
+    res.end(await metricsRegistry.metrics());
+  } catch (err) {
+    log.error({ err }, "metrics endpoint error");
+    res.status(500).json({ error: "Erreur" });
+  }
+});
 
 /**
  * Helmet — security headers (PR #84 reactivates CSP + HSTS).

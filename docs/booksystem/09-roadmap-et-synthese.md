@@ -20,7 +20,7 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ✅ hooks payroll OCR `import-pdf` + `reparse-all` (PR #81) — **Sprint 4 V2 bouclé** |
 | 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) ✅ backend Bank/Cash (PR #83) — UI à venir |
 | 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ✅ sécu/ops (PR #84) ✅ backend Analytics (PR #85) — UI à venir |
-| 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ⏳ à venir |
+| 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ✅ sécu/ops (PR #87) — module History cross à venir |
 
 Règles :
 - Quality gates avant merge : `npm run check` + lint + test + CI verte.
@@ -96,23 +96,29 @@ Règles :
   status mix, séries mensuelles signées (bank/cash), TVA déductible.
   TVA collectée = `null` documenté (requires future revenue table).
   UI à livrer en PR follow-up.
+- ✅ Prometheus metrics + Sentry frontend (PR #87 — Sprint 7 sécu/ops) :
+  `server/services/observability/metrics.ts` (registry prom-client +
+  collectors http duration / counter / DB pool / AI providers + default
+  Node.js metrics). Endpoint `GET /metrics` Bearer-token gated via
+  `METRICS_TOKEN` env (≥16 chars, sinon 503). `routeLabel(req)` lit le
+  pattern Express matché → cardinalité bornée (pas 1 série par slug).
+  Sentry frontend `client/src/lib/sentry.ts` no-op si `VITE_SENTRY_DSN`
+  absent. `ErrorBoundary.componentDidCatch` forwarde via
+  `captureBoundaryError`. Scrub credentials dans `beforeSend`.
 
 ### 9.2.2 En cours / en attente de merge
 
-- (rien en attente — la stack Sprint 3-4-5-6 est intégralement mergée sur `main` au 2026-05-10)
+- (rien en attente — la stack Sprint 3-7 sécu/ops est intégralement mergée sur `main` au 2026-05-11)
 
-### 9.2.3 À suivre — UI Bank/Cash + Analytics + Sprint 7
-
-Backend complet jusqu'à Sprint 6 (#82 pino, #83 Bank/Cash, #84 HSTS+
-CSP+HIBP, #85 Analytics). Reste :
+### 9.2.3 À suivre — UI follow-ups + Sprint 7 module
 
 **UI follow-up** :
 - `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx` (PR Sprint 5 follow-up)
 - `AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers (PR Sprint 6 follow-up)
 
-**Sprint 7** :
-- Module métier : History cross-module (vue unifiée audit + métier).
-- Sécu/ops : Metrics Prometheus + Sentry frontend.
+**Sprint 7 module métier** : History cross-module — vue unifiée des
+1000 dernières actions (purchases, expenses, files, employees,
+payroll, bank/cash, audit log). Filtres par module + période + user.
 
 > Note ex-prerequis abandonné : initialement on avait planché sur
 > `pdf-parse` pour extraire le texte des bulletins PDF. La PR #81 a
@@ -128,7 +134,7 @@ CSP+HIBP, #85 Analytics). Reste :
 |---|---|---|
 | 5 | BankEntries / CashEntries redesign (moyens de paiement génériques) | Logger structuré pino (stdout JSON) |
 | ~~6~~ | ~~Analytics~~ ✅ Livré PR #85 (backend, UI à venir) | ~~HSTS nginx + CSP helmet + check HIBP~~ ✅ Livré PR #84 |
-| 7 | History cross-module (vue unifiée audit + métier) | Metrics Prometheus + Sentry frontend |
+| 7 | History cross-module (vue unifiée audit + métier) | ~~Metrics Prometheus + Sentry frontend~~ ✅ Livré PR #87 |
 
 ---
 
@@ -186,7 +192,7 @@ Ce qui est solide :
 Ce qui manque pour être *fully bankable* :
 - Hooks payroll OCR (`import-pdf` + `reparse-all`) pour boucler Sprint 4 V2.
 - 3 modules métier restants (Bank/Cash redesign, Analytics, History cross).
-- Logger structuré + metrics + Sentry.
+- ~~Logger structuré + metrics + Sentry.~~ ✅ Logger PR #82, metrics + Sentry PR #87.
 - ~~HSTS + CSP + HIBP.~~ ✅ Livré PR #84.
 - Stripe billing (Phase 2).
 
@@ -239,8 +245,8 @@ Ce qui manque pour être *fully bankable* :
 
 - ~~**Pas de healthcheck Docker `app`**~~ ✅ Livré (PR #70).
 - ~~**Pas de logger structuré**~~ ✅ Livré pino (PR #82).
-- **Aucune metric applicative** (latence, error rate, DB pool).
-- **Aucun alerting**.
+- ~~**Aucune metric applicative** (latence, error rate, DB pool).~~ ✅ Livré PR #87 (Prometheus `/metrics` Bearer-token gated).
+- **Aucun alerting** côté repo (Alertmanager / BetterStack = config ops, hors scope applicatif).
 - ~~**Cron backups** pas câblé en prod.~~ ✅ Livré units versionnées (PR #70), reste à install sur le host.
 - **Pas de pre-commit hooks** (Husky/lint-staged).
 
