@@ -101,6 +101,7 @@ Tous générés via Shadcn CLI, avec helper `cn()` (clsx + tailwind-merge).
 | `sections/EmployeesSection.tsx` | Page Gestion RH : stats + table employés + détail collapsible (Documents RH / Absences / Fiches de Paie). PR #76. |
 | `sections/BankSection.tsx` | Tabs internes "Comptes" / "Opérations". Comptes : table CRUD avec solde calculé. Opérations : stats credits/debits/net/reconciledRate + filtres date/account/reconciled + table CRUD signée. PR #90. |
 | `sections/CashSection.tsx` | Caisse simple : stats in/out/net + filtres date/kind + table CRUD `kind` ('in'\|'out') + amount toujours positif. PR #90. |
+| `sections/AnalyticsSection.tsx` | Sélecteur période (presets + custom). Dashboard : 5 StatCards (achats/dépenses/payroll/banque/caisse) + top fournisseurs bar list + payment status mix. Série mensuelle 12 mois (barres CSS, toggle metric). TVA déductible + collectée=null disclaimer. Pas de lib charts externe. PR #91. |
 
 > Le `sharedUI/` a été porté depuis ulysseclaude (PR #63). Voir
 > `project_mybeez_sprint_plan` pour la stratégie d'adaptation
