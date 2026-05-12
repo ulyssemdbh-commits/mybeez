@@ -49,7 +49,7 @@ Fichier : `client/src/pages/`.
 |---|---|---|
 | `TenantChecklist.tsx` | ✅ implémentée | `/api/checklist/:slug/*` + SSE |
 | `TenantManagement.tsx` | ✅ shell + dispatch sections | `/api/management/:slug/*` |
-| `TenantHistory.tsx` | 🟡 stub | aucun |
+| `TenantHistory.tsx` | ✅ wrapper TenantAppShell + HistorySection | `/api/management/:slug/history` (PR #92) |
 | `TenantAdmin.tsx` | ✅ "Mon template" + vocabulary + modules toggle | `/api/management/:slug/{template,settings/*}` |
 | `Landing.tsx` | ✅ implémentée (hero, verticals dynamiques, FAQ, pricing) | `/api/templates` |
 | `Admin.tsx` (`/123admin`) | ✅ implémentée (users, tenants, templates, dialogs) | `/api/admin/*` |
@@ -102,6 +102,7 @@ Tous générés via Shadcn CLI, avec helper `cn()` (clsx + tailwind-merge).
 | `sections/BankSection.tsx` | Tabs internes "Comptes" / "Opérations". Comptes : table CRUD avec solde calculé. Opérations : stats credits/debits/net/reconciledRate + filtres date/account/reconciled + table CRUD signée. PR #90. |
 | `sections/CashSection.tsx` | Caisse simple : stats in/out/net + filtres date/kind + table CRUD `kind` ('in'\|'out') + amount toujours positif. PR #90. |
 | `sections/AnalyticsSection.tsx` | Sélecteur période (presets + custom). Dashboard : 5 StatCards (achats/dépenses/payroll/banque/caisse) + top fournisseurs bar list + payment status mix. Série mensuelle 12 mois (barres CSS, toggle metric). TVA déductible + collectée=null disclaimer. Pas de lib charts externe. PR #91. |
+| `sections/HistorySection.tsx` | Flux unifié audit_log avec filtres module / action / date range / userId + pagination offset 50/page. Ligne expandable (metadata JSON inline). Deep-link vers la section management de l'entité touchée (purchase / expense / payroll / …). Consommée par `TenantHistory.tsx` qui devient un wrapper TenantAppShell. PR #92. |
 
 > Le `sharedUI/` a été porté depuis ulysseclaude (PR #63). Voir
 > `project_mybeez_sprint_plan` pour la stratégie d'adaptation

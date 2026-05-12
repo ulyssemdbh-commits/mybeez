@@ -1,12 +1,9 @@
 # Chapitre 07 — Modules métier
 
 > **Résumé.** myBeez est conçu autour de modules métier toggleables par tenant
-> via `tenants.modulesEnabled`. **Tous les modules planifiés sont livrés
-> backend au 2026-05-11** : 8 production-ready (Checklist, Suppliers,
-> Purchases+OCR, Expenses, Files, Employees, Payroll, Absences) + 4 backend
-> livrés en attente d'UI (BankAccounts, BankEntries, CashEntries, Analytics,
-> History cross). Pattern de référence : `purchases.ts` (route) +
-> `PurchasesSection.tsx` (UI).
+> via `tenants.modulesEnabled`. **Les 12 modules planifiés sont livrés
+> production-ready au 2026-05-12** (backend + UI). Pattern de référence :
+> `purchases.ts` (route) + `PurchasesSection.tsx` (UI).
 
 ---
 
@@ -27,7 +24,7 @@
 | 9 | BankAccounts + BankEntries | ✅ | ✅ | ✅ | **Production-ready** (PR #83 backend + PR #90 UI) |
 | 10 | CashEntries | ✅ | ✅ | ✅ | **Production-ready** (PR #83 backend + PR #90 UI) |
 | 11 | Analytics | (compute) | ✅ | ✅ | **Production-ready** (PR #85 backend + PR #91 UI) |
-| 12 | History cross-module | (audit_log compute) | ✅ | ❌ | Backend livré PR #88 (Sprint 7 module métier). UI à venir. |
+| 12 | History cross-module | (audit_log compute) | ✅ | ✅ | **Production-ready** (PR #88 backend + PR #92 UI) |
 
 ### 7.1.2 Pattern de livraison
 
