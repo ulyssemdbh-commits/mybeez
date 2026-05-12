@@ -205,45 +205,89 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 ---
 
-## 6. État actuel — chantiers ouverts & dette technique
+## 6. État actuel — checkpoint 2026-05-12
 
-### Chantiers en cours / pages stub
-- `TenantHistory` reste un placeholder. `TenantAdmin` a la section vocabulaire/modules/template livrée. `TenantManagement` n'est plus un stub : sections Suppliers, Purchases, Expenses, Files (V1 + UI + hook send-email-bulk V2), Employees, Payroll, Absences livrées (cf. roadmap booksystem 9.2.1).
-- Tables business **toutes schématisées** ; modules livrés end-to-end (backend + UI) : **Checklist, Suppliers, Purchases, Expenses, Files, Employees, Payroll, Absences**. Reste : `bank_entries` / `cash_entries` (redesign Sprint 5), `analytics` (Sprint 6), `history` cross-module (Sprint 7).
-- **Migration restaurant → SaaS générique en cours** :
-  - ✅ Catalogue `business_templates` + API publique (PR #9)
-  - ✅ `tenants.templateId/vocabulary/modulesEnabled` ajoutés (PR #10a). `businessType` et `features` deprecated, conservés pour compat tant que `templateId` est nullable.
-  - ✅ Colonnes `items.nameVi/nameTh` et `categories.nameVi/nameTh` supprimées (purge restaurant-ism : c'était spécifique à un Sushi Bar).
-  - ✅ Alfred prompt dégénéricisé : nom du tenant + vocabulary dynamiques, plus de Valentine/Maillane/Sushi hardcodés.
-  - ✅ Schéma auth (PR #11) : `users`, `user_tenants` (M2M avec role), `password_reset_tokens`, `email_verification_tokens`, `mfa_secrets`, `audit_log`. Session store basculé vers Postgres (`connect-pg-simple` → table `user_sessions` créée auto).
-  - ✅ Auth nominative email/password (PR #12) : argon2id, routes `/api/auth/user/*`, middleware `requireUser` + `requireRole(...)`, mailService Resend (fail-soft dev), page `/auth/login` minimale. PIN auth coexiste pendant la migration.
-  - ✅ MFA TOTP (PR #13a) : `mfaService` (otplib, RFC 6238, drift ±30s), routes `/api/auth/user/mfa/{status,setup,confirm,disable,challenge,recovery,cancel}`, gate sur `/login` (retourne `{mfaRequired:true}`, session `mfaPending*` TTL 5 min), 10 recovery codes XXXX-XXXX-XXXX (sha-256, single-use), page `/auth/security` (QR + recovery codes affichés une fois).
-  - ✅ Routes **checklist** + **SSE** migrées vers `requireUser` + `requireRole(...)` strict avec matrice rôles (lecture = tous rôles, ops quotidiennes = staff+, gestion structurelle = manager+). `requireTenantAuth` n'a plus de caller en runtime — purge prévue avec PIN auth.
-  - ✅ Routes **Alfred** : `/api/alfred/:slug/{chat,analyze,clear}` derrière `resolveTenant` + `requireUser` + `requireRole(...)` (any tenant role). `tenantId` retiré du body, slug pris dans l'URL. Front (`AlfredChat`) renomme la prop en `tenantSlug` et appelle l'URL slug-scopée.
-  - ✅ **Purge PIN auth** : suppression de `routes/auth.ts`, `services/auth.ts`, `services/auth/pinService.ts`, des middlewares `requireAuth`/`requireAdmin`/`requireTenantAuth`/`getAuthSession`/`getSessionToken`, de `tenantService.loginWithPin`/`migrateLegacyPins`, du hook front `use-auth.ts`, de `PinGate`+`ChecklistTabletView` dans `TenantChecklist`. `tenants.pinCode`/`adminCode` passées en **nullable** (drop SQL définitif différé). Le tablet-PIN flow Phase-2 (per-staff device-paired token) sera reconstruit différemment selon `project_mybeez_decisions`.
-  - ✅ **Catalogue verticals enrichi** (chantier 15/10, PRs #57/#58/#59/#60) : 4 verticals × 25 sub-templates (4ème vertical Santé & bien-être ajouté). Schema templates +6 colonnes (icon, tagline, idealFor, coverGradient, featuresHighlight, notIncluded). Wizard signup 3 étapes avec cards visuelles + recherche. Landing `Verticales` lit `/api/templates`. TenantAdmin section "Mon template" avec switch + impact + TVA suggérée.
-  - ⏳ **Reste** : audit log writes + rate limit/lockout (PR #13b), passer `tenant.templateId` en NOT NULL + backfill via SQL et droper `businessType`, drop SQL définitif `tenants.pinCode`/`adminCode`.
+### 🎯 Phase 1 (roadmap option C) — bouclée
 
-### Sécurité — à corriger
-- ✅ ~~**`POST/GET/PATCH /api/tenants` n'ont aucune auth.**~~ Protégées via `requireSuperadmin` (Bearer + `SUPERADMIN_TOKEN`). Mécanisme **temporaire** jusqu'à l'auth nominative complète (PR #8-10).
-- ✅ ~~**Endpoint `/api/tenants/by-code/:code`**~~ supprimé (retournait le tenant complet incluant PIN/admin codes ; client code à 8 chiffres = brute-forçable).
-- ✅ ~~**`PATCH /api/tenants/:id`** accepte un `req.body` brut~~ → schéma Zod strict, champs autorisés explicitement listés.
-- ✅ ~~**`POST /api/checklist/:slug/toggle` n'exige pas `requireTenantAuth`.**~~ Gatée. Idem pour `POST /api/checklist/:slug/comments` (deuxième mutation non documentée comme trou, fixée dans la même PR).
-- 🟡 **`SESSION_SECRET` default dev** présent en clair dans `server/index.ts`. OK pour dev, fatal en prod (mais le code refuse de booter en prod sans secret — bonne pratique conservée).
-- 🟡 **Pas de CSRF token** sur les mutations alors que le cookie de session est utilisé. Mitigations en place : `sameSite: lax` + `httpOnly`.
+**12/12 modules métier production-ready** (backend + UI mergés sur `main`) :
 
-### Dette technique
-- **`AuthSession.tenantId: string`** (middleware/auth.ts) vs `session.tenantId = result.tenant.id` (number, route auth.ts) — type incohérent. Voir aussi la comparaison `session.tenantId !== req.tenantId` dans checklist.ts.
-- ✅ ~~**Routes Alfred** : reçoivent `tenantId` dans le body~~ Refactorées pour passer par `/api/alfred/:slug/*` + `resolveTenant` + `requireUser` + `requireRole(...)`. Le service `alfredService` continue de prendre un slug en argument interne (analyze appelle chat).
-- ✅ ~~`requireTenantAuth` dupliqué inline dans `checklist.ts`~~ — déplacé dans `server/middleware/auth.ts`, importé là où nécessaire, couvert par `requireTenantAuth.test.ts` (6 tests).
-- **Route `GET /history`** : `byDate[date].total = allItems.length` calcule le total avec les items actifs **aujourd'hui**, pas à la date X — biaise les pourcentages historiques si la liste d'items évolue.
-- **Aucun test, aucune CI** — toute régression doit être détectée à la main.
-- **`refetchOnWindowFocus: true` + `refetchInterval: 30000`** sur la checklist : beaucoup de fetchs alors qu'on a déjà du SSE branché. Choisir un seul mécanisme.
+| # | Module | Référence |
+|---|---|---|
+| 1 | Checklist quotidienne | base produit |
+| 2 | Suppliers (Fournisseurs) | PR #2 |
+| 3 | Purchases (Achats) + OCR auto-match | PR #64 + #65 + #67 |
+| 4 | Expenses (Dépenses générales) | PR #66 |
+| 5 | Files (corbeille TTL + send-email-bulk) | PR #71 + #78 + #79 |
+| 6 | Employees | PR #72 + #76 |
+| 7 | Payroll + OCR bulletins | PR #72 + #76 + #81 |
+| 8 | Absences | PR #72 + #76 |
+| 9 | BankAccounts + BankEntries | PR #83 + #90 |
+| 10 | CashEntries | PR #83 + #90 |
+| 11 | Analytics (dashboard + monthly + TVA) | PR #85 + #91 |
+| 12 | History cross-module | PR #88 + #92 |
+
+**Sécu / ops sprints 1-7** intégralement livrés :
+- MFA TOTP + recovery codes (PR #52)
+- RBAC nominatif + lockout par compte + rate-limit IP `/api/auth/*` (PR #53 / #54 / #69)
+- Audit log writes (PR #68) + scrub secrets
+- Healthcheck Docker + cron systemd backup R2 (PR #70)
+- Logger structuré pino + pino-http middleware (PR #82)
+- HSTS + CSP strict prod + HIBP k-anonymity (PR #84)
+- Prometheus `/metrics` Bearer-gated + Sentry frontend (PR #87)
+
+**Schéma Drizzle** : 25+ tables, multi-tenant single-DB, isolation par filtres `tenant_id` (pas de RLS Postgres).
+
+**Front** : 13 pages, dispatch `/management/:section` couvre tous les modules, sidebar dynamique selon `tenant.modulesEnabled`.
+
+### Reste à faire (court terme, dans la roadmap actuelle)
+
+- Smoke prod : `curl https://mybeez-ai.com/api/health`, valider les 12 sections dans un tenant test, surveiller les premières erreurs Sentry / metrics Prometheus.
+- **PR #92 (UI History)** : mergeable au prochain check si la CI passe ; après ça la roadmap option C est officiellement terminée.
+- Surveiller la **session parallèle** sur `fix/invoice-parse-robust-gemini-json` (commits orphelins potentiels — convention worktree active depuis PR #91, cf. memory `feedback_mybeez_parallel_sessions`).
+- Drop SQL définitif `tenants.pin_code` / `admin_code` + `bank_entries` / `cash_entries` legacy : différé tant que `deploy.sh` reste non-interactif (`db:push --force` interdit en prod). À faire via script SQL manuel.
+
+### Phase 2 (hors-200%, cf. booksystem §9.7)
+
+Priorités classées :
+1. **Stripe billing** + plan limits + trial 14 jours
+2. **MFA obligatoire** Owner/Admin + **WebAuthn / passkeys** primary path
+3. **Custom domain provisioning automatisé** (Let's Encrypt DNS-01 ou Cloudflare on-demand TLS)
+4. **RLS Postgres** (defense in depth, complète les filtres Drizzle)
+5. **Module Revenue générique** → débloque TVA collectée + ratios CA-based (food cost %, masse salariale %, marge brute)
+6. **Mobile PWA** (manifest + service worker), puis app native plus tard
+7. **Intégrations comptables** : export FEC, Pennylane, QuickBooks
+8. **SSO** Google / Microsoft pour Owners
+9. **Logs persistence** (Loki / Datadog) + Alertmanager
+10. **Migrations versionnées** (`drizzle-kit generate` + `migrate`) à la place de `db:push`
+
+### Dette technique reconnue (non-bloquante)
+
+- `AuthSession.tenantId: string` vs `session.tenantId: number` → type incohérent dans middleware/auth.ts.
+- `GET /checklist/:slug/history` calcule le total à partir des items actifs aujourd'hui, pas à la date X → biaise les pourcentages historiques.
+- `refetchOnWindowFocus + refetchInterval: 30s + SSE` sur la checklist : 3 mécanismes de refresh redondants → garder SSE seul.
+- `tenantService` / `templateService` / `alfredService` : caches process-local → bloquant pour multi-noeud (bascule Redis Phase 2).
+- FK logiques non contraintes : `items.categoryId`, `checks.itemId`, `purchases.supplierId`, `payroll.employeeId`, `absences.employeeId`, `files.employeeId`, `bank_entries_v2.bankAccountId / purchaseId / expenseId / payrollId` → orphelins possibles. Sprint cleanup futur.
+- Sidebar : `/history` reste `moduleSlug: "checklist"` (statut quo, cf. PR #92 description). À revoir si on veut qu'un tenant qui désactive checklist garde l'historique global.
 
 ### Limitation Windows
-- Le script `dev` utilise `NODE_ENV=development tsx ...` (syntaxe Unix). En PowerShell, lancer plutôt :
+
+- Le script `dev` utilise `NODE_ENV=development tsx ...` (syntaxe Unix). En PowerShell :
   - `$env:NODE_ENV="development"; npx tsx server/index.ts`
   - ou ajouter `cross-env` aux deps et préfixer `cross-env NODE_ENV=development tsx ...`
+
+### Convention sessions parallèles (depuis 2026-05-11)
+
+Bascule en **git worktree** pour les nouvelles branches plutôt que se battre sur le working tree principal :
+
+```powershell
+git worktree add C:\Users\meyer\mybeez-<slug> -b feat/<branch> main
+cmd /c mklink /J "C:\Users\meyer\mybeez-<slug>\node_modules" "C:\Users\meyer\mybeez\node_modules"
+Set-Location C:\Users\meyer\mybeez-<slug>
+# travail + commit + push
+# en fin de PR : git worktree remove C:\Users\meyer\mybeez-<slug>
+```
+
+Pattern appliqué PR #91 (analytics) et PR #92 (history). Memo dans `feedback_mybeez_parallel_sessions`.
 
 ---
 
@@ -274,11 +318,21 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 ## 8. Notes pour Claude (futures sessions)
 
-- **Toujours lire ce fichier en début de session.** Le mettre à jour en fin de session si quelque chose de structurel a changé (nouvelle table, nouvelle route majeure, nouveau service, dette résolue).
+### Reprise rapide
+
+1. Lire ce CLAUDE.md (§6 checkpoint surtout) puis `docs/booksystem/README.md` (synthèse 30 secondes).
+2. `git fetch origin && git status` — vérifier qu'on est sur main à jour.
+3. `gh pr list --state open` — voir s'il reste des PRs ouvertes (#92 UI history doit être mergé pour clore la roadmap option C).
+4. Sessions parallèles : faire `git worktree list` pour voir ce qui est actif. Toujours créer une nouvelle branche en worktree dédié (cf. §6 convention).
+5. Pour reprendre un nouveau chantier : se baser sur la liste **Phase 2** de §6 ou demander à l'utilisateur ce qu'il veut attaquer.
+
+### Règles permanentes
+
 - Avant tout refactor sur une zone du multi-tenant, **vérifier qu'aucune nouvelle requête ne contourne le filtre `tenant_id`**.
 - Avant de toucher à un service AI, vérifier la chaîne de fallback dans `services/core/openaiClient.ts`.
 - Pour exécuter le serveur en local sur Windows : préfixer `NODE_ENV` via PowerShell (cf. §6).
-- Privilégier la **suppression de code mort** (services orphelins, `emitSugu*` legacy) plutôt que l'ajout, sauf demande explicite.
+- Privilégier la **suppression de code mort** plutôt que l'ajout, sauf demande explicite.
+- Mettre à jour ce fichier en fin de session si quelque chose de structurel a changé (nouvelle table, nouvelle route majeure, nouveau service, dette résolue).
 
 ---
 
