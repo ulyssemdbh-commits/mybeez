@@ -1,9 +1,9 @@
 # Chapitre 09 — Roadmap et synthèse
 
-> **Résumé.** Ce chapitre donne l'état réel au 2026-05-09, les sprints livrés,
-> ce qui est en cours, ce qui reste à faire pour atteindre l'objectif "200%"
-> (produit bankable + différenciation), et la dette explicitement reconnue.
-> Mettre à jour à chaque sprint terminé.
+> **Résumé.** Ce chapitre donne l'état réel au 2026-05-12 : **roadmap
+> option C bouclée** (12 modules métier production-ready + 7 sprints
+> sécu/ops livrés). La suite passe en Phase 2 (cf. §9.7). Mettre à jour
+> à chaque évolution structurelle.
 
 ---
 
@@ -29,7 +29,7 @@ Règles :
 
 ---
 
-## 9.2 État réel au 2026-05-09
+## 9.2 État réel au 2026-05-12
 
 ### 9.2.1 Livré (mergé sur `main`)
 
@@ -179,33 +179,36 @@ automatisé, etc.) — cf. §9.7.
 
 ## 9.5 Verdict global
 
-> **myBeez est un produit en consolidation rapide à ~85%, sur fondations
-> saines, avec 8 modules métier production-ready (Checklist, Suppliers,
-> Purchases, Expenses, Files V1+V2 send-email, Employees, Payroll,
-> Absences — backend + UI), sécu de phase 1 complète (audit log + lockout +
-> rate-limit + healthcheck + cron backup livrés sprints 2-3), et 3 modules
-> métier restants à porter dans les sprints 5-7 (Bank/Cash redesign,
-> Analytics, History). Reste payroll OCR (`import-pdf` + `reparse-all`)
-> pour boucler le Sprint 4 V2.**
+> **myBeez a bouclé sa roadmap option C au 2026-05-12 : 12/12 modules
+> métier production-ready (backend + UI mergés sur main) + 7 sprints
+> sécu/ops complets (MFA TOTP, audit log, lockout, healthcheck,
+> backups cron, pino logger, HSTS+CSP+HIBP, Prometheus+Sentry). Le
+> produit est *fully bankable côté Phase 1*. La phase 2 ouvre sur
+> Stripe billing, MFA obligatoire, WebAuthn, RLS Postgres et custom
+> domain provisioning automatisé — cf. §9.7.**
 
-Ce qui est solide :
-- Architecture multi-tenant cohérente.
-- Stack moderne et maintenue.
-- Auth nominative + MFA + RBAC + audit log.
-- CI/CD opérationnelle.
-- Tests sur les fondations critiques.
-- Backup pipeline production-grade (cron à brancher).
-- Realtime SSE proprement gaté.
-- Alfred AI vocabulary-neutral.
-- Pattern UI cohérent (TenantAppShell + sharedUI Management).
-- Catalogue verticals enrichi (4 × 25, présentation visuelle).
+Ce qui est solide (verdict final Phase 1) :
+- Architecture multi-tenant cohérente, hostname-first résolution + cookie cross-subdomain.
+- Stack moderne et maintenue (Node 20+, React 18, Vite 7, Drizzle 0.45, TS 5.6 strict).
+- Auth nominative complète (Argon2id + sessions Postgres + MFA TOTP + RBAC 5 rôles + audit log + lockout + HIBP).
+- Headers sécurité prod : HSTS (nginx + helmet defense in depth), CSP strict.
+- Observabilité : pino structuré (redact secrets), `/metrics` Prometheus (cardinalité bornée), Sentry frontend.
+- CI/CD GitHub Actions opérationnelle.
+- Tests pure helpers solides (374 tests verts au 2026-05-12 dont parsing, matching, financeSummary, analyticsSummary, historyDecorator).
+- Backup pipeline production-grade (pg_dump → gzip → R2, retention 30j, cron systemd).
+- Realtime SSE proprement gaté par RBAC.
+- Alfred AI vocabulary-neutral (lit `tenant.vocabulary`, plus de hardcodes Valentine/Maillane).
+- Pattern UI cohérent (TenantAppShell + sharedUI Management, 12 sections).
+- Catalogue verticals enrichi (4 × 25 sub-templates, wizard signup 3 étapes, landing dynamique).
 
-Ce qui manque pour être *fully bankable* :
-- Hooks payroll OCR (`import-pdf` + `reparse-all`) pour boucler Sprint 4 V2.
-- 3 modules métier restants (Bank/Cash redesign, Analytics, History cross).
-- ~~Logger structuré + metrics + Sentry.~~ ✅ Logger PR #82, metrics + Sentry PR #87.
-- ~~HSTS + CSP + HIBP.~~ ✅ Livré PR #84.
-- Stripe billing (Phase 2).
+Ce qui reste explicitement pour Phase 2 — cf. §9.7 :
+- Stripe billing + plan limits + trial 14 jours.
+- MFA obligatoire Owner/Admin + WebAuthn / passkeys + SSO Google/Microsoft.
+- Custom domain provisioning automatisé (Let's Encrypt DNS-01 / CF on-demand TLS).
+- RLS Postgres (defense in depth multi-tenant).
+- Module Revenue générique → débloque TVA collectée + ratios CA-based.
+- Mobile PWA (manifest + service worker).
+- Intégrations comptables (FEC, Pennylane, QuickBooks).
 
 ---
 

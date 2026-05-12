@@ -4,7 +4,7 @@
 > préambule, chapitres, sous-chapitres, architecture complète, synthèse et
 > objectifs en cours de réalisation et à suivre.
 >
-> **À jour au :** 2026-05-09 — main (PRs #78 UI Files, #79 send-email-bulk mergées)
+> **À jour au :** 2026-05-12 — main (roadmap option C bouclée, 12/12 modules production-ready, sprints 1-7 sécu/ops + module métier intégralement mergés)
 > **Domaine prod :** https://mybeez-ai.com
 > **Repo :** https://github.com/ulyssemdbh-commits/mybeez
 
@@ -75,36 +75,57 @@ code (et non l'état idéal ou intentionné). Sa raison d'être :
 
 ## Synthèse 30 secondes
 
-**État global au 2026-05-09** : MVP solide à ~85%, fondations saines, en
-durcissement sécu et en livraison continue des modules métier.
+**État global au 2026-05-12** : **roadmap option C bouclée**. 12 modules
+métier production-ready (backend + UI), 7 sprints sécu/ops intégralement
+livrés. Plus aucun item planifié dans la phase 1. La suite passe en
+**Phase 2** (Stripe billing, MFA obligatoire Owner/Admin, WebAuthn,
+SSO, RLS Postgres, custom domain provisioning automatisé) — cf.
+[09-roadmap-et-synthese.md §9.7](./09-roadmap-et-synthese.md#97-hors-200-phase-2).
+
+### Modules métier
+
+| # | Module | Backend | UI |
+|---|---|---|---|
+| 1 | Checklist quotidienne | ✅ | ✅ |
+| 2 | Suppliers (Fournisseurs) | ✅ | ✅ |
+| 3 | Purchases (Achats) + OCR auto-match supplier | ✅ | ✅ |
+| 4 | Expenses (Dépenses générales) | ✅ | ✅ |
+| 5 | Files (corbeille TTL + send-email-bulk V2) | ✅ | ✅ |
+| 6 | Employees | ✅ | ✅ |
+| 7 | Payroll + OCR bulletins (`/import-pdf` + `/reparse-all`) | ✅ | ✅ |
+| 8 | Absences | ✅ | ✅ |
+| 9 | BankAccounts + BankEntries (signed amount, FK rapprochement) | ✅ | ✅ |
+| 10 | CashEntries (kind in/out, générique vertical) | ✅ | ✅ |
+| 11 | Analytics (dashboard + monthly + TVA) | ✅ | ✅ |
+| 12 | History cross-module (audit_log unifié + deep-link) | ✅ | ✅ |
+
+### Sécu / ops (sprints 1-7)
 
 | Pilier | État |
 |---|---|
-| Multi-tenant (subdomain + custom domain) | 🟡 70% (subdomain ✅, custom domain provisioning auto ❌) |
-| Auth nominative (email + password + Argon2id + sessions Postgres) | ✅ |
-| MFA TOTP + recovery codes | ✅ (opt-in, gating Owner/Admin obligatoire à venir) |
-| RBAC nominatif 5 rôles (`requireRole`) | ✅ |
-| Audit log (writes) | ✅ (Sprint 2 livré, PR #13b) |
-| Catalogue verticals (4 × 25 sub-templates) | ✅ |
-| Wizard signup + landing dynamique + switch tenant template | ✅ |
-| Module Checklist quotidienne | ✅ |
-| Module Suppliers (Fournisseurs) | ✅ |
-| Module Purchases (Achats) + OCR + auto-match | ✅ |
-| Module Expenses (Dépenses générales) | ✅ |
-| Module Files (corbeille TTL 7j + UI + hook send-email-bulk V2) | ✅ |
-| Modules Employees + Payroll + Absences (backend + UI Sprint 4 V2) | ✅ (reste payroll/import-pdf OCR) |
-| Modules BankEntries/CashEntries/Analytics/History | ⏳ Sprints 5-7 |
+| Multi-tenant (subdomain + custom domain) | 🟢 90% (subdomain ✅, custom domain provisioning auto ❌ Phase 2) |
+| Auth nominative Argon2id + sessions Postgres-backed | ✅ |
+| MFA TOTP + recovery codes single-use | ✅ (opt-in, gating Owner/Admin obligatoire = Phase 2) |
+| RBAC nominatif 5 rôles strict (`requireRole`) | ✅ |
+| Audit log writes + scrub secrets | ✅ (PR #68) |
+| Lockout par compte + rate-limit IP `/api/auth/*` | ✅ (PR #69) |
+| Catalogue verticals (4 × 25 sub-templates) + wizard signup + switch template | ✅ |
 | CI/CD GitHub Actions (typecheck + lint + test + build) | ✅ |
-| Backups Postgres → R2 (script + retention + cron systemd) | ✅ (units versionnées PR #70, install host à faire) |
-| Healthcheck Docker `app` | ✅ (PR #70) |
-| Logger structuré pino | ⏳ Sprint 5 |
-| HSTS + CSP + check HIBP | ⏳ Sprint 6 |
-| Metrics Prometheus + Sentry | ⏳ Sprint 7 |
+| Healthcheck Docker `app` + cron systemd backup R2 | ✅ (PR #70, install host fait) |
+| Backups Postgres → R2 (streaming + retention + restore dry-run) | ✅ |
+| Logger structuré pino + pino-http (requestId, redact secrets) | ✅ (PR #82) |
+| HSTS + CSP strict prod + HIBP k-anonymity (signup + reset) | ✅ (PR #84) |
+| Prometheus `/metrics` Bearer-gated + Sentry frontend (no-op si DSN absent) | ✅ (PR #87) |
 | Stripe / billing | ❌ Phase 2 |
+| RLS Postgres (defense in depth multi-tenant) | ❌ Phase 2 |
+| WebAuthn / passkeys + SSO | ❌ Phase 2 |
 
-**Verrou actuel** : finir les hooks payroll OCR (`import-pdf` + `reparse-all`)
-pour boucler le Sprint 4 V2 avant d'entamer le Sprint 5 (Bank/Cash redesign +
-logger pino). Cf. `09-roadmap-et-synthese.md`.
+### Reste avant Phase 2
+
+- Smoke prod sur les 12 modules dans un tenant test (UI + flows métier).
+- Surveiller les premières erreurs Sentry + scrape Prometheus.
+- Drop SQL définitif `tenants.pin_code`/`admin_code` + `bank_entries`/`cash_entries` legacy (script manuel, `db:push --force` interdit en prod).
+- Voir `09-roadmap-et-synthese.md §9.6` pour la dette technique reconnue (FK manquantes, refresh redondants, caches process-local, etc.).
 
 ---
 
