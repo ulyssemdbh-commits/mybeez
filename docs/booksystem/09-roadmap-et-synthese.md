@@ -118,17 +118,18 @@ Règles :
 
 - (rien en attente — Sprints 3-7 sont intégralement bouclés côté backend au 2026-05-11)
 
-### 9.2.3 À suivre — UI follow-ups
+### 9.2.3 À suivre — objectif 200% atteint, phase 2
 
-Tous les 12 modules métier sont **livrés côté API** au 2026-05-11.
-Reste exclusivement la **couche UI** :
+**Les 12 modules métier sont production-ready au 2026-05-12** (backend
++ UI) :
+- ~~`BankSection.tsx` (tabs Comptes/Opérations) + `CashSection.tsx`~~ ✅ Livré PR #90 (Sprint 5 follow-up)
+- ~~`AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers~~ ✅ Livré PR #91 (Sprint 6 follow-up)
+- ~~`HistorySection.tsx` — table + filtres + deep-link entity~~ ✅ Livré PR #92 (Sprint 7 follow-up)
 
-- ~~`BankSection.tsx` (tabs Comptes/Opérations) + `CashSection.tsx`~~ ✅ Livré PR #90 — UI Bank/Cash (Sprint 5 follow-up)
-- ~~`AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers~~ ✅ Livré PR #91 — UI Analytics (Sprint 6 follow-up)
-- `HistorySection.tsx` — table + filtres + deep-link entity (PR Sprint 7 follow-up)
-
-Hors-200% : Phase 2 (Stripe billing, MFA obligatoire Owner/Admin,
-WebAuthn, SSO, etc.) — cf. §9.7.
+Plus aucun item planifié dans la roadmap option C (sprints 1-7).
+La suite passe en **Phase 2** (Stripe billing, MFA obligatoire
+Owner/Admin, WebAuthn, SSO, RLS Postgres, custom domain provisioning
+automatisé, etc.) — cf. §9.7.
 
 > Note ex-prerequis abandonné : initialement on avait planché sur
 > `pdf-parse` pour extraire le texte des bulletins PDF. La PR #81 a
