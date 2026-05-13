@@ -1,21 +1,28 @@
 /**
  * Invoice OCR parser — extrait les champs d'une facture image ou PDF.
  *
- * Stratégie : Vision API (OpenAI / Gemini / Grok) avec provider chain
- * identique à Alfred. Le service est best-effort : retourne tout ce
- * qui peut être détecté, `null` pour le reste. Le front applique sur
- * un form Add Achat existant — l'utilisateur valide / corrige avant
- * d'enregistrer.
+ * Stratégie :
+ *   - Images (jpeg/png/webp) : Vision API local via provider chain
+ *     OpenAI > Gemini > Grok sur OpenAI-compat. Pattern inchangé.
+ *   - PDF : délégué à ulysseclaude `/api/external/parse-invoice` qui fait
+ *     pdf-parse → Gemini 2.5 Flash texte → fallback OpenAI gpt-4.1-mini.
+ *     Pipeline éprouvée production-grade (cf. suguval). Évite la
+ *     duplication et la fragilité de l'ancien `parsePdfViaGemini`
+ *     (PDF brut inline → JSON tronqué à 600 tokens).
  *
  * Adaptations myBeez :
- *   - Validation Zod stricte sur la sortie
- *   - Provider chain via `core/openaiClient.ts` (déjà 3 providers) pour les images
- *   - PDF traité séparément via l'API Gemini native (le proxy OpenAI-compat
- *     ne supporte pas l'inline PDF). Si pas de GEMINI_API_KEY → 503.
+ *   - Validation Zod stricte sur la sortie (uniforme image/PDF)
+ *   - Mapping `ParsedPurchaseInvoice` (ulysseclaude) → `InvoiceFields` (myBeez)
  *   - Pas de stockage local du fichier (pure inline base64, jeté après)
  *
  * Helpers de matching fournisseur exposés (`normalizeSupplierName`,
  * `matchSupplierByName`) pour pré-sélection automatique côté route.
+ *
+ * Env vars (PDF path) :
+ *   - `ULYSSECLAUDE_PARSE_URL` : default
+ *     `https://moe.ulyssepro.org/api/external/parse-invoice`
+ *   - `ULYSSECLAUDE_PARSE_TOKEN` : Bearer token (≥32 chars). Si absent, le
+ *     path PDF throw "Aucun provider OCR configuré".
  */
 
 import { z } from "zod";
@@ -131,7 +138,7 @@ export async function parseInvoiceImage(
   mimeType: SupportedMime,
 ): Promise<ParseAttempt> {
   if (mimeType === SUPPORTED_PDF_MIME_TYPE) {
-    return parsePdfViaGemini(fileBase64);
+    return parsePdfViaUlysseclaude(fileBase64);
   }
 
   const order: Array<"openai" | "gemini" | "grok"> = ["openai", "gemini", "grok"];
@@ -187,61 +194,142 @@ export async function parseInvoiceImage(
 }
 
 /**
- * Parse un PDF via l'API Gemini native. On contourne l'OpenAI-compat
- * proxy parce qu'il ne supporte pas `inline_data: application/pdf`.
+ * Forme du payload retourné par ulysseclaude `/api/external/parse-invoice`.
+ * On définit le strict minimum dont on a besoin pour le mapping —
+ * ulysseclaude renvoie d'autres champs (siret, address, vatNumber,
+ * vatBreakdown, currency) qu'on ignore ici pour la première itération.
  */
-async function parsePdfViaGemini(pdfBase64: string): Promise<ParseAttempt> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) {
+const UlysseclaudeResponseSchema = z.object({
+  success: z.literal(true),
+  source: z.enum(["ai-text", "ai-text-fallback", "ai-vision"]),
+  data: z.object({
+    vendor: z.object({
+      name: z.string().nullable(),
+    }),
+    invoiceNumber: z.string().nullable(),
+    invoiceDate: z.string().nullable(),
+    dueDate: z.string().nullable(),
+    totalHT: z.number().nullable(),
+    totalTTC: z.number().nullable(),
+    totalVAT: z.number().nullable(),
+    vatBreakdown: z
+      .array(
+        z.object({
+          rate: z.number(),
+          baseHT: z.number(),
+          vatAmount: z.number(),
+        }),
+      )
+      .nullable(),
+    paymentMethod: z.string().nullable(),
+  }),
+});
+
+const ULYSSECLAUDE_DEFAULT_URL = "https://moe.ulyssepro.org/api/external/parse-invoice";
+
+/** Normalise une string OCR date vers `YYYY-MM-DD` ou null si non parseable. */
+function normaliseIsoDate(raw: string | null): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * Mappe la réponse ulysseclaude (forme `ParsedPurchaseInvoice`) vers la
+ * forme `InvoiceFields` attendue par myBeez et son schéma Zod.
+ *
+ * Différences clés :
+ *   - `vendor.name` → `supplierName`
+ *   - `totalHT/TTC/VAT` → `totalHt/Ttc` + `tvaAmount`
+ *   - `vatBreakdown[0].rate` → `tvaRate` (premier taux trouvé)
+ *   - `category` non extrait par ulysseclaude (V1) → null
+ */
+function mapUlysseclaudeToInvoiceFields(
+  data: z.infer<typeof UlysseclaudeResponseSchema>["data"],
+): InvoiceFields {
+  const tvaRate =
+    data.vatBreakdown && data.vatBreakdown.length > 0 ? data.vatBreakdown[0].rate : null;
+  return {
+    supplierName: data.vendor.name,
+    invoiceNumber: data.invoiceNumber,
+    invoiceDate: normaliseIsoDate(data.invoiceDate),
+    totalHt: data.totalHT,
+    totalTtc: data.totalTTC,
+    tvaRate,
+    tvaAmount: data.totalVAT,
+    dueDate: normaliseIsoDate(data.dueDate),
+    category: null,
+    paymentMethod: data.paymentMethod,
+  };
+}
+
+/**
+ * Parse un PDF en déléguant à ulysseclaude. La pipeline upstream gère
+ * pdf-parse → Gemini text → fallback OpenAI, avec extraction défensive.
+ *
+ * Throws :
+ *   - `Error("Aucun provider OCR configuré...")` si `ULYSSECLAUDE_PARSE_TOKEN`
+ *     manquant. La route mappe ça vers 503.
+ *   - `InvoiceOcrParseError` si l'upstream renvoie 422 (donnée non
+ *     extractible). Mappé vers 422 côté myBeez.
+ *   - `Error` générique sinon. Mappé vers 502.
+ */
+async function parsePdfViaUlysseclaude(pdfBase64: string): Promise<ParseAttempt> {
+  const token = process.env.ULYSSECLAUDE_PARSE_TOKEN;
+  if (!token) {
     throw new Error(
-      "Aucun provider OCR configuré pour les PDF (GEMINI_API_KEY requise — OpenAI/Grok n'acceptent pas le PDF inline).",
+      "Aucun provider OCR configuré pour les PDF (ULYSSECLAUDE_PARSE_TOKEN manquant).",
     );
   }
-
-  const model = PROVIDER_MODELS.gemini;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+  const url = process.env.ULYSSECLAUDE_PARSE_URL || ULYSSECLAUDE_DEFAULT_URL;
 
   let response: Response;
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
       body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { text: "Extrais les champs structurés de cette facture. Réponds avec le JSON demandé." },
-              { inline_data: { mime_type: "application/pdf", data: pdfBase64 } },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 600,
-          responseMimeType: "application/json",
-        },
+        fileBase64: pdfBase64,
+        mimeType: SUPPORTED_PDF_MIME_TYPE,
       }),
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    throw new Error(`OCR PDF (Gemini) injoignable : ${msg}`);
+    throw new Error(`OCR PDF (ulysseclaude) injoignable : ${msg}`);
+  }
+
+  if (response.status === 422) {
+    // Upstream a tenté l'extraction mais le format est inattendu.
+    // On préserve l'UX existante (toast "L'OCR a renvoyé un format inattendu").
+    const body = await response.text().catch(() => "");
+    log.warn({ status: 422, bodyPreview: body.slice(0, 200) }, "ulysseclaude 422");
+    throw new InvoiceOcrParseError("gemini", body.slice(0, 200));
   }
 
   if (!response.ok) {
     const body = await response.text().catch(() => "");
-    throw new Error(`OCR PDF (Gemini) HTTP ${response.status} : ${body.slice(0, 200)}`);
+    throw new Error(
+      `OCR PDF (ulysseclaude) HTTP ${response.status} : ${body.slice(0, 200)}`,
+    );
   }
 
-  const payload = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  const text = payload.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? "";
-  if (!text) {
-    throw new Error("OCR PDF (Gemini) : réponse vide.");
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    throw new Error(`OCR PDF (ulysseclaude) réponse JSON invalide : ${msg}`);
   }
-  const fields = InvoiceFieldsSchema.parse(safeParseInvoiceJson(text, "gemini"));
+
+  const parsed = UlysseclaudeResponseSchema.parse(payload);
+  const fields = InvoiceFieldsSchema.parse(mapUlysseclaudeToInvoiceFields(parsed.data));
+  log.info(
+    { source: parsed.source, vendor: fields.supplierName, totalTtc: fields.totalTtc },
+    "ulysseclaude parse ok",
+  );
   return { provider: "gemini", fields };
 }
 
