@@ -205,7 +205,7 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 ---
 
-## 6. État actuel — checkpoint 2026-05-12
+## 6. État actuel — checkpoint 2026-05-19
 
 ### 🎯 Phase 1 (roadmap option C) — bouclée
 
@@ -239,11 +239,12 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 **Front** : 13 pages, dispatch `/management/:section` couvre tous les modules, sidebar dynamique selon `tenant.modulesEnabled`.
 
-### Reste à faire (court terme, dans la roadmap actuelle)
+### Reste à faire (court terme)
 
+- **Roadmap option C officiellement bouclée 2026-05-12** (PR #92 UI History mergée). 12/12 modules production-ready. Plus rien sur la roadmap.
 - Smoke prod : `curl https://mybeez-ai.com/api/health`, valider les 12 sections dans un tenant test, surveiller les premières erreurs Sentry / metrics Prometheus.
-- **PR #92 (UI History)** : mergeable au prochain check si la CI passe ; après ça la roadmap option C est officiellement terminée.
-- Surveiller la **session parallèle** sur `fix/invoice-parse-robust-gemini-json` (commits orphelins potentiels — convention worktree active depuis PR #91, cf. memory `feedback_mybeez_parallel_sessions`).
+- **PR #94 ouverte** sur `fix/invoice-parse-via-ulysseclaude` (fix OCR robust JSON Gemini, mergeable, hors-roadmap). Worktree `C:\Users\meyer\mybeez-ocr-fix` actif côté session parallèle — ne pas toucher.
+- **Reboot host Hetzner** à planifier : `*** System restart required ***` sur `65.21.209.102` (kernel update en attente). A causé l'incident 502 docker-proxy crashé du 2026-05-19. Impacte les 3 apps (mybeez + macommande + ulysseclaude) simultanément, fenêtre off-peak.
 - Drop SQL définitif `tenants.pin_code` / `admin_code` + `bank_entries` / `cash_entries` legacy : différé tant que `deploy.sh` reste non-interactif (`db:push --force` interdit en prod). À faire via script SQL manuel.
 
 ### Phase 2 (hors-200%, cf. booksystem §9.7)

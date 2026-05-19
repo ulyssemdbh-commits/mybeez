@@ -4,7 +4,7 @@
 > préambule, chapitres, sous-chapitres, architecture complète, synthèse et
 > objectifs en cours de réalisation et à suivre.
 >
-> **À jour au :** 2026-05-12 — main (roadmap option C bouclée, 12/12 modules production-ready, sprints 1-7 sécu/ops + module métier intégralement mergés)
+> **À jour au :** 2026-05-19 — main `62017f8` (roadmap option C entièrement bouclée 2026-05-12 par PR #92, 12/12 modules production-ready backend + UI, sprints 1-7 sécu/ops + module métier intégralement mergés. Hors-roadmap : PR #94 fix OCR ouverte)
 > **Domaine prod :** https://mybeez-ai.com
 > **Repo :** https://github.com/ulyssemdbh-commits/mybeez
 

@@ -1,9 +1,10 @@
 # Chapitre 09 — Roadmap et synthèse
 
-> **Résumé.** Ce chapitre donne l'état réel au 2026-05-12 : **roadmap
-> option C bouclée** (12 modules métier production-ready + 7 sprints
-> sécu/ops livrés). La suite passe en Phase 2 (cf. §9.7). Mettre à jour
-> à chaque évolution structurelle.
+> **Résumé.** Ce chapitre donne l'état réel au 2026-05-19 : **roadmap
+> option C entièrement bouclée** (12/12 modules métier production-ready,
+> backend + UI mergés sur main + 7 sprints sécu/ops livrés). PR #94 (fix
+> OCR robust JSON) reste ouverte hors-roadmap. La suite passe en Phase 2
+> (cf. §9.7). Mettre à jour à chaque évolution structurelle.
 
 ---
 
@@ -18,9 +19,9 @@ sprint touchent des zones disjointes pour pouvoir avancer sans dépendance.
 | 2 | feat/cashflow (= expenses + bank + cash) | Audit log writes | ✅ audit (PR #68) ✅ bonus lockout + rate-limit auth (PR #69) ✅ partiel module (expenses #66 livré, bank/cash redesign reportés au Sprint 5) |
 | 3 | feat/files (anticipé) | Healthcheck Docker app + cron systemd backup R2 (anticipé du Sprint 4) | ✅ module Files V1 (PR #71 backend + PR #78 UI) ✅ hook V2 send-email-bulk (PR #79) ✅ ops (PR #70) — sécu/ops Sprint 3 du plan original (lockout) consommé en Sprint 2 |
 | 4 | feat/hr (employees + payroll + absences) | (consommé au Sprint 3) | ✅ backend HR (PR #72) ✅ UI RH (PR #76) ✅ hooks payroll OCR `import-pdf` + `reparse-all` (PR #81) — **Sprint 4 V2 bouclé** |
-| 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) ✅ backend Bank/Cash (PR #83) — UI à venir |
-| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ✅ sécu/ops (PR #84) ✅ backend Analytics (PR #85) — UI à venir |
-| 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ✅ sécu/ops (PR #87) ✅ backend History cross (PR #88) — **Sprint 7 backend bouclé**, UI à venir |
+| 5 | feat/bank+cash redesign | Logger structuré pino (stdout JSON) | ✅ logger pino (PR #82) ✅ backend Bank/Cash (PR #83) + UI Bank/Cash (PR #90) — **Sprint 5 bouclé** |
+| 6 | feat/analytics | HSTS nginx + CSP helmet + check HIBP | ✅ sécu/ops (PR #84) ✅ backend Analytics (PR #85) + UI Analytics (PR #91) — **Sprint 6 bouclé** |
+| 7 | feat/history-cross | Metrics Prometheus + Sentry frontend | ✅ sécu/ops (PR #87) ✅ backend History cross (PR #88) + UI History (PR #92) — **Sprint 7 bouclé, 12/12 modules atteint** |
 
 Règles :
 - Quality gates avant merge : `npm run check` + lint + test + CI verte.
@@ -29,7 +30,7 @@ Règles :
 
 ---
 
-## 9.2 État réel au 2026-05-12
+## 9.2 État réel au 2026-05-19
 
 ### 9.2.1 Livré (mergé sur `main`)
 
@@ -81,7 +82,7 @@ Règles :
   **positif** + `kind` côté caisse. FK logiques optionnelles vers
   `purchases`/`expenses`/`payroll` pour rapprochement. Anciennes tables
   `bank_entries`/`cash_entries` (vides) renommées `legacyBankEntries`/`legacyCashEntries`
-  en TS (drop SQL différé). UI à livrer en PR follow-up.
+  en TS (drop SQL différé). UI livrée PR #90.
 - ✅ HSTS + CSP + HIBP (PR #84 — Sprint 6 sécu/ops) :
   HSTS `max-age=31536000; includeSubDomains; preload` côté nginx + helmet
   (defense in depth). CSP strict prod (script-src 'self', style-src
@@ -95,7 +96,7 @@ Règles :
   (vertical-agnostic, pas de hardcode resto). Top suppliers, payment
   status mix, séries mensuelles signées (bank/cash), TVA déductible.
   TVA collectée = `null` documenté (requires future revenue table).
-  UI à livrer en PR follow-up.
+  UI livrée PR #91.
 - ✅ Prometheus metrics + Sentry frontend (PR #87 — Sprint 7 sécu/ops) :
   `server/services/observability/metrics.ts` (registry prom-client +
   collectors http duration / counter / DB pool / AI providers + default
@@ -113,20 +114,41 @@ Règles :
   (parseEvent, buildLabel, extractEntityRef, decorateRow + 22 tests).
   Fallback gracieux sur events legacy malformés. Pas de nouvelle table
   — audit_log est la source de vérité.
+- ✅ UI Bank/Cash (PR #90 — Sprint 5 follow-up) : `BankSection.tsx`
+  (tabs Comptes/Opérations) + `CashSection.tsx`. Stats credits/debits/net/
+  reconciledRate + filtres date/account/category/reconciled/kind. CRUD complet.
+- ✅ UI Analytics (PR #91 — Sprint 6 follow-up) : `AnalyticsSection.tsx`
+  (sélecteur période, 5 StatCards, top fournisseurs bar list, payment
+  status mix, série mensuelle 12 mois barres CSS — pas de lib charts
+  externe). TVA déductible + disclaimer collectée=null.
+- ✅ UI History (PR #92 — Sprint 7 follow-up — **bouclage 12/12 modules**) :
+  `HistorySection.tsx` (table + filtres module/action/date range/userId
+  + pagination offset 50/page, ligne expandable metadata JSON, deep-link
+  vers la section management de l'entité touchée). `TenantHistory.tsx`
+  devient wrapper TenantAppShell.
 
 ### 9.2.2 En cours / en attente de merge
 
-- (rien en attente — Sprints 3-7 sont intégralement bouclés côté backend au 2026-05-11)
+- 🟡 PR #94 ouverte : `fix(ocr): délègue le parse PDF à ulysseclaude`
+  (branche `fix/invoice-parse-via-ulysseclaude`). Mergeable. Hors-roadmap
+  option C (fix correctif sur l'OCR PDF). Probablement portée par une
+  session parallèle.
 
 ### 9.2.3 À suivre — objectif 200% atteint, phase 2
 
 **Les 12 modules métier sont production-ready au 2026-05-12** (backend
-+ UI) :
-- ~~`BankSection.tsx` (tabs Comptes/Opérations) + `CashSection.tsx`~~ ✅ Livré PR #90 (Sprint 5 follow-up)
-- ~~`AnalyticsSection.tsx` — KPI cards + charts mensuels + top suppliers~~ ✅ Livré PR #91 (Sprint 6 follow-up)
-- ~~`HistorySection.tsx` — table + filtres + deep-link entity~~ ✅ Livré PR #92 (Sprint 7 follow-up)
++ UI mergés sur `main`) — bouclage final par PR #92 (HistorySection).
 
 Plus aucun item planifié dans la roadmap option C (sprints 1-7).
+Reste exclusivement :
+- Smoke prod sur les 12 sections dans un tenant test, surveiller les
+  premières erreurs Sentry / metrics Prometheus.
+- Drop SQL définitif `tenants.pin_code`/`admin_code` + tables
+  `bank_entries`/`cash_entries` legacy (script SQL manuel, voir §9.6.6).
+- Reboot host Hetzner (kernel update en attente — incident 502 docker-proxy
+  2026-05-19 a confirmé la dégradation). Impacte mybeez + macommande +
+  ulysseclaude simultanément, fenêtre off-peak.
+
 La suite passe en **Phase 2** (Stripe billing, MFA obligatoire
 Owner/Admin, WebAuthn, SSO, RLS Postgres, custom domain provisioning
 automatisé, etc.) — cf. §9.7.
@@ -141,11 +163,14 @@ automatisé, etc.) — cf. §9.7.
 
 ### 9.2.4 À suivre — Sprints 5-7
 
+Tous les sprints sont bouclés au 2026-05-12. Section conservée pour
+trace historique du plan original :
+
 | Sprint | Module | Sécu/Ops |
 |---|---|---|
-| 5 | BankEntries / CashEntries redesign (moyens de paiement génériques) | Logger structuré pino (stdout JSON) |
-| ~~6~~ | ~~Analytics~~ ✅ Livré PR #85 (backend, UI à venir) | ~~HSTS nginx + CSP helmet + check HIBP~~ ✅ Livré PR #84 |
-| ~~7~~ | ~~History cross-module~~ ✅ Livré PR #88 (backend, UI à venir) | ~~Metrics Prometheus + Sentry frontend~~ ✅ Livré PR #87 |
+| ~~5~~ | ~~Bank/Cash redesign~~ ✅ PR #83 backend + PR #90 UI | ~~Logger pino~~ ✅ PR #82 |
+| ~~6~~ | ~~Analytics~~ ✅ PR #85 backend + PR #91 UI | ~~HSTS nginx + CSP helmet + check HIBP~~ ✅ PR #84 |
+| ~~7~~ | ~~History cross-module~~ ✅ PR #88 backend + PR #92 UI | ~~Metrics Prometheus + Sentry frontend~~ ✅ PR #87 |
 
 ---
 
@@ -180,12 +205,13 @@ automatisé, etc.) — cf. §9.7.
 ## 9.5 Verdict global
 
 > **myBeez a bouclé sa roadmap option C au 2026-05-12 : 12/12 modules
-> métier production-ready (backend + UI mergés sur main) + 7 sprints
-> sécu/ops complets (MFA TOTP, audit log, lockout, healthcheck,
-> backups cron, pino logger, HSTS+CSP+HIBP, Prometheus+Sentry). Le
-> produit est *fully bankable côté Phase 1*. La phase 2 ouvre sur
-> Stripe billing, MFA obligatoire, WebAuthn, RLS Postgres et custom
-> domain provisioning automatisé — cf. §9.7.**
+> métier production-ready (backend + UI mergés sur main, dernier
+> bouclage = PR #92 HistorySection) + 7 sprints sécu/ops complets
+> (MFA TOTP, audit log, lockout, healthcheck, backups cron, pino logger,
+> HSTS+CSP+HIBP, Prometheus+Sentry). Le produit est *fully bankable côté
+> Phase 1*. La phase 2 ouvre sur Stripe billing, MFA obligatoire,
+> WebAuthn, RLS Postgres et custom domain provisioning automatisé —
+> cf. §9.7.**
 
 Ce qui est solide (verdict final Phase 1) :
 - Architecture multi-tenant cohérente, hostname-first résolution + cookie cross-subdomain.
@@ -247,9 +273,9 @@ Ce qui reste explicitement pour Phase 2 — cf. §9.7 :
 
 - **3 mécanismes refresh redondants checklist** : `refetchOnWindowFocus` +
   `refetchInterval: 30s` + SSE. Choisir SSE seul + invalidation manuelle.
-- **Sections `/management/...` restantes en placeholder** — Bank/Cash,
-  Analytics, History à livrer (cf. sprints 5-7). Files, Employees,
-  Payroll, Absences, Suppliers, Purchases, Expenses ✅ livrés.
+- ~~**Sections `/management/...` restantes en placeholder**~~ ✅ Tous livrés
+  (12/12 modules : Files, Employees, Payroll, Absences, Suppliers,
+  Purchases, Expenses, Bank, Cash, Analytics, History, Checklist).
 - **`AdminTenant` page stub** — route `/123admin/tenants/:id` ne charge rien.
 - **Aucun test frontend significatif** — uniquement IconRenderer + taxRulesLabels.
 - **Landing page monolithique** (~890 lignes) — à scinder en sections

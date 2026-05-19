@@ -441,7 +441,7 @@ Choix de design :
 
 ## 7.8 Modules planifiés (Sprints 5-7)
 
-### 7.8.1 Sprint 5 — Bank / Cash (livré PR #83 backend, UI à venir)
+### 7.8.1 Sprint 5 — Bank / Cash (PR #83 backend + PR #90 UI — bouclé)
 
 **Livré (PR #83)** :
 
@@ -468,17 +468,15 @@ Choix de design :
 - **Hard-delete** sur les entries (vs soft sur purchases/suppliers) — une opération erronée doit disparaître ; l'audit_log garde la trace.
 - **SQL `_v2`** sur les nouvelles tables : les anciennes `bank_entries` / `cash_entries` (vides en prod, jamais consommées) restent déclarées comme `legacyBankEntries`/`legacyCashEntries` pour ne pas casser `db:push` non-interactif. Drop SQL différé dans une PR de cleanup ultérieure.
 
-**Reste UI** (PR follow-up) :
-- `BankAccountsSection.tsx` + `BankEntriesSection.tsx` + `CashEntriesSection.tsx` côté `client/src/components/management/sections/`.
-- Bouton « Rapprocher » sur une bank entry → matching auto/manuel avec un purchase/expense de période proche.
-- Stats cards header (solde par compte, encaissements / décaissements période).
+✅ **UI livrée (PR #90)** : `BankSection.tsx` (tabs Comptes/Opérations) + `CashSection.tsx` côté `client/src/components/management/sections/`. Stats cards header (solde par compte, encaissements / décaissements période + reconciledRate sur opérations). Filtres date / account / category / reconciled / kind. CRUD complet.
 
-**Hors scope V1** (Phase 2 ou Sprint 7 obs) :
+**Hors scope V1** (Phase 2) :
+- Bouton « Rapprocher » sur une bank entry → matching auto/manuel avec un purchase/expense de période proche (UI side actuellement, FK logique en place).
 - Import CSV de relevés bancaires (cf. ulysseclaude `bankStatementParser.ts` + `bankStatementImportService.ts` — code de qualité, à porter quand le besoin sera concret).
 - OCR de ticket Z resto.
-- Table `loans` (emprunts/crédits — utile pour amortissements analytics, peut atterrir Sprint 6).
+- Table `loans` (emprunts/crédits — utile pour amortissements analytics).
 
-### 7.8.2 Sprint 6 — Analytics (livré PR #85 backend, UI à venir)
+### 7.8.2 Sprint 6 — Analytics (PR #85 backend + PR #91 UI — bouclé)
 
 **Livré (PR #85)** :
 
@@ -516,12 +514,13 @@ Choix de design :
   - TVA collectée = `null` documenté, pas un `0` trompeur
 - **Compute on-demand** plutôt que cache snapshot : volumes attendus < 12 mois × few thousand rows ⇒ <100ms. Table `analytics` reste libre pour Phase 2 si signal perf concret.
 
-⏳ **Reste** :
-- UI `AnalyticsSection.tsx` (charts mensuels, KPI cards, top suppliers).
-- Module Revenue générique pour débloquer la TVA collectée + ratios CA-based (Phase 2).
+✅ **UI livrée (PR #91)** : `AnalyticsSection.tsx` (sélecteur période presets + custom, 5 StatCards purchases/expenses/payroll/banque/caisse, top fournisseurs bar list, payment status mix, série mensuelle 12 mois en barres CSS — pas de lib charts externe, TVA déductible + disclaimer collectée=null).
+
+**Hors scope V1** (Phase 2) :
+- Module Revenue générique pour débloquer la TVA collectée + ratios CA-based (food cost %, marge brute, masse salariale %).
 - CSV export expert-comptable (port pattern ulysseclaude `/analytics/export-comptable` si demandé).
 
-### 7.8.3 Sprint 7 — History cross-module (livré PR #88 backend, UI à venir)
+### 7.8.3 Sprint 7 — History cross-module (PR #88 backend + PR #92 UI — bouclé, 12/12 modules atteint)
 
 **Livré (PR #88)** :
 
@@ -583,10 +582,10 @@ des rows `audit_log` du tenant, décorées pour la UI :
   metadata par module. Whitelist explicite par module — un mauvais
   mapping serait pire qu'un manquant.
 
-⏳ **Reste** :
-- UI `HistorySection.tsx` (table + filtres + click → deep-link entity).
-- Si volume → cursor-based pagination (`?cursor=...&limit=...` au lieu
-  de `?offset=...`).
+✅ **UI livrée (PR #92)** : `HistorySection.tsx` (table + filtres module / action / date range / userId + pagination offset 50/page). Ligne expandable (metadata JSON inline). Deep-link vers la section management de l'entité touchée (purchase / expense / payroll / …). `TenantHistory.tsx` devient un simple wrapper TenantAppShell. **Boucle officiellement les 12/12 modules production-ready.**
+
+**Hors scope V1** (Phase 2) :
+- Si volume audit_log > qq millions de rows → cursor-based pagination (`?cursor=...&limit=...` au lieu de `?offset=...`).
 - Si signal d'usage → export CSV pour expert-comptable.
 
 ---
