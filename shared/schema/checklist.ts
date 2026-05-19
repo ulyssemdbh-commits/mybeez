@@ -217,44 +217,6 @@ export const filesTrash = pgTable(
 );
 
 /**
- * @deprecated PR #83 — replaced by `bankEntries` (SQL `bank_entries_v2`) in
- * `shared/schema/finance.ts`. Kept declared so `drizzle-kit push` doesn't
- * mark the still-present (empty) SQL table for destructive drop. The SQL
- * `bank_entries` table will be dropped via a separate hand-written
- * migration once we're ready to run a destructive deploy.
- */
-export const legacyBankEntries = pgTable("bank_entries", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull(),
-  date: text("date").notNull(),
-  description: text("description").notNull(),
-  amount: real("amount").notNull(),
-  type: text("type").notNull().default("expense"),
-  category: text("category"),
-  reference: text("reference"),
-  isReconciled: boolean("is_reconciled").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-/**
- * @deprecated PR #83 — replaced by `cashEntries` (SQL `cash_entries_v2`)
- * in `shared/schema/finance.ts`. Same drop-deferred policy as
- * `legacyBankEntries`.
- */
-export const legacyCashEntries = pgTable("cash_entries", {
-  id: serial("id").primaryKey(),
-  tenantId: integer("tenant_id").notNull(),
-  date: text("date").notNull(),
-  type: text("type").notNull(),
-  amount: real("amount").notNull(),
-  description: text("description"),
-  category: text("category"),
-  paymentMethod: text("payment_method"),
-  reference: text("reference"),
-  createdAt: timestamp("created_at").defaultNow(),
-});
-
-/**
  * Employees — staff roster scoped per tenant. PR #72 enriched the
  * pre-existing table with HR-specific fields (SSN for payslip-PDF
  * matching, weekly hours, hourly rate, end date, free notes).

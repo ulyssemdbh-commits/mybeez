@@ -13,8 +13,6 @@ function makeTenant(overrides: Partial<Tenant> = {}): Tenant {
     businessType: "restaurant",
     vocabulary: {},
     modulesEnabled: [],
-    pinCode: null,
-    adminCode: null,
     email: null,
     phone: null,
     address: null,
