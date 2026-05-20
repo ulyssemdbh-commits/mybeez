@@ -92,7 +92,7 @@ Concrètement :
 8. L'app cashback consommateur (pages publiques sans connexion mybeez Pro)
    est exposée sur un **sous-domaine dédié** `cashback.mybeez-ai.com`,
    servi par le même process mybeez via une résolution de host spécifique
-   (à valider — cf. §6 Open questions).
+   (à valider — cf. §7 Open questions).
 9. Le module REV est **toggleable per tenant** via
    `tenants.modules_enabled.rev = true`. Tant que non activé, les routes
    `/api/management/:slug/rev/*` répondent 404 et la sidebar mybeez
@@ -100,6 +100,13 @@ Concrètement :
 10. Le code source `C:\Users\meyer\Projet-REV` est **archivé** (read-only,
     référence historique) une fois la migration data terminée. Plus aucun
     développement à l'extérieur de mybeez.
+11. **Contrainte ferme : zéro Replit dans le code livré.** Le code REV
+    importé contient plusieurs dépendances et hooks spécifiques à
+    Replit (cf. §4 Inventaire) qui doivent être **intégralement purgés**
+    avant ou pendant le portage de chaque fichier. Une **CI gate**
+    grep-based est ajoutée pour bloquer toute ré-introduction
+    accidentelle (`REPL_`, `@replit/`, `REPLIT_`, `stripe-replit-sync`).
+    Cette contrainte est PO-driven et non-négociable.
 
 ---
 
@@ -159,7 +166,7 @@ Concrètement :
   indexes (au moins `(tenant_id, ...)` sur les colonnes filtrées).
 - **App consommateur publique** : nouveau pattern d'exposition (sous-domaine
   non-tenant). Demande adaptation du middleware `resolveTenant` et de la
-  CSP helmet. À expliciter dans l'ADR sous-jacent ou en Sprint 4.
+  CSP helmet. À expliciter en Sprint 4.
 - **Module Revenue mybeez Phase 2** : risque de chevauchement avec les
   données REV (transactions REV = une source de CA). À arbitrer quand
   Revenue sera repris.
@@ -176,9 +183,86 @@ Concrètement :
 
 ---
 
-## 4. Alternatives considérées
+## 4. Inventaire Replit à purger (audit 2026-05-20)
 
-### 4.1 Option B — REV reste autonome, mybeez appelle REV via API externe
+Audit effectué sur `C:\Users\meyer\Projet-REV` à la date de l'ADR.
+Tout ce qui suit doit avoir disparu du code mybeez à la fin du
+**Sprint 1** (avant que la première PR feature REV ne touche le code).
+
+### 4.1 Dépendances npm à retirer (5)
+
+| Package | Type | Usage actuel | Remplacement |
+|---|---|---|---|
+| `stripe-replit-sync` | dependencies | `server/stripeClient.ts` (sync DB Stripe via le connector Replit) | Webhooks Stripe + mise à jour DB côté mybeez (pattern standard) |
+| `@replit/vite-plugin-runtime-error-modal` | devDependencies | `vite.config.ts` (overlay erreurs dev) | Vite affiche déjà nativement les erreurs en dev — suppression nette |
+| `@replit/vite-plugin-cartographer` | devDependencies | `vite.config.ts` (mapping fichiers Replit) | Inutile hors Replit — suppression nette |
+| `@replit/vite-plugin-dev-banner` | devDependencies | `vite.config.ts` (badge "Made with Replit") | Inutile — suppression nette |
+| `openid-client` | dependencies | **Orphelin** (aucun import dans `server/**`, vestige de `javascript_log_in_with_replit`) | Suppression nette |
+
+### 4.2 Fichiers / dossiers à supprimer
+
+| Chemin | Quoi | Action |
+|---|---|---|
+| `.replit` | Config Replit autoscale (modules, ports, workflows, integrations) | Ne pas porter |
+| `.config/replit/` | Config semgrep Replit Assistant | Ne pas porter |
+| `.local/skills/` | Skills Replit Assistant (mockups, artefacts, secondary_skills) | Ne pas porter |
+| `.local/state/replit/` | État Replit Assistant runtime | Ne pas porter |
+| `replit.md` | Documentation interne Replit + creds admin en clair (⚠ à archiver hors repo) | Ne pas porter, archiver hors repo si besoin de mémoire historique |
+
+### 4.3 Code à refactor
+
+| Fichier | Lignes | Problème | Action |
+|---|---|---|---|
+| `server/stripeClient.ts` | toutes (83 lignes) | Utilise `REPLIT_CONNECTORS_HOSTNAME`, `REPL_IDENTITY`, `WEB_REPL_RENEWAL`, `REPLIT_DEPLOYMENT`, `X_REPLIT_TOKEN`, `stripe-replit-sync` | **Réécrire** : init Stripe simple avec `STRIPE_SECRET_KEY` + `STRIPE_PUBLISHABLE_KEY` env vars (pattern macommande/mybeez), service `stripeService` dans `server/services/rev/payments/`, webhook handler dans `server/routes/rev/webhooks.ts` |
+| `server/routes.ts` | ligne 1454 | `process.env.REPLIT_DOMAINS?.split(',')[0]` pour base URL | Remplacer par `APP_BASE_URL` (env var mybeez existante, REQUIRED en prod) |
+| `vite.config.ts` | lignes 4, 9-21 | 3 plugins Replit + check `process.env.REPL_ID` | Réécrire la config Vite — aligner sur `mybeez/vite.config.ts` (qui sait déjà gérer client root, alias `@`/`@shared`, build vers `dist/public`) |
+
+### 4.4 Variables d'environnement Replit interdites en prod
+
+À ajouter au `eslint-plugin-no-process-env` config et au pre-deploy check :
+
+`REPLIT_CONNECTORS_HOSTNAME`, `REPL_IDENTITY`, `WEB_REPL_RENEWAL`,
+`REPLIT_DEPLOYMENT`, `REPLIT_DOMAINS`, `REPL_ID`, `REPL_SLUG`,
+`REPLIT_DB_URL`, `X_REPLIT_TOKEN`, et tout autre `REPL_*` / `REPLIT_*`.
+
+### 4.5 CI gate (à wirer en Sprint 1)
+
+Ajouter dans `.github/workflows/ci.yml` une étape :
+
+```yaml
+- name: No Replit residue
+  run: |
+    if grep -RE "@replit/|stripe-replit-sync|REPLIT_|REPL_IDENTITY|REPL_ID" \
+        --include="*.ts" --include="*.tsx" --include="*.json" \
+        --exclude-dir=node_modules --exclude-dir=dist \
+        client server shared scripts; then
+      echo "::error::Replit residue detected in source tree"
+      exit 1
+    fi
+```
+
+Cette gate doit passer dès la PR Sprint 1 (`feat/rev-schema`) et
+rester verte sur toute PR suivante touchant le module REV.
+
+### 4.6 Auth Replit — non-applicable
+
+L'audit confirme que **l'auth REV n'utilise PAS Replit Auth**
+(`javascript_log_in_with_replit`) malgré la déclaration d'intégration
+dans `.replit`. L'auth REV passe par `passport-local` + `bcryptjs`
+côté `server/storage.ts` (vérifié — aucun import `openid-client`).
+La présence d'`openid-client` dans `package.json` est un orphelin
+(probablement scaffold initial Replit jamais wiré).
+
+→ Auth merchant REV bascule directement sur le système nominatif mybeez
+(Argon2id + MFA + RBAC + sessions Postgres-backed) en Sprint 2.
+Auth consommateur REV reste indépendante mais migre `bcryptjs` →
+`argon2id` (pattern mybeez `services/auth/passwordService.ts`).
+
+---
+
+## 5. Alternatives considérées
+
+### 5.1 Option B — REV reste autonome, mybeez appelle REV via API externe
 
 Décrite formellement pour mémoire.
 
@@ -200,7 +284,7 @@ par tenant ou OAuth client_credentials.
   que l'absorption profite directement de tout l'écosystème mybeez.
 - Aucun gain compensatoire (le PO ne veut pas vendre REV séparément).
 
-### 4.2 Option C — White-label REV avec UI mybeez par-dessus
+### 5.2 Option C — White-label REV avec UI mybeez par-dessus
 
 REV resterait autonome côté code et auth, mais mybeez fournirait
 uniquement une couche UI "branded mybeez" qui consommerait l'API REV
@@ -214,7 +298,7 @@ en lecture seule + redirigerait vers l'app REV pour les actions.
 - Maintenance d'une "façade UI" qui doit suivre les changements de
   l'API REV → double travail.
 
-### 4.3 Option D — Migrer mybeez dans REV (sens inverse)
+### 5.3 Option D — Migrer mybeez dans REV (sens inverse)
 
 Théoriquement possible, écartée d'emblée :
 
@@ -228,7 +312,7 @@ Le sens de l'absorption est évident : REV → mybeez.
 
 ---
 
-## 5. Plan d'implémentation
+## 6. Plan d'implémentation
 
 7 sprints (S0 inclus). Chaque sprint = 1 PR principale + booksystem
 mis à jour dans la même PR. Quality gates : `npm run check` + lint
@@ -237,7 +321,7 @@ mis à jour dans la même PR. Quality gates : `npm run check` + lint
 | Sprint | Branche | Livrable | Estim. |
 |---|---|---|---|
 | **S0** | `docs/rev-absorption-adr` | **Cet ADR.** Validation PO + cartographie REV finale (via Agent Explore en cours). | 1 jour |
-| **S1** | `feat/rev-schema` | `shared/schema/rev/*.ts` (16 tables, tenant_id, PKs serial), Drizzle relations + Zod, migration SQL idempotente, indexes (`tenant_id` first), seed dev minimal. Booksystem ch. 05 et 07 (ajout module 13). | 5 jours |
+| **S1** | `feat/rev-schema` | **Purge Replit complète (cf. §4)** : retrait 5 packages npm, suppression `.replit` / `.config/replit/` / `.local/skills/` / `replit.md` (archivé hors repo), refactor `stripeClient.ts` + `routes.ts` ligne 1454 + `vite.config.ts`, **CI gate grep `REPL_` activée**. Puis : `shared/schema/rev/*.ts` (16 tables, tenant_id, PKs serial), Drizzle relations + Zod, migration SQL idempotente, indexes (`tenant_id` first), seed dev minimal. Booksystem ch. 05 et 07 (ajout module 13). | 7 jours (5 schema + 2 purge) |
 | **S2** | `feat/rev-merchant-api` | Routes `/api/management/:slug/rev/{merchant,transactions,balances,billings,promotions,gift-cards,stats}`, services `server/services/rev/*`, cron systemd timer pour billing auto 15/30 + cashback unlock, intégrations Stripe + PayPal côté merchant. Tests Vitest. | 10 jours |
 | **S3** | `feat/rev-management-ui` | `client/src/components/management/sections/Rev*.tsx` (RevSection + Dashboard + Onboarding + Transactions + Billings + Promotions + GiftCards), toggle `tenant.modulesEnabled.rev`, sidebar dynamique. Booksystem ch. 04 et 07. | 7-10 jours |
 | **S4** | `feat/rev-consumer-app` | App publique consommateur sur sous-domaine `cashback.mybeez-ai.com` (ou route `/c/:slug` — décidé en §6.1). Pages landing, login, solde, transactions, gift cards, transferts, scan QR. Auth `rev_consumers` séparée. | 10 jours |
@@ -255,7 +339,7 @@ Dépendances :
 
 ---
 
-## 6. Open questions (à trancher avant ou pendant l'implémentation)
+## 7. Open questions (à trancher avant ou pendant l'implémentation)
 
 ### 6.1 Sous-domaine `cashback.mybeez-ai.com` vs route publique `/c/:slug` ?
 
@@ -360,7 +444,7 @@ Proposition initiale (à valider) :
 
 ---
 
-## 7. Liens
+## 8. Liens
 
 - Booksystem chapitres impactés (à mettre à jour en S1+) :
   - [02-architecture](../02-architecture.md) — ajout REV comme module 13
