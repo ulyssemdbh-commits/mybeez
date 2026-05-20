@@ -10,11 +10,10 @@
  *   notifications, user_favorites.
  *
  * Voir l'ADR `docs/booksystem/adr/2026-05-20-rev-absorption.md` pour
- * le rationale d'absorption et le plan de mise en œuvre par sprints.
- *
- * Contrainte ferme zéro-Replit (ADR §2 point 11, §4) : ce module ne doit
- * contenir **aucune** référence à Replit (`REPL_*`, `@replit/`,
- * `stripe-replit-sync`). CI gate dans `.github/workflows/no-replit.yml`.
+ * le rationale d'absorption, le plan de mise en œuvre par sprints,
+ * et l'inventaire exhaustif des dépendances et variables interdites
+ * dans le code livré (contrainte ferme PO non-négociable).
+ * CI gate dans `.github/workflows/no-replit.yml`.
  */
 export * from "./consumers";
 export * from "./merchants";
