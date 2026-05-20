@@ -1,26 +1,26 @@
 /**
- * REV gift cards — cartes cadeaux émises par un merchant.
+ * CashMy gift cards — cartes cadeaux émises par un merchant.
  *
  * Modèle :
- * - `rev_gift_cards` : catalogue (face value + cashback rate, default 15%).
- * - `rev_gift_card_purchases` : achat par un consommateur (paie face_value,
+ * - `cashmy_gift_cards` : catalogue (face value + cashback rate, default 15%).
+ * - `cashmy_gift_card_purchases` : achat par un consommateur (paie face_value,
  *   reçoit la carte + cashback `face_value * 15%`). Verrouillage 7 jours
  *   ouvrés via `unlocks_at`.
- * - `rev_gift_card_balances` : solde courant détenu par un consommateur
+ * - `cashmy_gift_card_balances` : solde courant détenu par un consommateur
  *   (peut diminuer en utilisation ou être transféré).
- * - `rev_gift_card_transfers` : historique des transferts entre consommateurs.
+ * - `cashmy_gift_card_transfers` : historique des transferts entre consommateurs.
  *
  * **Décision absorption** : les gift cards sont scopées par tenant
  * (un tenant émet ses propres cartes — pas de gift cards globales
- * cross-tenant comme dans REV original). Cohérent avec la philosophie
- * multi-tenant mybeez.
+ * cross-tenant comme dans Projet-REV original). Cohérent avec la
+ * philosophie multi-tenant mybeez.
  */
 import { pgTable, text, serial, integer, boolean, timestamp, decimal, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const revGiftCards = pgTable(
-  "rev_gift_cards",
+export const cashmyGiftCards = pgTable(
+  "cashmy_gift_cards",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -37,13 +37,13 @@ export const revGiftCards = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_gift_cards_tenant_active_idx").on(table.tenantId, table.isActive),
-    index("rev_gift_cards_merchant_idx").on(table.merchantId),
+    index("cashmy_gift_cards_tenant_active_idx").on(table.tenantId, table.isActive),
+    index("cashmy_gift_cards_merchant_idx").on(table.merchantId),
   ],
 );
 
-export const revGiftCardPurchases = pgTable(
-  "rev_gift_card_purchases",
+export const cashmyGiftCardPurchases = pgTable(
+  "cashmy_gift_card_purchases",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -63,13 +63,13 @@ export const revGiftCardPurchases = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_gift_card_purchases_buyer_idx").on(table.buyerConsumerId),
-    index("rev_gift_card_purchases_tenant_idx").on(table.tenantId),
+    index("cashmy_gift_card_purchases_buyer_idx").on(table.buyerConsumerId),
+    index("cashmy_gift_card_purchases_tenant_idx").on(table.tenantId),
   ],
 );
 
-export const revGiftCardBalances = pgTable(
-  "rev_gift_card_balances",
+export const cashmyGiftCardBalances = pgTable(
+  "cashmy_gift_card_balances",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -85,13 +85,13 @@ export const revGiftCardBalances = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_gift_card_balances_owner_idx").on(table.ownerConsumerId, table.status),
-    index("rev_gift_card_balances_tenant_idx").on(table.tenantId),
+    index("cashmy_gift_card_balances_owner_idx").on(table.ownerConsumerId, table.status),
+    index("cashmy_gift_card_balances_tenant_idx").on(table.tenantId),
   ],
 );
 
-export const revGiftCardTransfers = pgTable(
-  "rev_gift_card_transfers",
+export const cashmyGiftCardTransfers = pgTable(
+  "cashmy_gift_card_transfers",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -103,36 +103,36 @@ export const revGiftCardTransfers = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_gift_card_transfers_tenant_idx").on(table.tenantId),
-    index("rev_gift_card_transfers_from_idx").on(table.fromConsumerId),
-    index("rev_gift_card_transfers_to_idx").on(table.toConsumerId),
+    index("cashmy_gift_card_transfers_tenant_idx").on(table.tenantId),
+    index("cashmy_gift_card_transfers_from_idx").on(table.fromConsumerId),
+    index("cashmy_gift_card_transfers_to_idx").on(table.toConsumerId),
   ],
 );
 
-export const insertRevGiftCardSchema = createInsertSchema(revGiftCards).omit({
+export const insertCashMyGiftCardSchema = createInsertSchema(cashmyGiftCards).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevGiftCard = z.infer<typeof insertRevGiftCardSchema>;
-export type RevGiftCard = typeof revGiftCards.$inferSelect;
+export type InsertCashMyGiftCard = z.infer<typeof insertCashMyGiftCardSchema>;
+export type CashMyGiftCard = typeof cashmyGiftCards.$inferSelect;
 
-export const insertRevGiftCardPurchaseSchema = createInsertSchema(revGiftCardPurchases).omit({
+export const insertCashMyGiftCardPurchaseSchema = createInsertSchema(cashmyGiftCardPurchases).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevGiftCardPurchase = z.infer<typeof insertRevGiftCardPurchaseSchema>;
-export type RevGiftCardPurchase = typeof revGiftCardPurchases.$inferSelect;
+export type InsertCashMyGiftCardPurchase = z.infer<typeof insertCashMyGiftCardPurchaseSchema>;
+export type CashMyGiftCardPurchase = typeof cashmyGiftCardPurchases.$inferSelect;
 
-export const insertRevGiftCardBalanceSchema = createInsertSchema(revGiftCardBalances).omit({
+export const insertCashMyGiftCardBalanceSchema = createInsertSchema(cashmyGiftCardBalances).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevGiftCardBalance = z.infer<typeof insertRevGiftCardBalanceSchema>;
-export type RevGiftCardBalance = typeof revGiftCardBalances.$inferSelect;
+export type InsertCashMyGiftCardBalance = z.infer<typeof insertCashMyGiftCardBalanceSchema>;
+export type CashMyGiftCardBalance = typeof cashmyGiftCardBalances.$inferSelect;
 
-export const insertRevGiftCardTransferSchema = createInsertSchema(revGiftCardTransfers).omit({
+export const insertCashMyGiftCardTransferSchema = createInsertSchema(cashmyGiftCardTransfers).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevGiftCardTransfer = z.infer<typeof insertRevGiftCardTransferSchema>;
-export type RevGiftCardTransfer = typeof revGiftCardTransfers.$inferSelect;
+export type InsertCashMyGiftCardTransfer = z.infer<typeof insertCashMyGiftCardTransferSchema>;
+export type CashMyGiftCardTransfer = typeof cashmyGiftCardTransfers.$inferSelect;

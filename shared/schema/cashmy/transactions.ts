@@ -1,23 +1,23 @@
 /**
- * REV transactions, balances, entries et transfers de cashback.
+ * CashMy transactions, balances, entries et transfers de cashback.
  *
  * Flow nominal :
  * 1. Le client paie en caisse, le merchant scanne le QR du client.
- * 2. Une `rev_transaction` est créée (montant, cashback calculé).
- * 3. Une `rev_cashback_entries` est créée en `pending` avec
+ * 2. Une `cashmy_transaction` est créée (montant, cashback calculé).
+ * 3. Une `cashmy_cashback_entries` est créée en `pending` avec
  *    `unlocks_at = now() + N jours` (configurable, default 7 jours).
  * 4. Quand `unlocks_at` est atteint, un cron déplace l'entry en
- *    `unlocked` et augmente `rev_cashback_balances.available_balance`
+ *    `unlocked` et augmente `cashmy_cashback_balances.available_balance`
  *    en baissant `pending_balance`.
- * 5. Le client peut alors transférer ce cashback (`rev_cashback_transfers`)
+ * 5. Le client peut alors transférer ce cashback (`cashmy_cashback_transfers`)
  *    ou l'utiliser comme paiement chez le même merchant.
  */
 import { pgTable, text, serial, integer, timestamp, decimal, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const revTransactions = pgTable(
-  "rev_transactions",
+export const cashmyTransactions = pgTable(
+  "cashmy_transactions",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -27,7 +27,7 @@ export const revTransactions = pgTable(
     amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
     /** Cashback offert (= amount * cashbackRate / 100). */
     cashbackAmount: decimal("cashback_amount", { precision: 10, scale: 2 }).notNull(),
-    /** Commission REV due par le merchant (= amount * 3 / 100). */
+    /** Commission plateforme CashMy due par le merchant (= amount * 3 / 100). */
     commissionAmount: decimal("commission_amount", { precision: 10, scale: 2 }).notNull(),
     /** `completed`, `cancelled`, `refunded`. */
     status: text("status").notNull().default("completed"),
@@ -35,9 +35,9 @@ export const revTransactions = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_transactions_tenant_created_idx").on(table.tenantId, table.createdAt),
-    index("rev_transactions_consumer_idx").on(table.consumerId),
-    index("rev_transactions_merchant_idx").on(table.merchantId),
+    index("cashmy_transactions_tenant_created_idx").on(table.tenantId, table.createdAt),
+    index("cashmy_transactions_consumer_idx").on(table.consumerId),
+    index("cashmy_transactions_merchant_idx").on(table.merchantId),
   ],
 );
 
@@ -47,8 +47,8 @@ export const revTransactions = pgTable(
  * services backend lors des transitions de status d'entries
  * (pending → unlocked) et des transferts.
  */
-export const revCashbackBalances = pgTable(
-  "rev_cashback_balances",
+export const cashmyCashbackBalances = pgTable(
+  "cashmy_cashback_balances",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -61,8 +61,8 @@ export const revCashbackBalances = pgTable(
     updatedAt: timestamp("updated_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("rev_cashback_balances_consumer_merchant_idx").on(table.consumerId, table.merchantId),
-    index("rev_cashback_balances_tenant_idx").on(table.tenantId),
+    uniqueIndex("cashmy_cashback_balances_consumer_merchant_idx").on(table.consumerId, table.merchantId),
+    index("cashmy_cashback_balances_tenant_idx").on(table.tenantId),
   ],
 );
 
@@ -71,8 +71,8 @@ export const revCashbackBalances = pgTable(
  * `unlocks_at`, puis `unlocked` quand le cron tourne. Peut aussi
  * passer en `cancelled` si la transaction d'origine est annulée.
  */
-export const revCashbackEntries = pgTable(
-  "rev_cashback_entries",
+export const cashmyCashbackEntries = pgTable(
+  "cashmy_cashback_entries",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -87,9 +87,9 @@ export const revCashbackEntries = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_cashback_entries_unlocks_status_idx").on(table.unlocksAt, table.status),
-    index("rev_cashback_entries_consumer_merchant_idx").on(table.consumerId, table.merchantId),
-    index("rev_cashback_entries_tenant_idx").on(table.tenantId),
+    index("cashmy_cashback_entries_unlocks_status_idx").on(table.unlocksAt, table.status),
+    index("cashmy_cashback_entries_consumer_merchant_idx").on(table.consumerId, table.merchantId),
+    index("cashmy_cashback_entries_tenant_idx").on(table.tenantId),
   ],
 );
 
@@ -98,8 +98,8 @@ export const revCashbackEntries = pgTable(
  * (le cashback est lié à un merchant donné, on ne peut pas transférer
  * du cashback "Boulangerie X" vers un solde "Coiffeur Y").
  */
-export const revCashbackTransfers = pgTable(
-  "rev_cashback_transfers",
+export const cashmyCashbackTransfers = pgTable(
+  "cashmy_cashback_transfers",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -112,38 +112,38 @@ export const revCashbackTransfers = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_cashback_transfers_tenant_idx").on(table.tenantId),
-    index("rev_cashback_transfers_from_idx").on(table.fromConsumerId),
-    index("rev_cashback_transfers_to_idx").on(table.toConsumerId),
+    index("cashmy_cashback_transfers_tenant_idx").on(table.tenantId),
+    index("cashmy_cashback_transfers_from_idx").on(table.fromConsumerId),
+    index("cashmy_cashback_transfers_to_idx").on(table.toConsumerId),
   ],
 );
 
-export const insertRevTransactionSchema = createInsertSchema(revTransactions).omit({
+export const insertCashMyTransactionSchema = createInsertSchema(cashmyTransactions).omit({
   id: true,
   createdAt: true,
   cancelledAt: true,
 });
-export type InsertRevTransaction = z.infer<typeof insertRevTransactionSchema>;
-export type RevTransaction = typeof revTransactions.$inferSelect;
+export type InsertCashMyTransaction = z.infer<typeof insertCashMyTransactionSchema>;
+export type CashMyTransaction = typeof cashmyTransactions.$inferSelect;
 
-export const insertRevCashbackBalanceSchema = createInsertSchema(revCashbackBalances).omit({
+export const insertCashMyCashbackBalanceSchema = createInsertSchema(cashmyCashbackBalances).omit({
   id: true,
   updatedAt: true,
 });
-export type InsertRevCashbackBalance = z.infer<typeof insertRevCashbackBalanceSchema>;
-export type RevCashbackBalance = typeof revCashbackBalances.$inferSelect;
+export type InsertCashMyCashbackBalance = z.infer<typeof insertCashMyCashbackBalanceSchema>;
+export type CashMyCashbackBalance = typeof cashmyCashbackBalances.$inferSelect;
 
-export const insertRevCashbackEntrySchema = createInsertSchema(revCashbackEntries).omit({
+export const insertCashMyCashbackEntrySchema = createInsertSchema(cashmyCashbackEntries).omit({
   id: true,
   createdAt: true,
   unlockedAt: true,
 });
-export type InsertRevCashbackEntry = z.infer<typeof insertRevCashbackEntrySchema>;
-export type RevCashbackEntry = typeof revCashbackEntries.$inferSelect;
+export type InsertCashMyCashbackEntry = z.infer<typeof insertCashMyCashbackEntrySchema>;
+export type CashMyCashbackEntry = typeof cashmyCashbackEntries.$inferSelect;
 
-export const insertRevCashbackTransferSchema = createInsertSchema(revCashbackTransfers).omit({
+export const insertCashMyCashbackTransferSchema = createInsertSchema(cashmyCashbackTransfers).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevCashbackTransfer = z.infer<typeof insertRevCashbackTransferSchema>;
-export type RevCashbackTransfer = typeof revCashbackTransfers.$inferSelect;
+export type InsertCashMyCashbackTransfer = z.infer<typeof insertCashMyCashbackTransferSchema>;
+export type CashMyCashbackTransfer = typeof cashmyCashbackTransfers.$inferSelect;

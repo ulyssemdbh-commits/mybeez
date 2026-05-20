@@ -1,5 +1,5 @@
 /**
- * REV consumer favorites — merchants favoris d'un consommateur.
+ * CashMy consumer favorites — merchants favoris d'un consommateur.
  *
  * Sert au front consumer pour afficher rapidement les merchants
  * suivis (raccourcis dans l'UI, notifs prioritaires sur leurs
@@ -9,8 +9,8 @@ import { pgTable, serial, integer, timestamp, uniqueIndex, index } from "drizzle
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const revUserFavorites = pgTable(
-  "rev_user_favorites",
+export const cashmyUserFavorites = pgTable(
+  "cashmy_user_favorites",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -19,14 +19,14 @@ export const revUserFavorites = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("rev_user_favorites_consumer_merchant_idx").on(table.consumerId, table.merchantId),
-    index("rev_user_favorites_tenant_idx").on(table.tenantId),
+    uniqueIndex("cashmy_user_favorites_consumer_merchant_idx").on(table.consumerId, table.merchantId),
+    index("cashmy_user_favorites_tenant_idx").on(table.tenantId),
   ],
 );
 
-export const insertRevUserFavoriteSchema = createInsertSchema(revUserFavorites).omit({
+export const insertCashMyUserFavoriteSchema = createInsertSchema(cashmyUserFavorites).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevUserFavorite = z.infer<typeof insertRevUserFavoriteSchema>;
-export type RevUserFavorite = typeof revUserFavorites.$inferSelect;
+export type InsertCashMyUserFavorite = z.infer<typeof insertCashMyUserFavoriteSchema>;
+export type CashMyUserFavorite = typeof cashmyUserFavorites.$inferSelect;

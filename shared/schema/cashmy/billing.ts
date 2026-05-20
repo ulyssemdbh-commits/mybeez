@@ -1,29 +1,29 @@
 /**
- * REV merchant billing — facturation périodique des merchants.
+ * CashMy merchant billing — facturation périodique des merchants.
  *
  * Cycles :
  * - 2 facturations par mois : période 1-15 et période 16-fin du mois
  *   (`due_date` = 5 jours après période_end).
  * - Calcul :
- *   - `totalSales` = somme des `rev_transactions.amount` complétées
+ *   - `totalSales` = somme des `cashmy_transactions.amount` complétées
  *     sur la période.
  *   - `cashbackAmount` = somme des `cashback_amount` (10% par défaut,
- *     versé aux consommateurs par REV → coût pour le merchant).
- *   - `revFeeAmount` = `totalSales * 0.03` (3% de commission REV).
- *   - `tvaAmount` = `revFeeAmount * 0.20` (TVA 20% sur la fee REV).
+ *     versé aux consommateurs par CashMy → coût pour le merchant).
+ *   - `platformFeeAmount` = `totalSales * 0.03` (3% de commission CashMy).
+ *   - `tvaAmount` = `platformFeeAmount * 0.20` (TVA 20% sur la fee CashMy).
  *   - `promotionCharges` = `promotionWeeks * 19` (19€/semaine).
- *   - `totalBilled` = `revFeeAmount + tvaAmount + promotionCharges`.
+ *   - `totalBilled` = `platformFeeAmount + tvaAmount + promotionCharges`.
  *
  * Génération automatique : cron systemd timer le 16 et le 1er de chaque
  * mois (cf. Sprint 2). Pour relancer manuellement :
- * `scripts/rev-billing-generate.ts -- --tenant=<slug> --period=YYYY-MM-A|B`.
+ * `scripts/cashmy-billing-generate.ts -- --tenant=<slug> --period=YYYY-MM-A|B`.
  */
 import { pgTable, text, serial, integer, timestamp, decimal, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const revMerchantBillings = pgTable(
-  "rev_merchant_billings",
+export const cashmyMerchantBillings = pgTable(
+  "cashmy_merchant_billings",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -32,7 +32,7 @@ export const revMerchantBillings = pgTable(
     periodEnd: timestamp("period_end").notNull(),
     totalSales: decimal("total_sales", { precision: 10, scale: 2 }).notNull().default("0.00"),
     cashbackAmount: decimal("cashback_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
-    revFeeAmount: decimal("rev_fee_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
+    platformFeeAmount: decimal("platform_fee_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
     tvaAmount: decimal("tva_amount", { precision: 10, scale: 2 }).notNull().default("0.00"),
     promotionCharges: decimal("promotion_charges", { precision: 10, scale: 2 }).notNull().default("0.00"),
     /** Nombre de promotion-weeks facturées sur la période. */
@@ -48,8 +48,8 @@ export const revMerchantBillings = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("rev_merchant_billings_period_idx").on(table.merchantId, table.periodStart, table.periodEnd),
-    index("rev_merchant_billings_tenant_status_idx").on(table.tenantId, table.status),
+    uniqueIndex("cashmy_merchant_billings_period_idx").on(table.merchantId, table.periodStart, table.periodEnd),
+    index("cashmy_merchant_billings_tenant_status_idx").on(table.tenantId, table.status),
   ],
 );
 
@@ -57,8 +57,8 @@ export const revMerchantBillings = pgTable(
  * Objectif mensuel de CA fixé par le merchant pour son propre suivi.
  * Sert au composant "barre de progression" du dashboard merchant.
  */
-export const revMerchantGoals = pgTable(
-  "rev_merchant_goals",
+export const cashmyMerchantGoals = pgTable(
+  "cashmy_merchant_goals",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -69,22 +69,22 @@ export const revMerchantGoals = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    uniqueIndex("rev_merchant_goals_merchant_month_idx").on(table.merchantId, table.month, table.year),
-    index("rev_merchant_goals_tenant_idx").on(table.tenantId),
+    uniqueIndex("cashmy_merchant_goals_merchant_month_idx").on(table.merchantId, table.month, table.year),
+    index("cashmy_merchant_goals_tenant_idx").on(table.tenantId),
   ],
 );
 
-export const insertRevMerchantBillingSchema = createInsertSchema(revMerchantBillings).omit({
+export const insertCashMyMerchantBillingSchema = createInsertSchema(cashmyMerchantBillings).omit({
   id: true,
   createdAt: true,
   paidAt: true,
 });
-export type InsertRevMerchantBilling = z.infer<typeof insertRevMerchantBillingSchema>;
-export type RevMerchantBilling = typeof revMerchantBillings.$inferSelect;
+export type InsertCashMyMerchantBilling = z.infer<typeof insertCashMyMerchantBillingSchema>;
+export type CashMyMerchantBilling = typeof cashmyMerchantBillings.$inferSelect;
 
-export const insertRevMerchantGoalSchema = createInsertSchema(revMerchantGoals).omit({
+export const insertCashMyMerchantGoalSchema = createInsertSchema(cashmyMerchantGoals).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevMerchantGoal = z.infer<typeof insertRevMerchantGoalSchema>;
-export type RevMerchantGoal = typeof revMerchantGoals.$inferSelect;
+export type InsertCashMyMerchantGoal = z.infer<typeof insertCashMyMerchantGoalSchema>;
+export type CashMyMerchantGoal = typeof cashmyMerchantGoals.$inferSelect;

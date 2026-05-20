@@ -1,5 +1,5 @@
 /**
- * REV notifications — événements adressés à un consommateur ou un
+ * CashMy notifications — événements adressés à un consommateur ou un
  * merchant dans le contexte d'un tenant.
  *
  * Types :
@@ -18,15 +18,15 @@ import { pgTable, text, serial, integer, boolean, timestamp, jsonb, index } from
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const revNotifications = pgTable(
-  "rev_notifications",
+export const cashmyNotifications = pgTable(
+  "cashmy_notifications",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
     /** `consumer` ou `merchant`. */
     recipientType: text("recipient_type").notNull(),
     /**
-     * Référence vers `rev_consumers.id` ou `rev_merchants.id`
+     * Référence vers `cashmy_consumers.id` ou `cashmy_merchants.id`
      * selon `recipientType`.
      */
     recipientId: integer("recipient_id").notNull(),
@@ -40,15 +40,15 @@ export const revNotifications = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_notifications_recipient_idx").on(table.recipientType, table.recipientId, table.isRead),
-    index("rev_notifications_tenant_created_idx").on(table.tenantId, table.createdAt),
+    index("cashmy_notifications_recipient_idx").on(table.recipientType, table.recipientId, table.isRead),
+    index("cashmy_notifications_tenant_created_idx").on(table.tenantId, table.createdAt),
   ],
 );
 
-export const insertRevNotificationSchema = createInsertSchema(revNotifications).omit({
+export const insertCashMyNotificationSchema = createInsertSchema(cashmyNotifications).omit({
   id: true,
   createdAt: true,
   readAt: true,
 });
-export type InsertRevNotification = z.infer<typeof insertRevNotificationSchema>;
-export type RevNotification = typeof revNotifications.$inferSelect;
+export type InsertCashMyNotification = z.infer<typeof insertCashMyNotificationSchema>;
+export type CashMyNotification = typeof cashmyNotifications.$inferSelect;

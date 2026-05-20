@@ -5,11 +5,12 @@
 > production-ready au 2026-05-12** (backend + UI). Pattern de référence :
 > `purchases.ts` (route) + `PurchasesSection.tsx` (UI).
 >
-> **Module 13 — REV (cashback)** en cours d'absorption depuis `Projet-REV`
-> (cf. [ADR 2026-05-20](./adr/2026-05-20-rev-absorption.md)). Sprint 1
-> `feat/rev-schema` 2026-05-20 = **16 tables `rev_*` livrées** (schema only,
-> cf. §5.1.5). API + UI Management + app cashback consommateur attendus
-> Sprints 2-4.
+> **Module 13 — CashMy (cashback)** en cours d'absorption depuis
+> `Projet-REV` (cf. [ADR 2026-05-20](./adr/2026-05-20-rev-absorption.md)).
+> Marque renommée REV → **CashMy** par PO 2026-05-20. Sprint 1
+> `feat/rev-schema` 2026-05-20 = **16 tables `cashmy_*` livrées**
+> (schema only, cf. §5.1.5). API + UI Management + app cashback
+> consommateur (sous-domaine `cashmy.mybeez-ai.com`) attendus Sprints 2-4.
 
 ---
 
@@ -31,7 +32,7 @@
 | 10 | CashEntries | ✅ | ✅ | ✅ | **Production-ready** (PR #83 backend + PR #90 UI) |
 | 11 | Analytics | (compute) | ✅ | ✅ | **Production-ready** (PR #85 backend + PR #91 UI) |
 | 12 | History cross-module | (audit_log compute) | ✅ | ✅ | **Production-ready** (PR #88 backend + PR #92 UI) |
-| 13 | REV (cashback) | ✅ schema | ⏳ | ⏳ | **Schema livré** (Sprint 1, 16 tables `rev_*`, ADR 2026-05-20). API + UI Sprints 2-4. |
+| 13 | CashMy (cashback) | ✅ schema | ⏳ | ⏳ | **Schema livré** (Sprint 1, 16 tables `cashmy_*`, ADR 2026-05-20, rebranding REV → CashMy). API + UI Sprints 2-4. |
 
 ### 7.1.2 Pattern de livraison
 

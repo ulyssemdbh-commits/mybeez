@@ -1,5 +1,5 @@
 /**
- * REV promotions — bons plans ponctuels et récurrents.
+ * CashMy promotions — bons plans ponctuels et récurrents.
  *
  * Types supportés :
  * - `cashback_boost` : taux de cashback majoré pendant la période
@@ -16,8 +16,8 @@ import { pgTable, text, serial, integer, boolean, timestamp, decimal, index } fr
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-export const revPromotions = pgTable(
-  "rev_promotions",
+export const cashmyPromotions = pgTable(
+  "cashmy_promotions",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -35,9 +35,9 @@ export const revPromotions = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_promotions_tenant_active_idx").on(table.tenantId, table.isActive),
-    index("rev_promotions_merchant_idx").on(table.merchantId),
-    index("rev_promotions_window_idx").on(table.startDate, table.endDate),
+    index("cashmy_promotions_tenant_active_idx").on(table.tenantId, table.isActive),
+    index("cashmy_promotions_merchant_idx").on(table.merchantId),
+    index("cashmy_promotions_window_idx").on(table.startDate, table.endDate),
   ],
 );
 
@@ -46,8 +46,8 @@ export const revPromotions = pgTable(
  * `daysOfWeek` est un string CSV (`"1,3,5"` = lundi, mercredi, vendredi),
  * conservé pour simplicité — décodé côté service `promotionScheduler`.
  */
-export const revRecurringPromotions = pgTable(
-  "rev_recurring_promotions",
+export const cashmyRecurringPromotions = pgTable(
+  "cashmy_recurring_promotions",
   {
     id: serial("id").primaryKey(),
     tenantId: integer("tenant_id").notNull(),
@@ -64,21 +64,21 @@ export const revRecurringPromotions = pgTable(
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [
-    index("rev_recurring_promotions_tenant_active_idx").on(table.tenantId, table.isActive),
-    index("rev_recurring_promotions_merchant_idx").on(table.merchantId),
+    index("cashmy_recurring_promotions_tenant_active_idx").on(table.tenantId, table.isActive),
+    index("cashmy_recurring_promotions_merchant_idx").on(table.merchantId),
   ],
 );
 
-export const insertRevPromotionSchema = createInsertSchema(revPromotions).omit({
+export const insertCashMyPromotionSchema = createInsertSchema(cashmyPromotions).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevPromotion = z.infer<typeof insertRevPromotionSchema>;
-export type RevPromotion = typeof revPromotions.$inferSelect;
+export type InsertCashMyPromotion = z.infer<typeof insertCashMyPromotionSchema>;
+export type CashMyPromotion = typeof cashmyPromotions.$inferSelect;
 
-export const insertRevRecurringPromotionSchema = createInsertSchema(revRecurringPromotions).omit({
+export const insertCashMyRecurringPromotionSchema = createInsertSchema(cashmyRecurringPromotions).omit({
   id: true,
   createdAt: true,
 });
-export type InsertRevRecurringPromotion = z.infer<typeof insertRevRecurringPromotionSchema>;
-export type RevRecurringPromotion = typeof revRecurringPromotions.$inferSelect;
+export type InsertCashMyRecurringPromotion = z.infer<typeof insertCashMyRecurringPromotionSchema>;
+export type CashMyRecurringPromotion = typeof cashmyRecurringPromotions.$inferSelect;

@@ -4,7 +4,7 @@
 > préambule, chapitres, sous-chapitres, architecture complète, synthèse et
 > objectifs en cours de réalisation et à suivre.
 >
-> **À jour au :** 2026-05-20 — main `6c0d8da` (roadmap option C bouclée 2026-05-12 ; PRs #94/#96/#97/#98 mergées). **Sprint 1 absorption REV en cours** (`feat/rev-schema`) : ADR `adr/2026-05-20-rev-absorption.md` Accepted (PR #98), schéma `rev_*` 16 tables livré + CI gate no-Replit + booksystem ch. 05/07 enrichis. Modules métier : 12 ✅ + 1 schema only (REV).
+> **À jour au :** 2026-05-20 — main `6c0d8da` (roadmap option C bouclée 2026-05-12 ; PRs #94/#96/#97/#98 mergées). **Sprint 1 absorption CashMy (ex-REV) en cours** (`feat/rev-schema`) : ADR `adr/2026-05-20-rev-absorption.md` Accepted (PR #98), schéma `cashmy_*` 16 tables livré + CI gate no-Replit + booksystem ch. 05/07 enrichis + rebranding REV → CashMy intégré (PO 2026-05-20). Modules métier : 12 ✅ + 1 schema only (CashMy).
 > **Domaine prod :** https://mybeez-ai.com
 > **Repo :** https://github.com/ulyssemdbh-commits/mybeez
 

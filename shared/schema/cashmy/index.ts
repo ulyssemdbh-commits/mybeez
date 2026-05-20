@@ -1,10 +1,13 @@
 /**
- * REV (cashback) — module métier 13 myBeez.
+ * CashMy (cashback) — module métier 13 myBeez.
+ *
+ * Marque : CashMy (rebranding du Projet-REV upstream — cf. mémoire
+ * Claude `mybeez-rev-rename` et ADR 2026-05-20 §10 note rebranding).
  *
  * 16 tables au total :
- * - `rev_consumers` (globale, pas tenant_id) : clients finaux cashback,
+ * - `cashmy_consumers` (globale, pas tenant_id) : clients finaux cashback,
  *   auth séparée des users mybeez Pro.
- * - 15 tables scopées par `tenant_id` (1 merchant REV = 1 tenant) :
+ * - 15 tables scopées par `tenant_id` (1 merchant CashMy = 1 tenant) :
  *   merchants, transactions, cashback_*, billings, goals, promotions,
  *   recurring_promotions, gift_cards, gift_card_purchases/balances/transfers,
  *   notifications, user_favorites.
