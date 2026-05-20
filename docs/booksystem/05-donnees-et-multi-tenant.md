@@ -31,7 +31,7 @@ Fichier : `shared/schema/tenants.ts`, `templates.ts`, `domains.ts`.
 
 | Table | PK | Notes |
 |---|---|---|
-| `tenants` | id serial | `slug` UNIQUE, `clientCode` UNIQUE 8 chiffres, FK `templateId`, `vocabulary` jsonb, `modulesEnabled` jsonb. `pinCode`/`adminCode` **nullable depuis #55**, plus aucune écriture. |
+| `tenants` | id serial | `slug` UNIQUE, `clientCode` UNIQUE 8 chiffres, FK `templateId`, `vocabulary` jsonb, `modulesEnabled` jsonb. ~~`pinCode`/`adminCode`~~ dropées 2026-05-19 (PR #96, script SQL manuel, après nullable PR #55). |
 | `business_templates` | id serial | Catalogue verticals. Self-FK `parentId` (2 niveaux : top/sub). 4 verticals × 25 sub-templates. Champs présentation : `icon`, `tagline`, `idealFor`, `coverGradient`, `featuresHighlight`, `notIncluded`. Champs config : `modules`, `defaultCategories`, `vocabulary`, `taxRules`. |
 | `tenant_domains` | id serial | `hostname` UNIQUE, FK cascade tenants, `verifiedAt`, `sslStatus`. Index (hostname, tenantId). |
 
@@ -58,8 +58,6 @@ Fichier : `shared/schema/checklist.ts`. Toutes ont `tenantId integer notnull`.
 | `bankAccounts` (finance.ts, PR #83) | `isActive` | un compte par row (`name`, `bankName`, `iban`, `openingBalance`, `notes`) | — |
 | `bankEntries` (SQL `bank_entries_v2`, PR #83) | — | FK logique `bankAccountId`. Amount **signé**. `isReconciled` + FK logiques optionnelles `purchaseId`/`expenseId`/`payrollId` pour rapprochement. | **bankAccountId/purchaseId/expenseId/payrollId non FK** |
 | `cashEntries` (SQL `cash_entries_v2`, PR #83) | — | `kind` ('in'\|'out'), amount toujours positif. Générique (pas de colonnes resto-flat). | — |
-| ~~`legacyBankEntries`~~ (SQL `bank_entries`, schema kept stub-only) | — | @deprecated PR #83. Tables vides en prod, drop SQL différé. | — |
-| ~~`legacyCashEntries`~~ (SQL `cash_entries`, schema kept stub-only) | — | @deprecated PR #83. Idem. | — |
 | `files` | — (via files_trash) | `category`, `fileType`, `supplier`, `description`, `mimeType`, `fileSize`, `storagePath`, `emailedTo[]`, `employeeId` (PR #72, FK logique). Index `tenantId` + `employeeId`. | **employeeId non FK** |
 | `files_trash` | — | mirror de `files` + `deletedAt`, `expiresAt` (TTL 7j), `originalFileId`. Index `tenantId` + `expiresAt`. | — |
 | `employees` | `isActive` | identité + `contractType` (default CDI) + `socialSecurityNumber` (matching PDF) + `salary` / `hourlyRate` / `weeklyHours` (default 35) + `endDate` + `notes`. Index `tenantId`. (PR #72 enrichissement). | — |
@@ -120,8 +118,14 @@ Risque en prod : `--force` peut dropper colonnes/tables silencieusement.
 - **Relaxations de contrainte** (NULL/DEFAULT) → idem.
 - **DROP / RENAME / NOT NULL strict** → `db:push` demande confirmation
   interactive, ce qui casse `deploy.sh`. Pour ces cas, écrire un script SQL
-  séparé exécuté manuellement après le deploy (ex. drop pin_code/admin_code
-  différé).
+  séparé exécuté manuellement après le deploy. Convention : déposer le
+  script dans `scripts/migrations/YYYY-MM-DD-<slug>.sql`, suivre la
+  procédure documentée dans `scripts/migrations/README.md` (backup R2
+  frais → pre-flight asserts → exec via `docker compose exec -T db psql`
+  → vérif post-exec). Pattern établi par
+  `scripts/migrations/2026-05-19-drop-legacy.sql` (PR #96, drop des
+  colonnes `tenants.pin_code/admin_code` et tables `bank_entries` /
+  `cash_entries` v1).
 
 ### 5.3.3 Mitigation
 

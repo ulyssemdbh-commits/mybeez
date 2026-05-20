@@ -4,7 +4,7 @@
 > préambule, chapitres, sous-chapitres, architecture complète, synthèse et
 > objectifs en cours de réalisation et à suivre.
 >
-> **À jour au :** 2026-05-19 — main `62017f8` (roadmap option C entièrement bouclée 2026-05-12 par PR #92, 12/12 modules production-ready backend + UI, sprints 1-7 sécu/ops + module métier intégralement mergés. Hors-roadmap : PR #94 fix OCR ouverte)
+> **À jour au :** 2026-05-20 — main `b371e33` (roadmap option C entièrement bouclée 2026-05-12 par PR #92 ; 12/12 modules production-ready backend + UI, sprints 1-7 sécu/ops + module métier intégralement mergés ; PR #94 OCR fix + PR #96 drop SQL legacy mergées 2026-05-19. DB alignée avec schema TS, plus de dette legacy)
 > **Domaine prod :** https://mybeez-ai.com
 > **Repo :** https://github.com/ulyssemdbh-commits/mybeez
 
@@ -124,7 +124,8 @@ SSO, RLS Postgres, custom domain provisioning automatisé) — cf.
 
 - Smoke prod sur les 12 modules dans un tenant test (UI + flows métier).
 - Surveiller les premières erreurs Sentry + scrape Prometheus.
-- Drop SQL définitif `tenants.pin_code`/`admin_code` + `bank_entries`/`cash_entries` legacy (script manuel, `db:push --force` interdit en prod).
+- ~~Drop SQL définitif `tenants.pin_code`/`admin_code` + `bank_entries`/`cash_entries` legacy~~ ✅ Exécuté 2026-05-19 (script `scripts/migrations/2026-05-19-drop-legacy.sql`, PR #96).
+- Reboot host Hetzner (kernel update en attente, cf. incident 502 docker-proxy 2026-05-19). À planifier en fenêtre off-peak.
 - Voir `09-roadmap-et-synthese.md §9.6` pour la dette technique reconnue (FK manquantes, refresh redondants, caches process-local, etc.).
 
 ---
