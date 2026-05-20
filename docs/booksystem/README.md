@@ -4,7 +4,7 @@
 > préambule, chapitres, sous-chapitres, architecture complète, synthèse et
 > objectifs en cours de réalisation et à suivre.
 >
-> **À jour au :** 2026-05-20 — main `b371e33` (roadmap option C entièrement bouclée 2026-05-12 par PR #92 ; 12/12 modules production-ready backend + UI, sprints 1-7 sécu/ops + module métier intégralement mergés ; PR #94 OCR fix + PR #96 drop SQL legacy mergées 2026-05-19. DB alignée avec schema TS, plus de dette legacy)
+> **À jour au :** 2026-05-20 — main `ae809fb` (roadmap option C entièrement bouclée 2026-05-12 par PR #92 ; 12/12 modules production-ready backend + UI, sprints 1-7 sécu/ops + module métier intégralement mergés ; PR #94 OCR fix + PR #96 drop SQL legacy mergées 2026-05-19 ; PR #97 docs cleanup mergée 2026-05-20). **ADR absorption REV proposé 2026-05-20** (`adr/2026-05-20-rev-absorption.md`, 7-sprint plan vers module 13 cashback).
 > **Domaine prod :** https://mybeez-ai.com
 > **Repo :** https://github.com/ulyssemdbh-commits/mybeez
 
@@ -70,6 +70,7 @@ code (et non l'état idéal ou intentionné). Sa raison d'être :
 | **08** | [Ops et déploiement](./08-ops-et-deploiement.md) | Déployer, debugger en prod, ajouter une env var |
 | **09** | [Roadmap et synthèse](./09-roadmap-et-synthese.md) | Comprendre ce qui est en cours et à venir |
 | **10** | [Cheatsheet](./10-cheatsheet.md) | Référence rapide commandes, env vars, glossaire |
+| **ADR** | [Architecture Decision Records](./adr/README.md) | Décisions structurelles documentées (1 fichier par décision) |
 
 ---
 
