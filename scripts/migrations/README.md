@@ -14,6 +14,19 @@ Un fichier par migration : `YYYY-MM-DD-<slug>.sql`. Chaque script :
 - est idempotent (`IF EXISTS` / `IF NOT EXISTS`)
 - documente sa raison d'être en commentaire en tête
 
+### Ajouts purs (CREATE TABLE)
+
+Les **créations de tables additives** (ex. Sprint 1 module REV qui ajoute
+16 tables `rev_*`) **n'ont pas besoin** de script SQL manuel dans ce
+dossier : `db:push` non-interactif gère les ajouts sans demander de
+confirmation et sans risque de perte de data (Drizzle ne propose pas
+de `DROP` sans `--force`). La source de vérité reste le schema TS dans
+`shared/schema/`.
+
+Les migrations manuelles ici sont **réservées aux opérations destructives
+ou non-additives** : `DROP TABLE`, `DROP COLUMN`, renames, type changes,
+modifications de FK / unique constraints, splits / merges de tables, etc.
+
 ## Procédure d'exécution (prod Hetzner)
 
 ### 1. Backup frais

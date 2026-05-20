@@ -1,0 +1,63 @@
+name: no-replit
+
+# Gate ferme : aucun artefact Replit dans le code source mybeez.
+#
+# Origine : ADR 2026-05-20 §2 point 11 — absorption Projet-REV dans
+# mybeez s'accompagne d'une contrainte zéro-Replit non-négociable.
+# Le code REV importé contenait `stripe-replit-sync`, 3 plugins
+# `@replit/vite-plugin-*`, `openid-client` orphelin, 6 variables d'env
+# `REPLIT_*` / `REPL_*`, et 3 dossiers `.replit/` `.config/replit/`
+# `.local/skills/`. Cette gate empêche toute ré-introduction
+# accidentelle au fil des PRs.
+#
+# Patterns interdits :
+#   - @replit/<package>             (devDependencies + dependencies)
+#   - stripe-replit-sync            (dependency runtime)
+#   - REPLIT_*                      (env vars Replit Connectors / Domains / Deployment)
+#   - REPL_IDENTITY, REPL_ID, REPL_SLUG (env vars Replit identity / repl info)
+#   - X_REPLIT_TOKEN                (header d'auth Replit Connectors)
+#
+# Scope : `client/`, `server/`, `shared/`, `scripts/`, fichiers racine
+# (package.json, vite.config.ts, etc.). Exclus : `node_modules/`,
+# `dist/`, `.git/`, `docs/` (les ADR mentionnent Replit en référence
+# historique, c'est attendu).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  no-replit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Grep for Replit residue
+        run: |
+          set -e
+          # rg n'est pas dans le runner par défaut sur certaines configs ; on s'en tient à grep -RnE.
+          PATTERN='@replit/|stripe-replit-sync|REPLIT_[A-Z_]+|REPL_IDENTITY|REPL_ID[^a-zA-Z_]|REPL_SLUG|X_REPLIT_TOKEN'
+          if grep -RnE "$PATTERN" \
+              --include='*.ts' \
+              --include='*.tsx' \
+              --include='*.js' \
+              --include='*.cjs' \
+              --include='*.mjs' \
+              --include='*.json' \
+              --include='*.yml' \
+              --include='*.yaml' \
+              --exclude-dir=node_modules \
+              --exclude-dir=dist \
+              --exclude-dir=.git \
+              --exclude-dir=docs \
+              client server shared scripts \
+              package.json package-lock.json vite.config.ts tsconfig.json eslint.config.js 2>/dev/null; then
+            echo ""
+            echo "::error::Replit residue detected. ADR 2026-05-20 forbids any Replit dependency or env var in the source tree."
+            echo "::error::Remove the matches above, or amend the ADR if a new exception is needed."
+            exit 1
+          fi
+          echo "no-replit: OK — aucune trace Replit détectée."

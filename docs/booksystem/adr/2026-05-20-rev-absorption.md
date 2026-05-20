@@ -1,6 +1,6 @@
 # ADR 2026-05-20 — Absorption Projet-REV → mybeez
 
-- **Statut :** Proposed
+- **Statut :** Accepted (PR #98 mergée 2026-05-20, Sprint 1 en cours dans `feat/rev-schema`)
 - **Date :** 2026-05-20
 - **Décideurs :** Ulysse (PO) · Claude (engineering principal)
 - **Contexte technique :** [02-architecture](../02-architecture.md), [05-donnees-et-multi-tenant](../05-donnees-et-multi-tenant.md), [07-modules-metier](../07-modules-metier.md)
