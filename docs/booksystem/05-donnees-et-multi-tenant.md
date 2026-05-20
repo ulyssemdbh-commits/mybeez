@@ -2,10 +2,12 @@
 
 > **Résumé.** Postgres 16 single-DB single-schema. Multi-tenant garanti par
 > filtre Drizzle `where(eq(table.tenantId, tid))` sur chaque requête (pas de
-> RLS Postgres). 25+ tables : identité cross-tenant, business tenant-scoped,
-> catalogue templates, custom domains, tokens, MFA, audit. Migrations via
-> `drizzle-kit push` (pas d'historique versionné). Caches process-local sur 4
-> services (risque scale-out).
+> RLS Postgres). 41+ tables (25+ socle + 16 module CashMy cashback, Sprint 1
+> 2026-05-20) : identité cross-tenant, business tenant-scoped, catalogue
+> templates, custom domains, tokens, MFA, audit, plus le module CashMy
+> (`cashmy_consumers` global + 15 tables `cashmy_*` tenant-scopées).
+> Migrations via `drizzle-kit push` (pas d'historique versionné). Caches
+> process-local sur 4 services (risque scale-out).
 
 ---
 
@@ -68,6 +70,48 @@ Fichier : `shared/schema/checklist.ts`. Toutes ont `tenantId integer notnull`.
 > **Dette.** Les FK logiques manquantes (categoryId, itemId, supplierId,
 > employeeId) permettent des orphelins. Sprint future de cleanup. Tracé dans
 > `09-roadmap-et-synthese.md`.
+
+### 5.1.5 Module 13 — CashMy (cashback)
+
+> **Note rebranding.** Le module s'appelait `REV` (nom du projet
+> upstream `Projet-REV`) dans le code initial de la PR #99. Renommé
+> en **CashMy** le 2026-05-20 par décision PO, avant merge — tous
+> les noms (tables, types, modules, sous-domaine) sont alignés.
+> Le repo source `Projet-REV` garde son nom historique.
+
+Fichiers : `shared/schema/cashmy/{consumers,merchants,transactions,billing,promotions,giftCards,notifications,favorites}.ts`.
+Sprint 1 (`feat/rev-schema`) livre uniquement le schema, l'API et l'UI
+arrivent aux Sprints 2-3 (cf. ADR
+[`adr/2026-05-20-rev-absorption.md`](./adr/2026-05-20-rev-absorption.md)).
+
+| Table | Tenant | PK | Notes |
+|---|---|---|---|
+| `cashmy_consumers` | ❌ Global | id serial | Clients finaux cashback. `email` UNIQUE, `public_id` UNIQUE 16 chars (`CashMy-XXXXXXXX`, 8 chars alphanumérique). Auth séparée des users mybeez Pro (`password_hash` argon2id, status `pending`/`active`/`disabled`/`banned`). |
+| `cashmy_merchants` | ✅ | id serial | 1 par tenant (UNIQUE `tenant_id`). `cashbackRate` decimal default 10.00. Champs : siret, IBAN, BIC, addresse, contact. |
+| `cashmy_transactions` | ✅ | id serial | `consumer_id`, `merchant_id`, `amount`, `cashback_amount`, `commission_amount`. Index (tenantId, createdAt). Status completed/cancelled/refunded. |
+| `cashmy_cashback_balances` | ✅ | id serial | UNIQUE (`consumer_id`, `merchant_id`). `available_balance` + `pending_balance`. Mis à jour par les services. |
+| `cashmy_cashback_entries` | ✅ | id serial | 1 par transaction. `pending` jusqu'à `unlocks_at`, puis `unlocked` (cron). Index sur (unlocks_at, status) pour le scheduler. |
+| `cashmy_cashback_transfers` | ✅ | id serial | Transferts consumer→consumer, scopés par merchant. |
+| `cashmy_merchant_billings` | ✅ | id serial | Facturation 1-15 + 16-fin du mois. `totalSales`, `cashbackAmount`, `platformFeeAmount` (3%), `tvaAmount` (20% de platformFee), `promotionCharges` (19€/promo-week). UNIQUE (`merchant_id`, `period_start`, `period_end`). |
+| `cashmy_merchant_goals` | ✅ | id serial | Objectif CA mensuel UNIQUE (`merchant_id`, `month`, `year`). |
+| `cashmy_promotions` | ✅ | id serial | `type` ∈ {cashback_boost, free_article, discount_percent}. `start_date`/`end_date`. |
+| `cashmy_recurring_promotions` | ✅ | id serial | Promotions récurrentes. `daysOfWeek` CSV ("0,1,2,3,4,5,6", dimanche=0). |
+| `cashmy_gift_cards` | ✅ | id serial | Catalogue cartes cadeaux. `cashbackRate` default 15%. Émises par un merchant donné. |
+| `cashmy_gift_card_purchases` | ✅ | id serial | Achat consumer → carte. `paymentProvider` (stripe/paypal). `unlocks_at` = 7 jours ouvrés. |
+| `cashmy_gift_card_balances` | ✅ | id serial | Solde courant détenu (peut être reçu par transfert). |
+| `cashmy_gift_card_transfers` | ✅ | id serial | Historique transferts gift cards. |
+| `cashmy_notifications` | ✅ | id serial | `recipient_type` ∈ {consumer, merchant} + `recipient_id`. Index `(recipientType, recipientId, isRead)`. |
+| `cashmy_user_favorites` | ✅ | id serial | Merchants favoris d'un consommateur. UNIQUE (`consumer_id`, `merchant_id`). |
+
+Particularités :
+- **PKs `serial integer`** (convention mybeez) — pas de UUID `varchar` comme dans Projet-REV d'origine.
+- **Préfixe `cashmy_`** sur toutes les tables pour éviter les collisions et signaler la provenance.
+- **Pas de FK Drizzle déclarées** (cohérent avec le reste du schema mybeez ; FK logiques uniquement). À traiter dans le sprint cleanup global FK.
+- **Pas de table `cashmy_sessions`** : on n'a pas encore branché l'auth consumer (Sprint 4). Si on garde `connect-pg-simple`, on partage la table `user_sessions` existante mais on filtre par `userId` qui pointera vers `cashmy_consumers.id` ou `users.id` selon le type d'utilisateur — à reconsidérer en Sprint 4 (sessions séparées probable pour éviter les collisions d'ids).
+- **Pas de table `cashmy_audit_logs`** : on réutilise `audit_log` mybeez (PR #68) en ajoutant `module: "cashmy"` dans la metadata.
+- **Pas de table `cashmy_merchant_categories`** : remplacée par les `business_templates` mybeez (vertical du tenant).
+- **Module slug** : `"cashmy"` dans `tenants.modulesEnabled`.
+- **Sous-domaine app consumer** : `cashmy.mybeez-ai.com` (cf. ADR §7 Open question 6.1 tranchée).
 
 ---
 

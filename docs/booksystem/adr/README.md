@@ -91,4 +91,4 @@ Ce qui reste à trancher avant ou pendant l'implémentation.
 
 | Date | ADR | Statut |
 |---|---|---|
-| 2026-05-20 | [Absorption Projet-REV → mybeez](./2026-05-20-rev-absorption.md) | Proposed |
+| 2026-05-20 | [Absorption Projet-REV → mybeez](./2026-05-20-rev-absorption.md) | Accepted |

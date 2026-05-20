@@ -9,3 +9,4 @@ export * from "./schema/domains";
 export * from "./schema/templates";
 export * from "./schema/users";
 export * from "./schema/finance";
+export * from "./schema/cashmy";

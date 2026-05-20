@@ -1,6 +1,6 @@
 # ADR 2026-05-20 — Absorption Projet-REV → mybeez
 
-- **Statut :** Proposed
+- **Statut :** Accepted (PR #98 mergée 2026-05-20, Sprint 1 en cours dans `feat/rev-schema`)
 - **Date :** 2026-05-20
 - **Décideurs :** Ulysse (PO) · Claude (engineering principal)
 - **Contexte technique :** [02-architecture](../02-architecture.md), [05-donnees-et-multi-tenant](../05-donnees-et-multi-tenant.md), [07-modules-metier](../07-modules-metier.md)
@@ -444,15 +444,50 @@ Proposition initiale (à valider) :
 
 ---
 
-## 8. Liens
+## 9. Mises à jour
+
+### 9.1 2026-05-20 — Rebranding REV → CashMy (PO)
+
+Pendant le Sprint 1, le PO a tranché que la marque exposée au public
+serait **CashMy** (au lieu de **REV** dans le projet upstream). Décision
+mémoire `mybeez-rev-rename`. Intégrée à la PR #99 avant merge pour
+éviter une double-migration plus tard (~Sprint 3 si reporté = cher :
+rename des tables DB en prod + routes + UI).
+
+**Alignement appliqué dans cette PR** :
+- Tables DB : `cashmy_*` (au lieu de `rev_*`)
+- Module slug `tenants.modulesEnabled` : `"cashmy"`
+- Sous-domaine app consumer : `cashmy.mybeez-ai.com` (confirme l'option
+  retenue à l'open question §7.1)
+- Identifiant public consumer : `CashMy-XXXXXXXX` (au lieu de
+  `REVid-XXXXXXXX`), `varchar(16)`
+- Types TypeScript : `CashMy*` (consumer, merchant, transaction, etc.)
+- Exports : `cashmyConsumers`, `cashmyMerchants`, etc.
+- Dossier schema : `shared/schema/cashmy/`
+- Champ `revFeeAmount` (billing) → `platformFeeAmount` (neutre marque)
+
+**Inchangé** :
+- Nom du repo source : `Projet-REV` (le repo upstream s'appelle
+  vraiment ça, c'est historique)
+- Nom de la branche en cours : `feat/rev-schema` (live, déjà
+  pushée et reviewée — pas la peine de re-pousser sous un autre
+  nom). Les branches suivantes seront nommées `feat/cashmy-*`.
+- Nom du fichier ADR : `2026-05-20-rev-absorption.md` (référencé
+  partout, rename = casserait les liens)
+
+**Open question §7.1 (sous-domaine) résolue** : `cashmy.mybeez-ai.com`.
+
+---
+
+## 10. Liens
 
 - Booksystem chapitres impactés (à mettre à jour en S1+) :
-  - [02-architecture](../02-architecture.md) — ajout REV comme module 13
-  - [05-donnees-et-multi-tenant](../05-donnees-et-multi-tenant.md) — schema rev/*
+  - [02-architecture](../02-architecture.md) — ajout CashMy comme module 13
+  - [05-donnees-et-multi-tenant](../05-donnees-et-multi-tenant.md) — schema cashmy/*
   - [06-securite-et-auth](../06-securite-et-auth.md) — auth consommateur séparée
-  - [07-modules-metier](../07-modules-metier.md) — section module 13 REV
-  - [08-ops-et-deploiement](../08-ops-et-deploiement.md) — sous-domaine cashback, secrets Stripe/PayPal
-  - [09-roadmap-et-synthese](../09-roadmap-et-synthese.md) — sprint REV S0-S6
+  - [07-modules-metier](../07-modules-metier.md) — section module 13 CashMy
+  - [08-ops-et-deploiement](../08-ops-et-deploiement.md) — sous-domaine cashmy.mybeez-ai.com, secrets Stripe/PayPal
+  - [09-roadmap-et-synthese](../09-roadmap-et-synthese.md) — sprint CashMy S0-S6
 - Mémoire Claude : `project_mybeez_rev_integration` (décision actée + sprint plan)
 - Source REV archive : `C:\Users\meyer\Projet-REV` (à archiver read-only une fois migration faite)
 - Replit deploy REV (à confirmer si encore actif) : domaine inconnu — à

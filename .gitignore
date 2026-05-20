@@ -10,3 +10,8 @@ dist/
 backups/
 *.dump
 *.sql.gz
+
+# Temp commit / PR body files (Claude convention sur Windows PS 5.1
+# pour passer du texte UTF-8 avec accents à git via -F)
+.commit-msg.tmp
+.pr-body.tmp

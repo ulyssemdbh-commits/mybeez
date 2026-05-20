@@ -241,7 +241,8 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 ### Reste à faire (court terme)
 
-- **Roadmap option C officiellement bouclée 2026-05-12** (PR #92 UI History mergée). 12/12 modules production-ready. Plus rien sur la roadmap.
+- **Roadmap option C officiellement bouclée 2026-05-12** (PR #92 UI History mergée). 12/12 modules production-ready. Plus rien sur la roadmap initiale.
+- **Sprint 1 absorption CashMy (ex-REV) en cours** (`feat/rev-schema`, 2026-05-20) : schéma 16 tables `cashmy_*` livré dans `shared/schema/cashmy/` + CI gate no-Replit (`.github/workflows/no-replit.yml`) + booksystem ch. 05.1.5 / 07 enrichis + rebranding REV → CashMy intégré (PO 2026-05-20, mémoire `mybeez-rev-rename`). ADR `docs/booksystem/adr/2026-05-20-rev-absorption.md` Accepted. Sprints 2-6 (backend, UI Management, app consumer `cashmy.mybeez-ai.com`, migration data, go-live) à suivre — cf. ADR §6.
 - ~~**PR #94** OCR fix Gemini~~ ✅ Mergée 2026-05-19.
 - ~~**Drop SQL définitif** `tenants.pin_code`/`admin_code` + `bank_entries`/`cash_entries` legacy~~ ✅ Exécuté 2026-05-19 via `scripts/migrations/2026-05-19-drop-legacy.sql` (PR #96). DB alignée avec schema TS.
 - Smoke prod : `curl https://mybeez-ai.com/api/health`, valider les 12 sections dans un tenant test, surveiller les premières erreurs Sentry / metrics Prometheus.
