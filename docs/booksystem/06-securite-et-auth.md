@@ -20,9 +20,10 @@
 | **Superadmin nominatif** | ✅ Implémenté | Routes `/api/admin/*` |
 
 L'auth PIN partagée tenant-wide (legacy `tenants.pinCode`/`adminCode`) a été
-**purgée en PR #55**. Plus aucun chemin d'authentification PIN dans le code
-applicatif. Les colonnes restent en DB en nullable jusqu'au DROP SQL définitif
-(différé pour ne pas casser `deploy.sh`).
+**purgée en PR #55** (plus aucun chemin d'authentification PIN dans le code
+applicatif, colonnes laissées nullable). Le **drop SQL définitif** des
+colonnes a été exécuté le 2026-05-19 (PR #96, script
+`scripts/migrations/2026-05-19-drop-legacy.sql`).
 
 Le tablet-PIN flow Phase-2 sera reconstruit **différemment** : per-staff
 device-paired token (le device s'authentifie d'abord nominativement, obtient un
@@ -397,7 +398,7 @@ connue. Choisissez-en un autre. »).
 |---|---|---|---|---|---|
 | 1 | ~~🔴 critique~~ | GET checklist sans auth | `server/routes/checklist.ts` | S | ✅ #50 + #53 |
 | 2 | ~~🔴 critique~~ | SSE `/api/:tenant/events` sans auth | `server/services/realtimeSync.ts` | S | ✅ #50 + #53 |
-| 3 | ~~🔴 critique~~ | PIN codes stockés en clair | `tenants.pinCode/adminCode` | M | ✅ #51 hash, #55 purge complète |
+| 3 | ~~🔴 critique~~ | PIN codes stockés en clair | `tenants.pinCode/adminCode` | M | ✅ #51 hash, #55 purge complète, #96 drop SQL définitif 2026-05-19 |
 | 4 | 🟡 moyen | MFA pas obligatoire pour Owner/Admin (opt-in) | politique de gate | M | partiel — implémenté #52, gating à brancher |
 | 5 | 🟠 haut | FK manquantes (orphelins possibles) | items, checks, purchases, payroll, absences | M | à planifier |
 | 6 | ~~🟠 haut~~ | Audit log non écrit | (à implémenter) | M | ✅ Sprint 2 (PR #68) |
@@ -411,7 +412,7 @@ connue. Choisissez-en un autre. »).
 | 14 | 🟡 moyen | Pas de logs structurés / persistence | `server/index.ts` | M | Sprint 5 sécu/ops |
 | 15 | ~~🟢 faible~~ | Routes Alfred slug en body | `server/routes/alfred.ts` | S | ✅ #54 |
 | 16 | ~~🟢 faible~~ | Code mort `services/auth.ts` | — | XS | ✅ #55 |
-| 17 | 🟢 faible | Drop SQL définitif `tenants.pin_code/admin_code` | migration script | XS | différé (deploy.sh non interactif) |
+| 17 | ~~🟢 faible~~ | Drop SQL définitif `tenants.pin_code/admin_code` | migration script | XS | ✅ PR #96 — exécuté 2026-05-19 (`scripts/migrations/2026-05-19-drop-legacy.sql`) |
 | 18 | 🟡 moyen | Pas de chiffrement des dumps R2 | `scripts/backup-postgres.ts` | M | à planifier |
 | 19 | 🟡 moyen | Pas de CSRF token | `server/index.ts` | S | acceptable tant que pas de form cross-origin |
 

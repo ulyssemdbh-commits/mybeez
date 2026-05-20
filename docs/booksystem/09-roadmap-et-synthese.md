@@ -81,8 +81,9 @@ Règles :
   `computeBankStats`, `computeCashStats`). Amount **signé** côté banque,
   **positif** + `kind` côté caisse. FK logiques optionnelles vers
   `purchases`/`expenses`/`payroll` pour rapprochement. Anciennes tables
-  `bank_entries`/`cash_entries` (vides) renommées `legacyBankEntries`/`legacyCashEntries`
-  en TS (drop SQL différé). UI livrée PR #90.
+  `bank_entries`/`cash_entries` (vides) ont d'abord été renommées
+  `legacyBankEntries`/`legacyCashEntries` en TS, puis dropées 2026-05-19
+  via PR #96 (`scripts/migrations/2026-05-19-drop-legacy.sql`). UI livrée PR #90.
 - ✅ HSTS + CSP + HIBP (PR #84 — Sprint 6 sécu/ops) :
   HSTS `max-age=31536000; includeSubDomains; preload` côté nginx + helmet
   (defense in depth). CSP strict prod (script-src 'self', style-src
@@ -129,10 +130,9 @@ Règles :
 
 ### 9.2.2 En cours / en attente de merge
 
-- 🟡 PR #94 ouverte : `fix(ocr): délègue le parse PDF à ulysseclaude`
-  (branche `fix/invoice-parse-via-ulysseclaude`). Mergeable. Hors-roadmap
-  option C (fix correctif sur l'OCR PDF). Probablement portée par une
-  session parallèle.
+- (rien — PRs récentes #94 fix OCR PDF, #95 docs checkpoint et #96 drop
+  SQL legacy toutes mergées 2026-05-19, drop SQL exécuté en prod
+  2026-05-19 ; DB alignée avec schema TS).
 
 ### 9.2.3 À suivre — objectif 200% atteint, phase 2
 
@@ -143,8 +143,10 @@ Plus aucun item planifié dans la roadmap option C (sprints 1-7).
 Reste exclusivement :
 - Smoke prod sur les 12 sections dans un tenant test, surveiller les
   premières erreurs Sentry / metrics Prometheus.
-- Drop SQL définitif `tenants.pin_code`/`admin_code` + tables
-  `bank_entries`/`cash_entries` legacy (script SQL manuel, voir §9.6.6).
+- ~~Drop SQL définitif `tenants.pin_code`/`admin_code` + tables
+  `bank_entries`/`cash_entries` legacy~~ ✅ Exécuté 2026-05-19 via
+  `scripts/migrations/2026-05-19-drop-legacy.sql` (PR #96). DB alignée
+  avec schema TS.
 - Reboot host Hetzner (kernel update en attente — incident 502 docker-proxy
   2026-05-19 a confirmé la dégradation). Impacte mybeez + macommande +
   ulysseclaude simultanément, fenêtre off-peak.
@@ -297,7 +299,8 @@ Ce qui reste explicitement pour Phase 2 — cf. §9.7 :
   pourcentages historiques.
 - ~~**BankEntries / CashEntries** : schemas restaurant-flat~~ ✅ Redesigné PR #83
   (`bank_accounts` + `bank_entries_v2` + `cash_entries_v2` dans `finance.ts`).
-  Anciens schémas renommés `legacy*` ; drop SQL définitif différé.
+  Drop SQL définitif des tables legacy `bank_entries`/`cash_entries`
+  exécuté 2026-05-19 (PR #96, `scripts/migrations/2026-05-19-drop-legacy.sql`).
 
 ---
 

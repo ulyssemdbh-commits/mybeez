@@ -150,7 +150,7 @@ mybeez/
 **Appel des routes admin** :
 ```bash
 curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenants \
-  -H "Content-Type: application/json" -d '{"name":"...", "pinCode":"...", "adminCode":"..."}'
+  -H "Content-Type: application/json" -d '{"name":"...", "slug":"..."}'
 ```
 
 **Backups Postgres → R2** (`scripts/backup-postgres.ts`, `scripts/restore-postgres.ts`) :
@@ -205,7 +205,7 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 
 ---
 
-## 6. État actuel — checkpoint 2026-05-19
+## 6. État actuel — checkpoint 2026-05-20
 
 ### 🎯 Phase 1 (roadmap option C) — bouclée
 
@@ -242,10 +242,11 @@ curl -H "Authorization: Bearer <SUPERADMIN_TOKEN>" -X POST https://.../api/tenan
 ### Reste à faire (court terme)
 
 - **Roadmap option C officiellement bouclée 2026-05-12** (PR #92 UI History mergée). 12/12 modules production-ready. Plus rien sur la roadmap.
+- ~~**PR #94** OCR fix Gemini~~ ✅ Mergée 2026-05-19.
+- ~~**Drop SQL définitif** `tenants.pin_code`/`admin_code` + `bank_entries`/`cash_entries` legacy~~ ✅ Exécuté 2026-05-19 via `scripts/migrations/2026-05-19-drop-legacy.sql` (PR #96). DB alignée avec schema TS.
 - Smoke prod : `curl https://mybeez-ai.com/api/health`, valider les 12 sections dans un tenant test, surveiller les premières erreurs Sentry / metrics Prometheus.
-- **PR #94 ouverte** sur `fix/invoice-parse-via-ulysseclaude` (fix OCR robust JSON Gemini, mergeable, hors-roadmap). Worktree `C:\Users\meyer\mybeez-ocr-fix` actif côté session parallèle — ne pas toucher.
 - **Reboot host Hetzner** à planifier : `*** System restart required ***` sur `65.21.209.102` (kernel update en attente). A causé l'incident 502 docker-proxy crashé du 2026-05-19. Impacte les 3 apps (mybeez + macommande + ulysseclaude) simultanément, fenêtre off-peak.
-- Drop SQL définitif `tenants.pin_code` / `admin_code` + `bank_entries` / `cash_entries` legacy : différé tant que `deploy.sh` reste non-interactif (`db:push --force` interdit en prod). À faire via script SQL manuel.
+- **Convention `scripts/migrations/`** désormais établie (cf. `scripts/migrations/README.md`) pour les opérations DDL destructives que `db:push` non-interactif refuse.
 
 ### Phase 2 (hors-200%, cf. booksystem §9.7)
 

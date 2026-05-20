@@ -466,7 +466,7 @@ Choix de design :
 - **`bank_accounts` table dédiée** (vs suguval qui avait juste `bankName text`) — un client multi-comptes a une UX propre.
 - **Cash générique** — pas de colonnes restaurant hardcodées. Z-ticket parser resto = future feature vertical-spécifique.
 - **Hard-delete** sur les entries (vs soft sur purchases/suppliers) — une opération erronée doit disparaître ; l'audit_log garde la trace.
-- **SQL `_v2`** sur les nouvelles tables : les anciennes `bank_entries` / `cash_entries` (vides en prod, jamais consommées) restent déclarées comme `legacyBankEntries`/`legacyCashEntries` pour ne pas casser `db:push` non-interactif. Drop SQL différé dans une PR de cleanup ultérieure.
+- **SQL `_v2`** sur les nouvelles tables : les anciennes `bank_entries` / `cash_entries` (vides en prod, jamais consommées) ont été dropées via script SQL manuel le 2026-05-19 (PR #96, `scripts/migrations/2026-05-19-drop-legacy.sql`). Les déclarations `legacyBankEntries`/`legacyCashEntries` côté TS ont été retirées dans la même PR.
 
 ✅ **UI livrée (PR #90)** : `BankSection.tsx` (tabs Comptes/Opérations) + `CashSection.tsx` côté `client/src/components/management/sections/`. Stats cards header (solde par compte, encaissements / décaissements période + reconciledRate sur opérations). Filtres date / account / category / reconciled / kind. CRUD complet.
 
